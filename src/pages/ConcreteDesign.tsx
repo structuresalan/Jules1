@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { Layers, Download } from 'lucide-react';
 import { usePDF } from 'react-to-pdf';
 import rebarData from '../data/aci/rebar.json';
+import { IBC_TO_ACI_MAP } from '../data/ibc_mapping';
 
 // Type assertion for rebar
 const rebars = rebarData as Record<string, { diameter: number, area: number }>;
@@ -10,8 +11,12 @@ const rebarSizes = Object.keys(rebars);
 export const ConcreteDesign: React.FC = () => {
   const { toPDF, targetRef } = usePDF({filename: 'concrete-design-report.pdf'});
   
+  // Code Logic
+  const [ibcYear, setIbcYear] = useState('IBC 2018');
+  const [aciYear, setAciYear] = useState(IBC_TO_ACI_MAP['IBC 2018']);
+  const [isOverridden, setIsOverridden] = useState(false);
+
   // Inputs
-  const [codeYear, setCodeYear] = useState('ACI 318-19');
   const [width, setWidth] = useState(12); // inches (b)
   const [height, setHeight] = useState(24); // inches (h)
   const [cover, setCover] = useState(1.5); // inches
@@ -57,7 +62,9 @@ export const ConcreteDesign: React.FC = () => {
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
-      <div className="flex justify-between items-start">
+      
+      {/* Header and Global Settings */}
+      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-gray-900 flex items-center gap-3">
             <Layers className="text-blue-600" />
@@ -65,13 +72,61 @@ export const ConcreteDesign: React.FC = () => {
           </h1>
           <p className="mt-2 text-gray-500">Rectangular beam flexural capacity calculation.</p>
         </div>
-        <button 
-          onClick={() => toPDF()}
-          className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
-        >
-          <Download size={16} />
-          Export PDF
-        </button>
+        
+        <div className="flex items-center gap-4 bg-white p-2 rounded-lg border border-gray-200 shadow-sm w-full lg:w-auto">
+          {/* Top Right Code Selectors */}
+          <div className="flex items-center gap-3 pr-4 border-r border-gray-200">
+            <div>
+              <div className="text-[10px] text-gray-500 uppercase font-semibold">IBC</div>
+              <select 
+                value={ibcYear} 
+                onChange={(e) => {
+                  const newIbc = e.target.value;
+                  setIbcYear(newIbc);
+                  setAciYear(IBC_TO_ACI_MAP[newIbc] || "ACI 318-14");
+                  setIsOverridden(false);
+                }}
+                className="text-sm font-medium bg-transparent focus:outline-none focus:ring-0 cursor-pointer text-gray-900"
+              >
+                {Object.keys(IBC_TO_ACI_MAP).map(year => (
+                  <option key={year} value={year}>{year}</option>
+                ))}
+              </select>
+            </div>
+            
+            <div className="relative">
+              <div className="flex items-center gap-2">
+                <div className="text-[10px] text-gray-500 uppercase font-semibold">ACI 318</div>
+                {isOverridden && (
+                  <span className="absolute -top-1 -right-2 transform translate-x-full text-[8px] font-bold bg-amber-100 text-amber-800 px-1 rounded border border-amber-200">
+                    OVERRIDE
+                  </span>
+                )}
+              </div>
+              <select 
+                value={aciYear} 
+                onChange={(e) => {
+                  setAciYear(e.target.value);
+                  setIsOverridden(e.target.value !== IBC_TO_ACI_MAP[ibcYear]);
+                }}
+                className="text-sm font-medium bg-transparent focus:outline-none focus:ring-0 cursor-pointer text-gray-900"
+              >
+                <option>ACI 318-19</option>
+                <option>ACI 318-14</option>
+                <option>ACI 318-11</option>
+                <option>ACI 318-08</option>
+              </select>
+            </div>
+          </div>
+
+          <button 
+            onClick={() => toPDF()}
+            className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 text-blue-700 rounded hover:bg-blue-100 transition-colors text-sm font-medium shrink-0"
+          >
+            <Download size={16} />
+            Export
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8" ref={targetRef}>
@@ -82,19 +137,6 @@ export const ConcreteDesign: React.FC = () => {
             <h2 className="text-lg font-semibold text-gray-900 mb-4 border-b pb-2">Design Parameters</h2>
             
             <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Design Code</label>
-                <select 
-                  value={codeYear} 
-                  onChange={(e) => setCodeYear(e.target.value)}
-                  className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2"
-                >
-                  <option>ACI 318-19</option>
-                  <option>ACI 318-14</option>
-                  <option>ACI 318-11</option>
-                </select>
-              </div>
-
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Width, b (in)</label>
@@ -150,7 +192,7 @@ export const ConcreteDesign: React.FC = () => {
         {/* Output Section */}
         <div className="lg:col-span-2 space-y-6">
           <div className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4 border-b pb-2">Results: {codeYear}</h2>
+            <h2 className="text-lg font-semibold text-gray-900 mb-4 border-b pb-2">Results: {aciYear}</h2>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
               <div className="p-4 bg-blue-50 rounded-lg border border-blue-100">

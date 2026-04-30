@@ -17,6 +17,10 @@
       "B": { "Fully Exposed": 0.9, "Partially Exposed": 1.0, "Sheltered": 1.2 },
       "C": { "Fully Exposed": 0.9, "Partially Exposed": 1.0, "Sheltered": 1.1 },
       "D": { "Fully Exposed": 0.8, "Partially Exposed": 0.9, "Sheltered": 1.0 }
+    },
+    "roof_slope_factor_Cs": {
+      "Slippery": { "Ct<=1.0": 15, "Ct>=1.1": 10 },
+      "Non-Slippery": { "Ct<=1.0": 30, "Ct>=1.1": 15 }
     }
   },
   "ASCE 7-16": {
@@ -37,6 +41,10 @@
       "B": { "Fully Exposed": 0.9, "Partially Exposed": 1.0, "Sheltered": 1.2 },
       "C": { "Fully Exposed": 0.9, "Partially Exposed": 1.0, "Sheltered": 1.1 },
       "D": { "Fully Exposed": 0.8, "Partially Exposed": 0.9, "Sheltered": 1.0 }
+    },
+    "roof_slope_factor_Cs": {
+      "Slippery": { "Ct<=1.0": 15, "Ct>=1.1": 10 },
+      "Non-Slippery": { "Ct<=1.0": 30, "Ct>=1.1": 15 }
     }
   },
   "ASCE 7-10": {
@@ -57,6 +65,10 @@
       "B": { "Fully Exposed": 0.9, "Partially Exposed": 1.0, "Sheltered": 1.2 },
       "C": { "Fully Exposed": 0.9, "Partially Exposed": 1.0, "Sheltered": 1.1 },
       "D": { "Fully Exposed": 0.8, "Partially Exposed": 0.9, "Sheltered": 1.0 }
+    },
+    "roof_slope_factor_Cs": {
+      "Slippery": { "Ct<=1.0": 15, "Ct>=1.1": 10 },
+      "Non-Slippery": { "Ct<=1.0": 30, "Ct>=1.1": 15 }
     }
   },
   "ASCE 7-05": {
@@ -77,6 +89,10 @@
       "B": { "Fully Exposed": 0.9, "Partially Exposed": 1.0, "Sheltered": 1.2 },
       "C": { "Fully Exposed": 0.9, "Partially Exposed": 1.0, "Sheltered": 1.1 },
       "D": { "Fully Exposed": 0.8, "Partially Exposed": 0.9, "Sheltered": 1.0 }
+    },
+    "roof_slope_factor_Cs": {
+      "Slippery": { "Ct<=1.0": 15, "Ct>=1.1": 10 },
+      "Non-Slippery": { "Ct<=1.0": 30, "Ct>=1.1": 15 }
     }
   }
 }

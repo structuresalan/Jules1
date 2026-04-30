@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { Frame, Download } from 'lucide-react';
 import { usePDF } from 'react-to-pdf';
 import wShapesData from '../data/aisc/shapes_w.json';
+import { IBC_TO_AISC_MAP } from '../data/ibc_mapping';
 
 // Type assertion for the imported JSON
 const shapes = wShapesData as Record<string, { d: number, tw: number, bf: number, tf: number, A: number, Zx: number }>;
@@ -10,8 +11,12 @@ const shapeNames = Object.keys(shapes);
 export const SteelDesign: React.FC = () => {
   const { toPDF, targetRef } = usePDF({filename: 'steel-design-report.pdf'});
   
+  // Code Logic
+  const [ibcYear, setIbcYear] = useState('IBC 2018');
+  const [aiscYear, setAiscYear] = useState(IBC_TO_AISC_MAP['IBC 2018']);
+  const [isOverridden, setIsOverridden] = useState(false);
+
   // Inputs
-  const [codeYear, setCodeYear] = useState('AISC 360-16');
   const [method, setMethod] = useState('LRFD');
   const [section, setSection] = useState(shapeNames[1]); // Default to W12x50
   
@@ -53,7 +58,9 @@ export const SteelDesign: React.FC = () => {
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
-      <div className="flex justify-between items-start">
+      
+      {/* Header and Global Settings */}
+      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-gray-900 flex items-center gap-3">
             <Frame className="text-blue-600" />
@@ -61,13 +68,61 @@ export const SteelDesign: React.FC = () => {
           </h1>
           <p className="mt-2 text-gray-500">Wide flange section interaction calculation.</p>
         </div>
-        <button 
-          onClick={() => toPDF()}
-          className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
-        >
-          <Download size={16} />
-          Export PDF
-        </button>
+        
+        <div className="flex items-center gap-4 bg-white p-2 rounded-lg border border-gray-200 shadow-sm w-full lg:w-auto">
+          {/* Top Right Code Selectors */}
+          <div className="flex items-center gap-3 pr-4 border-r border-gray-200">
+            <div>
+              <div className="text-[10px] text-gray-500 uppercase font-semibold">IBC</div>
+              <select 
+                value={ibcYear} 
+                onChange={(e) => {
+                  const newIbc = e.target.value;
+                  setIbcYear(newIbc);
+                  setAiscYear(IBC_TO_AISC_MAP[newIbc] || "AISC 360-16");
+                  setIsOverridden(false);
+                }}
+                className="text-sm font-medium bg-transparent focus:outline-none focus:ring-0 cursor-pointer text-gray-900"
+              >
+                {Object.keys(IBC_TO_AISC_MAP).map(year => (
+                  <option key={year} value={year}>{year}</option>
+                ))}
+              </select>
+            </div>
+            
+            <div className="relative">
+              <div className="flex items-center gap-2">
+                <div className="text-[10px] text-gray-500 uppercase font-semibold">AISC 360</div>
+                {isOverridden && (
+                  <span className="absolute -top-1 -right-2 transform translate-x-full text-[8px] font-bold bg-amber-100 text-amber-800 px-1 rounded border border-amber-200">
+                    OVERRIDE
+                  </span>
+                )}
+              </div>
+              <select 
+                value={aiscYear} 
+                onChange={(e) => {
+                  setAiscYear(e.target.value);
+                  setIsOverridden(e.target.value !== IBC_TO_AISC_MAP[ibcYear]);
+                }}
+                className="text-sm font-medium bg-transparent focus:outline-none focus:ring-0 cursor-pointer text-gray-900"
+              >
+                <option>AISC 360-22</option>
+                <option>AISC 360-16</option>
+                <option>AISC 360-10</option>
+                <option>AISC 360-05</option>
+              </select>
+            </div>
+          </div>
+
+          <button 
+            onClick={() => toPDF()}
+            className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 text-blue-700 rounded hover:bg-blue-100 transition-colors text-sm font-medium shrink-0"
+          >
+            <Download size={16} />
+            Export
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8" ref={targetRef}>
@@ -78,30 +133,16 @@ export const SteelDesign: React.FC = () => {
             <h2 className="text-lg font-semibold text-gray-900 mb-4 border-b pb-2">Design Parameters</h2>
             
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Design Code</label>
-                  <select 
-                    value={codeYear} 
-                    onChange={(e) => setCodeYear(e.target.value)}
-                    className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2"
-                  >
-                    <option>AISC 360-22</option>
-                    <option>AISC 360-16</option>
-                    <option>AISC 360-10</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Method</label>
-                  <select 
-                    value={method} 
-                    onChange={(e) => setMethod(e.target.value)}
-                    className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2"
-                  >
-                    <option>LRFD</option>
-                    <option>ASD</option>
-                  </select>
-                </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Method</label>
+                <select 
+                  value={method} 
+                  onChange={(e) => setMethod(e.target.value)}
+                  className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2"
+                >
+                  <option>LRFD</option>
+                  <option>ASD</option>
+                </select>
               </div>
 
               <div>
@@ -146,7 +187,7 @@ export const SteelDesign: React.FC = () => {
         {/* Output Section */}
         <div className="lg:col-span-2 space-y-6">
           <div className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4 border-b pb-2">Results: {codeYear} ({method})</h2>
+            <h2 className="text-lg font-semibold text-gray-900 mb-4 border-b pb-2">Results: {aiscYear} ({method})</h2>
             
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
               <div className={`p-4 rounded-lg border ${isOk ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'} md:col-span-3`}>
