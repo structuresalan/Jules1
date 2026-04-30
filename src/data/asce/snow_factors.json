@@ -74,9 +74,9 @@
       "Continuously heated greenhouses": 0.85
     },
     "exposure_factor_Ce": {
-      "B": { "Fully Exposed": 0.85, "Partially Exposed": 1.0, "Sheltered": 1.2 },
-      "C": { "Fully Exposed": 0.85, "Partially Exposed": 1.0, "Sheltered": 1.1 },
-      "D": { "Fully Exposed": 0.75, "Partially Exposed": 0.9, "Sheltered": 1.0 }
+      "B": { "Fully Exposed": 0.9, "Partially Exposed": 1.0, "Sheltered": 1.2 },
+      "C": { "Fully Exposed": 0.9, "Partially Exposed": 1.0, "Sheltered": 1.1 },
+      "D": { "Fully Exposed": 0.8, "Partially Exposed": 0.9, "Sheltered": 1.0 }
     }
   }
 }

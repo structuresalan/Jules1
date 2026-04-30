@@ -32,15 +32,22 @@ export const Loads: React.FC = () => {
   const [roofExposure, setRoofExposure] = useState<RoofExposure>("Partially Exposed");
 
   // Dynamically extract ASCE Factors based on the ACTIVE YEAR
+  const isAsce22 = asceYear === 'ASCE 7-22';
+  
+  // In ASCE 7-22, Is is baked into the reliability-targeted ground snow load pg, so we effectively treat it as 1.0 for math, but we hide it in the UI.
   const Is = activeSnowData.importance_factor_Is[riskCategory];
-  const Ct = activeSnowData.thermal_factor_Ct[thermalCondition];
+  const mathIs = isAsce22 ? 1.0 : Is;
+  
+  const Ct = activeSnowData.thermal_factor_Ct[thermalCondition as keyof typeof activeSnowData.thermal_factor_Ct];
   const Ce = activeSnowData.exposure_factor_Ce[terrain][roofExposure];
 
-  // Calculation: pf = 0.7 * Ce * Ct * Is * pg
-  const pf_raw = 0.7 * Ce * Ct * Is * pg;
+  // Calculation: pf = 0.7 * Ce * Ct * (Is) * pg
+  const pf_raw = 0.7 * Ce * Ct * mathIs * pg;
   
   // ASCE 7 Minimum Snow Load Check (pm)
-  const pm = pg <= 20 ? Is * pg : Is * 20;
+  const pm = isAsce22 
+    ? (pg <= 20 ? pg : 20)
+    : (pg <= 20 ? Is * pg : Is * 20);
 
   // Final Design Snow Load
   const pf = Math.max(pf_raw, pm);
@@ -151,18 +158,20 @@ export const Loads: React.FC = () => {
                     <input type="number" value={pg} onChange={(e) => setPg(Number(e.target.value))} className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2" />
                   </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Risk Category</label>
-                    <select 
-                      value={riskCategory} 
-                      onChange={(e) => setRiskCategory(e.target.value as "I"|"II"|"III"|"IV")}
-                      className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2 bg-gray-50"
-                    >
-                      {Object.keys(activeSnowData.importance_factor_Is).map(cat => (
-                        <option key={cat} value={cat}>{cat}</option>
-                      ))}
-                    </select>
-                  </div>
+                  {!isAsce22 && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Risk Category</label>
+                      <select 
+                        value={riskCategory} 
+                        onChange={(e) => setRiskCategory(e.target.value as "I"|"II"|"III"|"IV")}
+                        className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2 bg-gray-50"
+                      >
+                        {Object.keys(activeSnowData.importance_factor_Is).map(cat => (
+                          <option key={cat} value={cat}>{cat}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Thermal Condition</label>
@@ -225,8 +234,12 @@ export const Loads: React.FC = () => {
                     <div>Ground snow load</div>
                     <div>p<sub className="text-[10px]">g</sub> = <strong>{pg} psf</strong></div>
                     
-                    <div>Importance factor (Table 1.5-2)</div>
-                    <div>I<sub className="text-[10px]">s</sub> = <strong>{Is.toFixed(2)}</strong></div>
+                    {!isAsce22 && (
+                      <>
+                        <div>Importance factor (Table 1.5-2)</div>
+                        <div>I<sub className="text-[10px]">s</sub> = <strong>{Is.toFixed(2)}</strong></div>
+                      </>
+                    )}
                     
                     <div>Thermal factor (Table 7.3-2)</div>
                     <div>C<sub className="text-[10px]">t</sub> = <strong>{Ct.toFixed(2)}</strong></div>
@@ -240,8 +253,17 @@ export const Loads: React.FC = () => {
                   {/* Equation */}
                   <div className="space-y-2">
                     <div className="text-gray-500">Calculate flat roof snow load (Eq. 7.3-1)</div>
-                    <div>p<sub className="text-[10px]">f_calc</sub> = 0.7 × C<sub className="text-[10px]">e</sub> × C<sub className="text-[10px]">t</sub> × I<sub className="text-[10px]">s</sub> × p<sub className="text-[10px]">g</sub></div>
-                    <div>p<sub className="text-[10px]">f_calc</sub> = 0.7 × {Ce} × {Ct} × {Is} × {pg}</div>
+                    {isAsce22 ? (
+                      <>
+                        <div>p<sub className="text-[10px]">f_calc</sub> = 0.7 × C<sub className="text-[10px]">e</sub> × C<sub className="text-[10px]">t</sub> × p<sub className="text-[10px]">g</sub></div>
+                        <div>p<sub className="text-[10px]">f_calc</sub> = 0.7 × {Ce} × {Ct} × {pg}</div>
+                      </>
+                    ) : (
+                      <>
+                        <div>p<sub className="text-[10px]">f_calc</sub> = 0.7 × C<sub className="text-[10px]">e</sub> × C<sub className="text-[10px]">t</sub> × I<sub className="text-[10px]">s</sub> × p<sub className="text-[10px]">g</sub></div>
+                        <div>p<sub className="text-[10px]">f_calc</sub> = 0.7 × {Ce} × {Ct} × {Is} × {pg}</div>
+                      </>
+                    )}
                     <div className="font-bold">p<sub className="text-[10px]">f_calc</sub> = {pf_raw.toFixed(2)} psf</div>
                   </div>
 
@@ -250,16 +272,30 @@ export const Loads: React.FC = () => {
                   {/* Minimum Check */}
                   <div className="space-y-2">
                     <div className="text-gray-500">Minimum allowable snow load for low-slope roofs (Sec. 7.3.4)</div>
-                    {pg <= 20 ? (
-                      <>
-                        <div>p<sub className="text-[10px]">m</sub> = I<sub className="text-[10px]">s</sub> × p<sub className="text-[10px]">g</sub> (Since p<sub className="text-[10px]">g</sub> ≤ 20 psf)</div>
-                        <div>p<sub className="text-[10px]">m</sub> = {Is} × {pg} = {pm.toFixed(2)} psf</div>
-                      </>
+                    {isAsce22 ? (
+                      pg <= 20 ? (
+                        <>
+                          <div>p<sub className="text-[10px]">m</sub> = p<sub className="text-[10px]">g</sub> (Since p<sub className="text-[10px]">g</sub> ≤ 20 psf)</div>
+                          <div>p<sub className="text-[10px]">m</sub> = {pm.toFixed(2)} psf</div>
+                        </>
+                      ) : (
+                        <>
+                          <div>p<sub className="text-[10px]">m</sub> = 20 psf (Since p<sub className="text-[10px]">g</sub> {'>'} 20 psf)</div>
+                          <div>p<sub className="text-[10px]">m</sub> = {pm.toFixed(2)} psf</div>
+                        </>
+                      )
                     ) : (
-                      <>
-                        <div>p<sub className="text-[10px]">m</sub> = I<sub className="text-[10px]">s</sub> × 20 psf (Since p<sub className="text-[10px]">g</sub> {'>'} 20 psf)</div>
-                        <div>p<sub className="text-[10px]">m</sub> = {Is} × 20 = {pm.toFixed(2)} psf</div>
-                      </>
+                      pg <= 20 ? (
+                        <>
+                          <div>p<sub className="text-[10px]">m</sub> = I<sub className="text-[10px]">s</sub> × p<sub className="text-[10px]">g</sub> (Since p<sub className="text-[10px]">g</sub> ≤ 20 psf)</div>
+                          <div>p<sub className="text-[10px]">m</sub> = {Is} × {pg} = {pm.toFixed(2)} psf</div>
+                        </>
+                      ) : (
+                        <>
+                          <div>p<sub className="text-[10px]">m</sub> = I<sub className="text-[10px]">s</sub> × 20 psf (Since p<sub className="text-[10px]">g</sub> {'>'} 20 psf)</div>
+                          <div>p<sub className="text-[10px]">m</sub> = {Is} × 20 = {pm.toFixed(2)} psf</div>
+                        </>
+                      )
                     )}
                   </div>
 
