@@ -36,8 +36,8 @@ export const Dashboard: React.FC = () => {
             <div className="w-10 h-10 bg-gray-100 rounded-md flex items-center justify-center text-gray-600 mb-4 group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors">
               <Wind size={24} />
             </div>
-            <h2 className="text-lg font-semibold text-gray-900 mb-2">ASCE Loads</h2>
-            <p className="text-gray-500 text-sm">ASCE 7 environmental load calculations. Compute flat roof snow loads and wind pressures.</p>
+            <h2 className="text-lg font-semibold text-gray-900 mb-2">Loads</h2>
+            <p className="text-gray-500 text-sm">Governing IBC and referenced ASCE 7 environmental load calculations. Compute flat roof snow loads.</p>
           </div>
         </Link>
       </div>

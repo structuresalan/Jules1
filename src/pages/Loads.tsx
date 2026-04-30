@@ -2,15 +2,20 @@ import React, { useState } from 'react';
 import { Wind, Download } from 'lucide-react';
 import { usePDF } from 'react-to-pdf';
 import snowData from '../data/asce/snow_factors.json';
+import { IBC_TO_ASCE_MAP } from '../data/ibc_mapping';
 
 type ExposureCategory = "B" | "C" | "D";
 type RoofExposure = "Fully Exposed" | "Partially Exposed" | "Sheltered";
 
-export const AsceLoads: React.FC = () => {
+export const Loads: React.FC = () => {
   const { toPDF, targetRef } = usePDF({filename: 'asce-snow-load-report.pdf'});
   
+  // Code Logic
+  const [ibcYear, setIbcYear] = useState('IBC 2018');
+  const [asceYear, setAsceYear] = useState(IBC_TO_ASCE_MAP['IBC 2018']);
+  const [isOverridden, setIsOverridden] = useState(false);
+
   // Inputs
-  const [codeYear, setCodeYear] = useState('ASCE 7-16');
   const [pg, setPg] = useState(20); // Ground snow load (psf)
   
   // Categorical Inputs
@@ -61,17 +66,50 @@ export const AsceLoads: React.FC = () => {
             <h2 className="text-lg font-semibold text-gray-900 mb-4 border-b pb-2">Design Parameters</h2>
             
             <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Design Code</label>
-                <select 
-                  value={codeYear} 
-                  onChange={(e) => setCodeYear(e.target.value)}
-                  className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2"
-                >
-                  <option>ASCE 7-22</option>
-                  <option>ASCE 7-16</option>
-                  <option>ASCE 7-10</option>
-                </select>
+              
+              {/* Governing Code Selection */}
+              <div className="p-4 bg-gray-50 border border-gray-200 rounded-md space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Governing Building Code (IBC)</label>
+                  <select 
+                    value={ibcYear} 
+                    onChange={(e) => {
+                      const newIbc = e.target.value;
+                      setIbcYear(newIbc);
+                      setAsceYear(IBC_TO_ASCE_MAP[newIbc] || "ASCE 7-16");
+                      setIsOverridden(false);
+                    }}
+                    className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2 bg-white"
+                  >
+                    {Object.keys(IBC_TO_ASCE_MAP).map(year => (
+                      <option key={year} value={year}>{year}</option>
+                    ))}
+                  </select>
+                </div>
+                
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-sm font-medium text-gray-700">Reference Standard (ASCE 7)</label>
+                    {isOverridden && (
+                      <span className="text-[10px] font-medium bg-amber-100 text-amber-800 px-2 py-0.5 rounded border border-amber-200">
+                        User Overridden
+                      </span>
+                    )}
+                  </div>
+                  <select 
+                    value={asceYear} 
+                    onChange={(e) => {
+                      setAsceYear(e.target.value);
+                      setIsOverridden(e.target.value !== IBC_TO_ASCE_MAP[ibcYear]);
+                    }}
+                    className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2 bg-white"
+                  >
+                    <option>ASCE 7-22</option>
+                    <option>ASCE 7-16</option>
+                    <option>ASCE 7-10</option>
+                    <option>ASCE 7-05</option>
+                  </select>
+                </div>
               </div>
 
               <div>
@@ -139,7 +177,7 @@ export const AsceLoads: React.FC = () => {
         {/* Output Section (Tedds Style) */}
         <div className="lg:col-span-2 space-y-6">
           <div className="bg-white p-8 rounded-lg border border-gray-200 shadow-sm h-full">
-            <h2 className="text-xl font-semibold text-gray-900 mb-6 border-b pb-2">Calculation Output: {codeYear}</h2>
+            <h2 className="text-xl font-semibold text-gray-900 mb-6 border-b pb-2">Calculation Output: {asceYear}</h2>
             
             {/* Calculation Block */}
             <div className="font-mono text-sm text-gray-800 space-y-4">

@@ -25,7 +25,7 @@ export const MainLayout: React.FC = () => {
     { to: '/', icon: <Home size={18} />, label: 'Dashboard' },
     { to: '/steel', icon: <Frame size={18} />, label: 'Steel Design' },
     { to: '/concrete', icon: <Layers size={18} />, label: 'Concrete Design' },
-    { to: '/loads', icon: <Wind size={18} />, label: 'ASCE Loads' },
+    { to: '/loads', icon: <Wind size={18} />, label: 'Loads' },
     { to: '/settings', icon: <Settings size={18} />, label: 'Settings' },
   ];
 
