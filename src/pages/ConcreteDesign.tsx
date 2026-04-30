@@ -1,6 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Layers, Download } from 'lucide-react';
 import { usePDF } from 'react-to-pdf';
+import rebarData from '../data/aci/rebar.json';
+
+// Type assertion for rebar
+const rebars = rebarData as Record<string, { diameter: number, area: number }>;
+const rebarSizes = Object.keys(rebars);
 
 export const ConcreteDesign: React.FC = () => {
   const { toPDF, targetRef } = usePDF({filename: 'concrete-design-report.pdf'});
@@ -12,10 +17,18 @@ export const ConcreteDesign: React.FC = () => {
   const [cover, setCover] = useState(1.5); // inches
   const [fc, setFc] = useState(4000); // psi (f'c)
   const [fy, setFy] = useState(60000); // psi (fy)
-  const [as, setAs] = useState(3.0); // sq in (As)
+  
+  // Rebar Selection
+  const [rebarSize, setRebarSize] = useState('#8');
+  const [rebarQty, setRebarQty] = useState(3);
+  
+  // Dynamically calculate area of steel (As)
+  const rebarProps = useMemo(() => rebars[rebarSize], [rebarSize]);
+  const as = rebarQty * rebarProps.area;
   
   // Calculate Effective Depth (d)
-  const d = height - cover - 0.5; // Rough estimate assuming #4 stirrups and 1 layer of rebar
+  // height - cover - stirrup(#4) - half main bar diam
+  const d = height - cover - 0.5 - (rebarProps.diameter / 2); 
 
   // Calculation Logic (Simplified ACI 318 for singly reinforced rectangular section)
   const beta1 = fc <= 4000 ? 0.85 : Math.max(0.65, 0.85 - 0.05 * ((fc - 4000) / 1000));
@@ -109,9 +122,26 @@ export const ConcreteDesign: React.FC = () => {
                 </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Tension Steel, As (in²)</label>
-                <input type="number" step="0.1" value={as} onChange={(e) => setAs(Number(e.target.value))} className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2" />
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Rebar Size</label>
+                  <select 
+                    value={rebarSize} 
+                    onChange={(e) => setRebarSize(e.target.value)}
+                    className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2"
+                  >
+                    {rebarSizes.map(size => (
+                      <option key={size} value={size}>{size}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Quantity</label>
+                  <input type="number" min="1" step="1" value={rebarQty} onChange={(e) => setRebarQty(Number(e.target.value))} className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2" />
+                </div>
+              </div>
+              <div className="text-sm text-gray-500 text-right">
+                Calculated As: <span className="font-semibold text-gray-700">{as.toFixed(2)} in²</span>
               </div>
             </div>
           </div>

@@ -1,16 +1,8 @@
-import React, { useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React from 'react';
 import { useAuth } from '../hooks/useAuth';
 
 export const Login: React.FC = () => {
-  const { user, mockLogin } = useAuth();
-  const navigate = useNavigate();
-
-  useEffect(() => {
-    if (user) {
-      navigate('/', { replace: true });
-    }
-  }, [user, navigate]);
+  const { mockLogin } = useAuth();
 
   return (
     <div className="flex h-screen items-center justify-center bg-gray-50">

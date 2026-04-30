@@ -1,6 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Frame, Download } from 'lucide-react';
 import { usePDF } from 'react-to-pdf';
+import wShapesData from '../data/aisc/shapes_w.json';
+
+// Type assertion for the imported JSON
+const shapes = wShapesData as Record<string, { d: number, tw: number, bf: number, tf: number, A: number, Zx: number }>;
+const shapeNames = Object.keys(shapes);
 
 export const SteelDesign: React.FC = () => {
   const { toPDF, targetRef } = usePDF({filename: 'steel-design-report.pdf'});
@@ -8,15 +13,11 @@ export const SteelDesign: React.FC = () => {
   // Inputs
   const [codeYear, setCodeYear] = useState('AISC 360-16');
   const [method, setMethod] = useState('LRFD');
-  const [section, setSection] = useState('W12x50');
+  const [section, setSection] = useState(shapeNames[1]); // Default to W12x50
   
-  // Section Properties (Simplified Mock Data for W12x50)
-  const d = 12.2; // in
-  const tw = 0.37; // in
-  const bf = 8.08; // in
-  const tf = 0.64; // in
-  const area = 14.6; // in^2
-  const zx = 64.7; // in^3
+  // Dynamically load Section Properties based on dropdown selection
+  const props = useMemo(() => shapes[section], [section]);
+  const { d, tw, bf, tf, A: area, Zx: zx } = props;
   
   // Material Properties
   const [fy, setFy] = useState(50); // ksi
@@ -104,13 +105,15 @@ export const SteelDesign: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Section Size (Mock Data)</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Section Size</label>
                 <select 
                   value={section} 
                   onChange={(e) => setSection(e.target.value)}
                   className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2 bg-gray-50"
                 >
-                  <option>W12x50</option>
+                  {shapeNames.map(name => (
+                    <option key={name} value={name}>{name}</option>
+                  ))}
                 </select>
               </div>
 
