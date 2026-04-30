@@ -2,7 +2,9 @@ import React, { useState, useMemo } from 'react';
 import { Layers, Download, CheckSquare } from 'lucide-react';
 import { usePDF } from 'react-to-pdf';
 import rebarData from '../data/aci/rebar.json';
+import aciData from '../data/aci/code_factors.json';
 import { IBC_TO_ACI_MAP } from '../data/ibc_mapping';
+import { VariableInput } from '../components/VariableInput';
 
 // Type assertion for rebar
 const rebars = rebarData as Record<string, { diameter: number, area: number }>;
@@ -37,20 +39,23 @@ export const ConcreteDesign: React.FC = () => {
   // Calculate Effective Depth (d)
   // height - cover - stirrup(#4) - half main bar diam
   const d = height - cover - 0.5 - (rebarProps.diameter / 2); 
+  
+  // Extract historical factors
+  const factors = (aciData as Record<string, typeof aciData["ACI 318-19"]>)[aciYear] || aciData["ACI 318-19"];
 
   // Calculation Logic (Simplified ACI 318 for singly reinforced rectangular section)
-  const beta1 = fc <= 4000 ? 0.85 : Math.max(0.65, 0.85 - 0.05 * ((fc - 4000) / 1000));
+  const beta1 = fc <= 4000 ? factors.beta1_limit : Math.max(0.65, factors.beta1_limit - 0.05 * ((fc - 4000) / 1000));
   const a = (as * fy) / (0.85 * fc * width); // Depth of equivalent rectangular stress block
   const c = a / beta1; // Depth to neutral axis
   
   const strain_t = 0.003 * ((d - c) / c); // Strain in extreme tension steel
   
-  // Phi factor determination
-  let phi = 0.9;
+  // Phi factor determination (dynamically using historical values)
+  let phi = factors.phi_tension_controlled;
   if (strain_t < 0.002) {
-    phi = 0.65; // Compression controlled (simplified spiral/tied)
+    phi = factors.phi_compression_tied; // Compression controlled (simplified tied)
   } else if (strain_t < 0.005) {
-    phi = 0.65 + (strain_t - 0.002) * (250 / 3); // Transition zone
+    phi = factors.phi_compression_tied + (strain_t - 0.002) * ((factors.phi_tension_controlled - factors.phi_compression_tied) / 0.003); // Transition zone
   }
 
   // Nominal Moment Capacity (Mn) in lb-in
@@ -175,20 +180,11 @@ export const ConcreteDesign: React.FC = () => {
             
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Width, b (in)</label>
-                  <input type="number" value={width} onChange={(e) => setWidth(Number(e.target.value))} className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Height, h (in)</label>
-                  <input type="number" value={height} onChange={(e) => setHeight(Number(e.target.value))} className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2" />
-                </div>
+                <VariableInput label="Width, b" value={width} onChange={setWidth} unit="in" />
+                <VariableInput label="Height, h" value={height} onChange={setHeight} unit="in" />
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Clear Cover (in)</label>
-                <input type="number" step="0.1" value={cover} onChange={(e) => setCover(Number(e.target.value))} className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2" />
-              </div>
+              <VariableInput label="Clear Cover" value={cover} onChange={setCover} unit="in" step="0.1" />
 
               <div className="grid grid-cols-2 gap-4">
                 <div>

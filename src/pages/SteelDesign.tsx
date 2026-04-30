@@ -2,7 +2,9 @@ import React, { useState, useMemo } from 'react';
 import { Frame, Download, CheckSquare } from 'lucide-react';
 import { usePDF } from 'react-to-pdf';
 import wShapesData from '../data/aisc/shapes_w.json';
+import aiscData from '../data/aisc/code_factors.json';
 import { IBC_TO_AISC_MAP } from '../data/ibc_mapping';
+import { VariableInput } from '../components/VariableInput';
 
 // Type assertion for the imported JSON
 const shapes = wShapesData as Record<string, { d: number, tw: number, bf: number, tf: number, A: number, Zx: number }>;
@@ -35,15 +37,18 @@ export const SteelDesign: React.FC = () => {
   const [mu, setMu] = useState(150); // kip-ft (Factored bending moment)
   const [lb, setLb] = useState(10); // ft (Unbraced length)
   
+  // Extract historical factors
+  const factors = (aiscData as Record<string, typeof aiscData["AISC 360-16"]>)[aiscYear] || aiscData["AISC 360-16"];
+
   // --- Simplified AISC Calculations ---
 
   // 1. Tension Capacity (Yielding)
-  const phi_t = method === 'LRFD' ? 0.90 : 1.67; // Omega for ASD
+  const phi_t = method === 'LRFD' ? factors.phi_t : factors.omega_t;
   const Pn = fy * area;
   const designTension = method === 'LRFD' ? phi_t * Pn : Pn / phi_t;
   
   // 2. Flexural Capacity (Assuming Lb < Lp for simplicity, yielding controls)
-  const phi_b = method === 'LRFD' ? 0.90 : 1.67;
+  const phi_b = method === 'LRFD' ? factors.phi_b : factors.omega_b;
   const Mn = fy * zx / 12; // kip-ft
   const designMoment = method === 'LRFD' ? phi_b * Mn : Mn / phi_b;
   
@@ -203,18 +208,9 @@ export const SteelDesign: React.FC = () => {
               <div className="pt-4 border-t border-gray-200">
                 <h3 className="text-sm font-semibold text-gray-900 mb-3">Applied Loads ({method})</h3>
                 <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Axial Load, Pu/Pa (kips)</label>
-                    <input type="number" value={pu} onChange={(e) => setPu(Number(e.target.value))} className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Bending Moment, Mu/Ma (kip-ft)</label>
-                    <input type="number" value={mu} onChange={(e) => setMu(Number(e.target.value))} className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Unbraced Length, Lb (ft)</label>
-                    <input type="number" value={lb} onChange={(e) => setLb(Number(e.target.value))} className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2" />
-                  </div>
+                  <VariableInput label="Axial Load, Pu/Pa" value={pu} onChange={setPu} unit="kips" />
+                  <VariableInput label="Bending Moment, Mu/Ma" value={mu} onChange={setMu} unit="kip-ft" />
+                  <VariableInput label="Unbraced Length, Lb" value={lb} onChange={setLb} unit="ft" />
                 </div>
               </div>
             </div>
