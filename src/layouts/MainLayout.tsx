@@ -3,6 +3,7 @@ import { NavLink, Outlet } from 'react-router-dom';
 import { Home, Frame, Layers, Settings, LogOut, Menu } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { signOut, auth } from '../firebase';
+import { DisclaimerModal } from '../components/DisclaimerModal';
 
 export const MainLayout: React.FC = () => {
   const { user, mockLogout } = useAuth();
@@ -28,7 +29,9 @@ export const MainLayout: React.FC = () => {
   ];
 
   return (
-    <div className="flex h-screen bg-white text-gray-800 font-sans">
+    <div className="flex h-screen bg-white text-gray-800 font-sans relative">
+      <DisclaimerModal />
+      
       {/* Mobile Sidebar Toggle */}
       <button 
         className="md:hidden fixed top-4 left-4 z-50 p-2 bg-white rounded-md shadow-sm border"
@@ -69,8 +72,8 @@ export const MainLayout: React.FC = () => {
           ))}
         </nav>
 
-        <div className="p-4 border-t border-gray-200">
-          <div className="flex items-center justify-between px-3 py-2">
+        <div className="p-4 border-t border-gray-200 flex flex-col gap-4">
+          <div className="flex items-center justify-between px-3">
             <span className="text-sm font-medium text-gray-600 truncate max-w-[140px]">
               {user?.email}
             </span>
@@ -81,6 +84,10 @@ export const MainLayout: React.FC = () => {
             >
               <LogOut size={16} />
             </button>
+          </div>
+          
+          <div className="px-3 text-[10px] text-gray-400 leading-tight">
+            NOT FOR CONSTRUCTION. Engineer of Record must verify all calculations. By using this tool, you accept the Terms of Use and liability disclaimer.
           </div>
         </div>
       </div>
