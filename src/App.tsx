@@ -7,6 +7,7 @@ import { Login } from './pages/Login';
 import { Dashboard } from './pages/Dashboard';
 import { ConcreteDesign } from './pages/ConcreteDesign';
 import { SteelDesign } from './pages/SteelDesign';
+import { AsceLoads } from './pages/AsceLoads';
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, loading } = useAuth();
@@ -30,6 +31,7 @@ const AppContent = () => {
         <Route index element={<Dashboard />} />
         <Route path="steel" element={<SteelDesign />} />
         <Route path="concrete" element={<ConcreteDesign />} />
+        <Route path="loads" element={<AsceLoads />} />
         <Route path="settings" element={<div className="p-8">Settings Coming Soon</div>} />
       </Route>
     </Routes>

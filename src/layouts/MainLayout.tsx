@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
-import { Home, Frame, Layers, Settings, LogOut, Menu } from 'lucide-react';
+import { Home, Frame, Layers, Wind, Settings, LogOut, Menu } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { signOut, auth } from '../firebase';
 import { DisclaimerModal } from '../components/DisclaimerModal';
@@ -25,6 +25,7 @@ export const MainLayout: React.FC = () => {
     { to: '/', icon: <Home size={18} />, label: 'Dashboard' },
     { to: '/steel', icon: <Frame size={18} />, label: 'Steel Design' },
     { to: '/concrete', icon: <Layers size={18} />, label: 'Concrete Design' },
+    { to: '/loads', icon: <Wind size={18} />, label: 'ASCE Loads' },
     { to: '/settings', icon: <Settings size={18} />, label: 'Settings' },
   ];
 
