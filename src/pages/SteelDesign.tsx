@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Frame, Download } from 'lucide-react';
+import { Frame, Download, CheckSquare } from 'lucide-react';
 import { usePDF } from 'react-to-pdf';
 import wShapesData from '../data/aisc/shapes_w.json';
 import { IBC_TO_AISC_MAP } from '../data/ibc_mapping';
@@ -15,6 +15,9 @@ export const SteelDesign: React.FC = () => {
   const [ibcYear, setIbcYear] = useState('IBC 2018');
   const [aiscYear, setAiscYear] = useState(IBC_TO_AISC_MAP['IBC 2018']);
   const [isOverridden, setIsOverridden] = useState(false);
+
+  // Rules of Thumb Toggle
+  const [showQuickChecks, setShowQuickChecks] = useState(false);
 
   // Inputs
   const [method, setMethod] = useState('LRFD');
@@ -116,6 +119,14 @@ export const SteelDesign: React.FC = () => {
           </div>
 
           <button 
+            onClick={() => setShowQuickChecks(!showQuickChecks)}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded transition-colors text-sm font-medium shrink-0 ${showQuickChecks ? 'bg-indigo-100 text-indigo-800 border border-indigo-200' : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'}`}
+          >
+            <CheckSquare size={16} />
+            Quick Checks
+          </button>
+
+          <button 
             onClick={() => toPDF()}
             className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 text-blue-700 rounded hover:bg-blue-100 transition-colors text-sm font-medium shrink-0"
           >
@@ -124,6 +135,32 @@ export const SteelDesign: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {showQuickChecks && (
+        <div className="bg-indigo-50 border border-indigo-100 rounded-lg p-4 animate-in slide-in-from-top-2">
+          <div className="flex items-center gap-2 mb-2 text-indigo-800">
+            <CheckSquare size={18} />
+            <h3 className="font-semibold">Engineering Rules of Thumb (Steel Beam)</h3>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-indigo-900">
+            <div className="bg-white/60 p-3 rounded border border-indigo-100">
+              <div className="font-medium mb-1">Estimated Beam Depth (d)</div>
+              <p>To prevent excessive deflection, a common rule of thumb for estimating the required depth of a steel roof/floor beam is:</p>
+              <ul className="list-disc list-inside ml-4 mt-1">
+                <li>Roof Beams: $d \approx L / 24$ (where L is span in inches)</li>
+                <li>Floor Beams: $d \approx L / 20$</li>
+              </ul>
+              <p className="mt-2 text-xs italic">Example: For a 20ft (240") floor span, d ≈ 240 / 20 = 12 inches (e.g. W12 shape).</p>
+            </div>
+            <div className="bg-white/60 p-3 rounded border border-indigo-100">
+              <div className="font-medium mb-1">Estimated Beam Weight</div>
+              <p>For a quickly estimated Moment $M_u$ (kip-ft) and choosing a nominal beam depth $d$ (inches), you can estimate the required beam weight (lbs/ft):</p>
+              <p className="mt-1"><code>Weight ≈ (M_u × 10) / d</code></p>
+              <p className="mt-2 text-xs italic">Example: For Mu = 150 kip-ft and depth 12", Weight ≈ (150 × 10) / 12 = 125 lbs/ft (This is a conservative estimate! W12x50 easily passes).</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8" ref={targetRef}>
         

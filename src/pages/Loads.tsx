@@ -32,6 +32,7 @@ export const Loads: React.FC = () => {
   const [terrain, setTerrain] = useState<ExposureCategory>("C");
   const [roofExposure, setRoofExposure] = useState<RoofExposure>("Partially Exposed");
   const [surfaceCondition, setSurfaceCondition] = useState<"Slippery"|"Non-Slippery">("Non-Slippery");
+  const [roofShape, setRoofShape] = useState<"Flat"|"Monoslope"|"Hip and Gable"|"Curved">("Flat");
 
   // Dynamically extract ASCE Factors based on the ACTIVE YEAR
   const isAsce22 = asceYear === 'ASCE 7-22';
@@ -46,20 +47,21 @@ export const Loads: React.FC = () => {
   // Calculation: pf = 0.7 * Ce * Ct * (Is) * pg
   const pf_raw = 0.7 * Ce * Ct * mathIs * pg;
   
-  // ASCE 7 Minimum Snow Load Check (pm)
+  // ASCE 7 Minimum Snow Load Check (pm) for low-slope roofs
+  // Applies if roof slope < 15 deg (for normal roofs) or < W/50 for curved
   const pm = isAsce22 
     ? (pg <= 20 ? pg : 20)
     : (pg <= 20 ? Is * pg : Is * 20);
 
-  // Final Flat Roof Snow Load
-  const pf = Math.max(pf_raw, pm);
-  const controls = pf === pm ? 'Minimum (pm) Controls' : 'Calculated (pf_calc) Controls';
+  const applyPm = roofPitch < 15;
+  const pf = applyPm ? Math.max(pf_raw, pm) : pf_raw;
+  const controls = (applyPm && pf === pm) ? 'Minimum (pm) Controls' : 'Calculated (pf_calc) Controls';
 
   // Slope Factor Cs Calculation
   const ctKey = Ct <= 1.0 ? "Ct<=1.0" : "Ct>=1.1";
   const limitAngle = activeSnowData.roof_slope_factor_Cs[surfaceCondition][ctKey];
   
-  const Cs = roofPitch <= limitAngle 
+  const Cs = roofShape === "Flat" || roofPitch <= limitAngle 
     ? 1.0 
     : roofPitch >= 70 
       ? 0.0 
@@ -230,22 +232,43 @@ export const Loads: React.FC = () => {
 
                   <div className="pt-4 border-t border-gray-200">
                     <h3 className="text-sm font-semibold text-gray-900 mb-3">Roof Geometry</h3>
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-4">
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Roof Pitch (°)</label>
-                        <input type="number" value={roofPitch} onChange={(e) => setRoofPitch(Number(e.target.value))} className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2" />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Surface Condition</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Roof Shape</label>
                         <select 
-                          value={surfaceCondition} 
-                          onChange={(e) => setSurfaceCondition(e.target.value as "Slippery"|"Non-Slippery")}
+                          value={roofShape} 
+                          onChange={(e) => {
+                            setRoofShape(e.target.value as "Flat"|"Monoslope"|"Hip and Gable"|"Curved");
+                            if (e.target.value === "Flat") setRoofPitch(0);
+                          }}
                           className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2 bg-gray-50"
                         >
-                          <option>Non-Slippery</option>
-                          <option>Slippery</option>
+                          <option>Flat</option>
+                          <option>Monoslope</option>
+                          <option>Hip and Gable</option>
+                          <option>Curved</option>
                         </select>
                       </div>
+                      
+                      {roofShape !== "Flat" && (
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Roof Pitch (°)</label>
+                            <input type="number" value={roofPitch} onChange={(e) => setRoofPitch(Number(e.target.value))} className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2" />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Surface Condition</label>
+                            <select 
+                              value={surfaceCondition} 
+                              onChange={(e) => setSurfaceCondition(e.target.value as "Slippery"|"Non-Slippery")}
+                              className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2 bg-gray-50"
+                            >
+                              <option>Non-Slippery</option>
+                              <option>Slippery</option>
+                            </select>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -308,7 +331,9 @@ export const Loads: React.FC = () => {
                   {/* Minimum Check */}
                   <div className="space-y-2">
                     <div className="text-gray-500">Minimum allowable snow load for low-slope roofs (Sec. 7.3.4)</div>
-                    {isAsce22 ? (
+                    {!applyPm ? (
+                      <div className="text-gray-500 italic">Does not apply. Roof slope ({roofPitch}°) is not considered low-slope.</div>
+                    ) : isAsce22 ? (
                       pg <= 20 ? (
                         <>
                           <div>p<sub className="text-[10px]">m</sub> = p<sub className="text-[10px]">g</sub> (Since p<sub className="text-[10px]">g</sub> ≤ 20 psf)</div>
@@ -337,43 +362,56 @@ export const Loads: React.FC = () => {
 
                   <div className="my-4 border-t border-gray-200"></div>
                   
-                  {/* Roof Slope Factor */}
-                  <div className="space-y-2">
-                    <div className="text-gray-500">Calculate roof slope factor (Fig. 7.4-1)</div>
-                    <div>Limit angle for C<sub className="text-[10px]">t</sub> {Ct <= 1.0 ? '≤ 1.0' : '≥ 1.1'} and {surfaceCondition} surface = <strong>{limitAngle}°</strong></div>
-                    {Cs === 1.0 ? (
-                      <div>C<sub className="text-[10px]">s</sub> = 1.0 (Since Pitch ≤ {limitAngle}°)</div>
-                    ) : Cs === 0.0 ? (
-                      <div>C<sub className="text-[10px]">s</sub> = 0.0 (Since Pitch ≥ 70°)</div>
-                    ) : (
-                      <>
-                        <div>C<sub className="text-[10px]">s</sub> = 1.0 - (Pitch - {limitAngle}) / (70 - {limitAngle})</div>
-                        <div>C<sub className="text-[10px]">s</sub> = 1.0 - ({roofPitch} - {limitAngle}) / {70 - limitAngle} = <strong>{Cs.toFixed(3)}</strong></div>
-                      </>
-                    )}
-                  </div>
+                  {roofShape !== "Flat" && (
+                    <>
+                      <div className="my-4 border-t border-gray-200"></div>
+                      
+                      {/* Roof Slope Factor */}
+                      <div className="space-y-2">
+                        <div className="text-gray-500">Calculate roof slope factor (Fig. 7.4-1)</div>
+                        <div>Roof Shape: <strong>{roofShape}</strong></div>
+                        <div>Limit angle for C<sub className="text-[10px]">t</sub> {Ct <= 1.0 ? '≤ 1.0' : '≥ 1.1'} and {surfaceCondition} surface = <strong>{limitAngle}°</strong></div>
+                        {Cs === 1.0 ? (
+                          <div>C<sub className="text-[10px]">s</sub> = 1.0 (Since Pitch ≤ {limitAngle}°)</div>
+                        ) : Cs === 0.0 ? (
+                          <div>C<sub className="text-[10px]">s</sub> = 0.0 (Since Pitch ≥ 70°)</div>
+                        ) : (
+                          <>
+                            <div>C<sub className="text-[10px]">s</sub> = 1.0 - (Pitch - {limitAngle}) / (70 - {limitAngle})</div>
+                            <div>C<sub className="text-[10px]">s</sub> = 1.0 - ({roofPitch} - {limitAngle}) / {70 - limitAngle} = <strong>{Cs.toFixed(3)}</strong></div>
+                          </>
+                        )}
+                      </div>
+                    </>
+                  )}
 
                   <div className="my-4 border-t border-gray-200"></div>
 
                   {/* Final Result */}
                   <div className="p-4 bg-gray-50 border border-gray-200 rounded">
-                    <div className="flex items-center justify-between mb-4 border-b border-gray-200 pb-4">
-                      <div>
-                        <div className="text-gray-600 font-medium">Flat Roof Design Load</div>
-                        <div className="text-xs text-blue-600 mt-1 italic">{controls}</div>
+                    {roofShape !== "Flat" && (
+                      <div className="flex items-center justify-between mb-4 border-b border-gray-200 pb-4">
+                        <div>
+                          <div className="text-gray-600 font-medium">Flat Roof Design Load</div>
+                          <div className="text-xs text-blue-600 mt-1 italic">{controls}</div>
+                        </div>
+                        <div className="text-xl font-bold text-gray-700">
+                          p<sub className="text-sm">f</sub> = {pf.toFixed(2)} psf
+                        </div>
                       </div>
-                      <div className="text-xl font-bold text-gray-700">
-                        p<sub className="text-sm">f</sub> = {pf.toFixed(2)} psf
-                      </div>
-                    </div>
+                    )}
                     
                     <div className="flex items-center justify-between">
                       <div>
-                        <div className="text-gray-900 font-bold">Sloped Roof Design Load</div>
-                        <div className="text-xs text-gray-500 mt-1">p<sub className="text-[10px]">s</sub> = C<sub className="text-[10px]">s</sub> × p<sub className="text-[10px]">f</sub></div>
+                        <div className="text-gray-900 font-bold">{roofShape === "Flat" ? "Flat" : "Sloped"} Roof Design Load</div>
+                        {roofShape !== "Flat" ? (
+                          <div className="text-xs text-gray-500 mt-1">p<sub className="text-[10px]">s</sub> = C<sub className="text-[10px]">s</sub> × p<sub className="text-[10px]">f</sub></div>
+                        ) : (
+                          <div className="text-xs text-blue-600 mt-1 italic">{controls}</div>
+                        )}
                       </div>
                       <div className="text-3xl font-bold text-gray-900 border-b-2 border-gray-900 pb-1">
-                        p<sub className="text-sm">s</sub> = {ps.toFixed(2)} psf
+                        p<sub className="text-sm">{roofShape === "Flat" ? "f" : "s"}</sub> = {ps.toFixed(2)} psf
                       </div>
                     </div>
                   </div>

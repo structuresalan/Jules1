@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Layers, Download } from 'lucide-react';
+import { Layers, Download, CheckSquare } from 'lucide-react';
 import { usePDF } from 'react-to-pdf';
 import rebarData from '../data/aci/rebar.json';
 import { IBC_TO_ACI_MAP } from '../data/ibc_mapping';
@@ -27,6 +27,9 @@ export const ConcreteDesign: React.FC = () => {
   const [rebarSize, setRebarSize] = useState('#8');
   const [rebarQty, setRebarQty] = useState(3);
   
+  // Rules of Thumb Toggle
+  const [showQuickChecks, setShowQuickChecks] = useState(false);
+
   // Dynamically calculate area of steel (As)
   const rebarProps = useMemo(() => rebars[rebarSize], [rebarSize]);
   const as = rebarQty * rebarProps.area;
@@ -120,6 +123,14 @@ export const ConcreteDesign: React.FC = () => {
           </div>
 
           <button 
+            onClick={() => setShowQuickChecks(!showQuickChecks)}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded transition-colors text-sm font-medium shrink-0 ${showQuickChecks ? 'bg-indigo-100 text-indigo-800 border border-indigo-200' : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'}`}
+          >
+            <CheckSquare size={16} />
+            Quick Checks
+          </button>
+
+          <button 
             onClick={() => toPDF()}
             className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 text-blue-700 rounded hover:bg-blue-100 transition-colors text-sm font-medium shrink-0"
           >
@@ -128,6 +139,32 @@ export const ConcreteDesign: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {showQuickChecks && (
+        <div className="bg-indigo-50 border border-indigo-100 rounded-lg p-4 animate-in slide-in-from-top-2">
+          <div className="flex items-center gap-2 mb-2 text-indigo-800">
+            <CheckSquare size={18} />
+            <h3 className="font-semibold">Engineering Rules of Thumb (Concrete Beam)</h3>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-indigo-900">
+            <div className="bg-white/60 p-3 rounded border border-indigo-100">
+              <div className="font-medium mb-1">Estimated Steel Area ($A_s$)</div>
+              <p>For a given factored moment $M_u$ (kip-ft), you can roughly estimate the required steel area: <br/><code>As ≈ Mu / (4 × d)</code></p>
+              <p className="mt-2 text-xs italic">Example: For Mu = 100 kip-ft and d = 20", As ≈ 100 / (4 × 20) = 1.25 in²</p>
+            </div>
+            <div className="bg-white/60 p-3 rounded border border-indigo-100">
+              <div className="font-medium mb-1">Minimum Span-to-Depth Ratio</div>
+              <p>ACI 318 Table 9.3.1.1 dictates minimum thickness $h$ for nonprestressed beams unless deflections are calculated:</p>
+              <ul className="list-disc list-inside ml-4 mt-1">
+                <li>Simply supported: $L/16$</li>
+                <li>One end continuous: $L/18.5$</li>
+                <li>Both ends continuous: $L/21$</li>
+                <li>Cantilever: $L/8$</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8" ref={targetRef}>
         
