@@ -2,13 +2,9 @@ import React, { useState } from 'react';
 import { AlertTriangle } from 'lucide-react';
 
 export const DisclaimerModal: React.FC = () => {
-  const [isOpen, setIsOpen] = useState(() => {
-    // Check if user has already accepted the disclaimer in this browser
-    return localStorage.getItem('struccalc_disclaimer_accepted') !== 'true';
-  });
+  const [isOpen, setIsOpen] = useState(true);
 
   const handleAccept = () => {
-    localStorage.setItem('struccalc_disclaimer_accepted', 'true');
     setIsOpen(false);
   };
 
