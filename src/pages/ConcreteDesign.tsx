@@ -41,6 +41,7 @@ export const ConcreteDesign: React.FC = () => {
   const [slabRebarSize, setSlabRebarSize] = useState('#5');
   const [slabSpacing, setSlabSpacing] = useState(12); // inches
   const [vu, setVu] = useState(4500); // lbs (Factored Shear Load)
+  const [muSlab, setMuSlab] = useState(12.5); // kip-ft (Factored Moment)
   
   // Rules of Thumb Toggle
   const [showQuickChecks, setShowQuickChecks] = useState(false);
@@ -80,12 +81,39 @@ export const ConcreteDesign: React.FC = () => {
   const isAsOk = as >= As_min;
 
 
-  // --- One-Way Slab Shear Logic ---
+  // --- One-Way Slab Logic ---
   const slabRebarProps = useMemo(() => rebars[slabRebarSize], [slabRebarSize]);
   // Effective depth for slab (no stirrups, assume main bar is directly on top of cover)
   const d_slab = slabThickness - slabCover - (slabRebarProps.diameter / 2);
   // Area of steel per 12-inch strip
   const as_slab = (12 / slabSpacing) * slabRebarProps.area;
+
+  // Slab Flexure Logic
+  const beta1_slab = fc <= 4000 ? factors.beta1_limit : Math.max(0.65, factors.beta1_limit - 0.05 * ((fc - 4000) / 1000));
+  const a_slab = (as_slab * fy) / (0.85 * fc * 12); // Width b = 12" unit strip
+  const c_slab = a_slab / beta1_slab;
+  const strain_t_slab = 0.003 * ((d_slab - c_slab) / c_slab);
+  
+  let phi_f_slab = factors.phi_tension_controlled;
+  if (strain_t_slab < 0.002) {
+    phi_f_slab = factors.phi_compression_tied;
+  } else if (strain_t_slab < 0.005) {
+    phi_f_slab = factors.phi_compression_tied + (strain_t_slab - 0.002) * ((factors.phi_tension_controlled - factors.phi_compression_tied) / 0.003);
+  }
+
+  const Mn_slab = as_slab * fy * (d_slab - a_slab / 2); // lb-in
+  const phiMn_slab = (phi_f_slab * Mn_slab) / 12000; // kip-ft
+  const isFlexureOk = muSlab <= phiMn_slab;
+
+  // Detailing Checks (Temperature & Shrinkage + Spacing)
+  // ACI min steel for slabs: 0.0018 for Grade 60, adjusted for others
+  const ts_ratio = fy >= 60000 ? Math.max(0.0014, (0.0018 * 60000) / fy) : 0.0020;
+  const As_min_slab = ts_ratio * 12 * slabThickness; // gross area (h) used for T&S
+  const isAsSlabOk = as_slab >= As_min_slab;
+
+  // Max spacing
+  const s_max = Math.min(3 * slabThickness, 18);
+  const isSpacingOk = slabSpacing <= s_max;
   
   const lambda = 1.0; // Normal weight concrete
 
@@ -368,7 +396,10 @@ export const ConcreteDesign: React.FC = () => {
                   
                   <div className="pt-4 border-t border-gray-200">
                     <h3 className="text-sm font-semibold text-gray-900 mb-3">Applied Loads</h3>
-                    <VariableInput label="Factored Shear, Vu" value={vu} onChange={setVu} unit="lbs" step="100" />
+                    <div className="space-y-4">
+                      <VariableInput label="Factored Moment, Mu" value={muSlab} onChange={setMuSlab} unit="kip-ft" step="0.5" />
+                      <VariableInput label="Factored Shear, Vu" value={vu} onChange={setVu} unit="lbs" step="100" />
+                    </div>
                   </div>
                 </div>
               </div>
@@ -376,74 +407,118 @@ export const ConcreteDesign: React.FC = () => {
 
             {/* Output Section */}
             <div className="lg:col-span-2 space-y-6">
-              <div className="bg-white p-8 rounded-lg border border-gray-200 shadow-sm h-full">
-                <h2 className="text-xl font-semibold text-gray-900 mb-6 border-b pb-2">One-Way Shear Capacity: {aciYear}</h2>
+              <div className="bg-white p-8 rounded-lg border border-gray-200 shadow-sm h-full overflow-hidden">
+                <h2 className="text-xl font-semibold text-gray-900 mb-6 border-b pb-2">One-Way Slab Calculation: {aciYear}</h2>
                 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-                  <div className={`p-4 rounded-lg border ${isShearOk ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
-                    <div className={`text-sm font-medium mb-1 ${isShearOk ? 'text-green-800' : 'text-red-800'}`}>Design Shear Capacity, φV<sub>c</sub></div>
-                    <div className={`text-3xl font-bold flex items-center gap-4 ${isShearOk ? 'text-green-900' : 'text-red-900'}`}>
-                      {phiVc_slab.toFixed(0)} <span className="text-lg font-normal">lbs</span>
-                    </div>
+                {/* 1. Flexural Capacity Block */}
+                <div className="font-mono text-sm text-gray-800 space-y-4 mb-8">
+                  <div className="border-l-4 border-blue-500 pl-4 py-1 mb-6 flex justify-between items-center bg-gray-50 pr-4">
+                    <h3 className="font-bold text-gray-900 uppercase">Flexural Capacity</h3>
+                    <span className={`px-2 py-0.5 rounded text-xs font-bold ${isFlexureOk ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                      {isFlexureOk ? 'PASS' : 'FAIL'}
+                    </span>
                   </div>
-                  <div className="p-4 bg-gray-50 rounded-lg border border-gray-200 flex flex-col justify-center">
-                    <div className="text-sm text-gray-600 font-medium mb-1">Applied Demand, V<sub>u</sub></div>
-                    <div className="text-2xl font-bold text-gray-900">{vu} <span className="text-sm font-normal">lbs</span></div>
-                    <div className={`text-xs font-bold mt-2 ${isShearOk ? 'text-green-600' : 'text-red-600'}`}>
-                      {isShearOk ? 'V_u ≤ φV_c (PASS)' : 'V_u > φV_c (FAIL)'}
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-y-2 mb-4">
+                    <div>Factored moment demand</div>
+                    <div>M<sub className="text-[10px]">u</sub> = <strong>{muSlab} kip-ft/ft</strong></div>
+                    <div>Effective depth</div>
+                    <div>d = {slabThickness} - {slabCover} - ({slabRebarProps.diameter}/2) = <strong>{d_slab.toFixed(2)}"</strong></div>
+                    <div>Area of steel</div>
+                    <div>A<sub className="text-[10px]">s</sub> = (12/{slabSpacing}) × {slabRebarProps.area} = <strong>{as_slab.toFixed(2)} in²/ft</strong></div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <div>a = (A<sub className="text-[10px]">s</sub> × f<sub className="text-[10px]">y</sub>) / (0.85 × f'<sub className="text-[10px]">c</sub> × b)</div>
+                    <div>a = ({as_slab.toFixed(2)} × {fy}) / (0.85 × {fc} × 12) = <strong>{a_slab.toFixed(2)}"</strong></div>
+                    <div>c = a / β<sub className="text-[10px]">1</sub> = {a_slab.toFixed(2)} / {beta1_slab.toFixed(2)} = <strong>{c_slab.toFixed(2)}"</strong></div>
+                    <div>ε<sub className="text-[10px]">t</sub> = 0.003 × (d - c) / c = 0.003 × ({d_slab.toFixed(2)} - {c_slab.toFixed(2)}) / {c_slab.toFixed(2)} = <strong>{strain_t_slab.toFixed(4)}</strong></div>
+                  </div>
+
+                  <div className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 rounded mt-4">
+                    <div>
+                      <div className="text-gray-500">Design flexural strength</div>
+                      <div>φM<sub className="text-[10px]">n</sub> = φ × A<sub className="text-[10px]">s</sub> × f<sub className="text-[10px]">y</sub> × (d - a/2) / 12000</div>
+                    </div>
+                    <div className="text-xl font-bold text-blue-900">
+                      φM<sub className="text-[10px]">n</sub> = {phiMn_slab.toFixed(1)} kip-ft/ft
                     </div>
                   </div>
                 </div>
 
-                <div className="font-mono text-sm text-gray-800 space-y-4">
-                  <div className="border-l-4 border-blue-500 pl-4 py-1 mb-6">
-                    <h3 className="font-bold text-gray-900 uppercase">12-Inch Strip Properties</h3>
+                {/* 2. Shear Capacity Block */}
+                <div className="font-mono text-sm text-gray-800 space-y-4 mb-8">
+                  <div className="border-l-4 border-blue-500 pl-4 py-1 mb-6 flex justify-between items-center bg-gray-50 pr-4">
+                    <h3 className="font-bold text-gray-900 uppercase">Shear Capacity</h3>
+                    <span className={`px-2 py-0.5 rounded text-xs font-bold ${isShearOk ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                      {isShearOk ? 'PASS' : 'FAIL'}
+                    </span>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-y-2 mb-6">
-                    <div>Effective depth</div>
-                    <div>d = {slabThickness} - {slabCover} - ({slabRebarProps.diameter}/2) = <strong>{d_slab.toFixed(2)}"</strong></div>
-                    
-                    <div>Area of steel</div>
-                    <div>A<sub>s</sub> = (12 / {slabSpacing}) × {slabRebarProps.area} = <strong>{as_slab.toFixed(2)} in²</strong></div>
+                  <div className="mb-4">
+                    Factored shear demand: V<sub className="text-[10px]">u</sub> = <strong>{vu} lbs/ft</strong>
                   </div>
-
-                  <div className="my-4 border-t border-gray-200"></div>
 
                   <div className="space-y-2">
-                    <div className="text-gray-500">Calculate nominal concrete shear strength, V<sub>c</sub></div>
+                    <div className="text-gray-500">Calculate nominal concrete shear strength, V<sub className="text-[10px]">c</sub></div>
                     
                     {isAci19 ? (
                       <>
-                        <div><em>Note: ACI 318-19 introduced size effect and reinforcement ratio to V<sub>c</sub> for sections without minimum shear reinforcement (Eq. 22.5.5.1).</em></div>
-                        <div className="mt-4">Reinforcement ratio (ρ<sub>w</sub>)</div>
-                        <div>ρ<sub>w</sub> = A<sub>s</sub> / (b<sub>w</sub> × d) = {as_slab.toFixed(2)} / (12 × {d_slab.toFixed(2)}) = <strong>{rho_w.toFixed(5)}</strong></div>
-                        
-                        <div className="mt-4">Size effect factor (λ<sub>s</sub>)</div>
-                        <div>λ<sub>s</sub> = min(1.0, √(2 / (1 + d/10)))</div>
-                        <div>λ<sub>s</sub> = min(1.0, √(2 / (1 + {d_slab.toFixed(2)}/10))) = <strong>{lambda_s.toFixed(3)}</strong></div>
-
-                        <div className="mt-4 border-t border-gray-100 pt-2"></div>
-                        <div>V<sub>c</sub> = 8 × λ<sub>s</sub> × λ × (ρ<sub>w</sub>)<sup>1/3</sup> × √(f'<sub>c</sub>) × b<sub>w</sub> × d</div>
-                        <div>V<sub>c</sub> = 8 × {lambda_s.toFixed(3)} × {lambda.toFixed(2)} × ({rho_w.toFixed(5)})<sup>1/3</sup> × √({fc}) × 12 × {d_slab.toFixed(2)}</div>
+                        <div className="text-xs italic text-gray-500 mb-2">Note: ACI 318-19 introduced size effect and reinforcement ratio to Vc.</div>
+                        <div>ρ<sub className="text-[10px]">w</sub> = A<sub className="text-[10px]">s</sub> / (b<sub className="text-[10px]">w</sub> × d) = {as_slab.toFixed(2)} / (12 × {d_slab.toFixed(2)}) = <strong>{rho_w.toFixed(5)}</strong></div>
+                        <div>λ<sub className="text-[10px]">s</sub> = min(1.0, √(2 / (1 + d/10))) = min(1.0, √(2 / (1 + {d_slab.toFixed(2)}/10))) = <strong>{lambda_s.toFixed(3)}</strong></div>
+                        <div className="mt-2">V<sub className="text-[10px]">c</sub> = 8 × λ<sub className="text-[10px]">s</sub> × λ × (ρ<sub className="text-[10px]">w</sub>)<sup>1/3</sup> × √(f'<sub className="text-[10px]">c</sub>) × b<sub className="text-[10px]">w</sub> × d</div>
+                        <div>V<sub className="text-[10px]">c</sub> = 8 × {lambda_s.toFixed(3)} × {lambda.toFixed(2)} × ({rho_w.toFixed(5)})<sup>1/3</sup> × √({fc}) × 12 × {d_slab.toFixed(2)}</div>
                       </>
                     ) : (
                       <>
-                        <div><em>Note: Using classic pre-2019 simplified concrete shear strength equation.</em></div>
-                        <div className="mt-4">V<sub>c</sub> = 2 × λ × √(f'<sub>c</sub>) × b<sub>w</sub> × d</div>
-                        <div>V<sub>c</sub> = 2 × {lambda.toFixed(2)} × √({fc}) × 12 × {d_slab.toFixed(2)}</div>
+                        <div className="text-xs italic text-gray-500 mb-2">Note: Using classic pre-2019 simplified concrete shear strength equation.</div>
+                        <div>V<sub className="text-[10px]">c</sub> = 2 × λ × √(f'<sub className="text-[10px]">c</sub>) × b<sub className="text-[10px]">w</sub> × d</div>
+                        <div>V<sub className="text-[10px]">c</sub> = 2 × {lambda.toFixed(2)} × √({fc}) × 12 × {d_slab.toFixed(2)}</div>
                       </>
                     )}
-                    
-                    <div className="font-bold text-lg mt-2">V<sub>c</sub> = {vc_slab.toFixed(0)} lbs</div>
+                    <div className="font-bold">V<sub className="text-[10px]">c</sub> = {vc_slab.toFixed(0)} lbs</div>
                   </div>
 
-                  <div className="my-4 border-t border-gray-200"></div>
+                  <div className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 rounded mt-4">
+                    <div>
+                      <div className="text-gray-500">Design shear strength</div>
+                      <div>φV<sub className="text-[10px]">c</sub> = {phi_v} × {vc_slab.toFixed(0)}</div>
+                    </div>
+                    <div className="text-xl font-bold text-blue-900">
+                      φV<sub className="text-[10px]">c</sub> = {phiVc_slab.toFixed(0)} lbs/ft
+                    </div>
+                  </div>
+                </div>
 
-                  <div className="space-y-2">
-                    <div className="text-gray-500">Design shear strength</div>
-                    <div>φV<sub>c</sub> = {phi_v} × {vc_slab.toFixed(0)}</div>
-                    <div className="font-bold text-xl text-blue-900">φV<sub>c</sub> = {phiVc_slab.toFixed(0)} lbs</div>
+                {/* 3. Detailing Checks Block */}
+                <div className="font-mono text-sm text-gray-800 space-y-4">
+                  <div className="border-l-4 border-blue-500 pl-4 py-1 mb-6 flex justify-between items-center bg-gray-50 pr-4">
+                    <h3 className="font-bold text-gray-900 uppercase">Detailing Requirements</h3>
+                    <span className={`px-2 py-0.5 rounded text-xs font-bold ${(isAsSlabOk && isSpacingOk) ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                      {(isAsSlabOk && isSpacingOk) ? 'PASS' : 'FAIL'}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-y-4 gap-x-8">
+                    <div>
+                      <div className="text-gray-500 mb-1">Minimum Steel (T&S)</div>
+                      <div>Ratio limit = <strong>{ts_ratio.toFixed(4)}</strong></div>
+                      <div>A<sub className="text-[10px]">s,min</sub> = {ts_ratio.toFixed(4)} × 12 × {slabThickness}</div>
+                      <div>A<sub className="text-[10px]">s,min</sub> = <strong>{As_min_slab.toFixed(3)} in²/ft</strong></div>
+                      <div className={`mt-1 font-bold ${isAsSlabOk ? 'text-green-600' : 'text-red-600'}`}>
+                        {isAsSlabOk ? 'A_s ≥ A_s,min (OK)' : 'A_s < A_s,min (NG)'}
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="text-gray-500 mb-1">Maximum Spacing</div>
+                      <div>s<sub className="text-[10px]">max</sub> = min(3h, 18")</div>
+                      <div>s<sub className="text-[10px]">max</sub> = min({3 * slabThickness}, 18) = <strong>{s_max}"</strong></div>
+                      <div className={`mt-1 font-bold ${isSpacingOk ? 'text-green-600' : 'text-red-600'}`}>
+                        {isSpacingOk ? 's ≤ s_max (OK)' : 's > s_max (NG)'}
+                      </div>
+                    </div>
                   </div>
 
                 </div>
