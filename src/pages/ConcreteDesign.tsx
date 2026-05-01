@@ -5,6 +5,7 @@ import rebarData from '../data/aci/rebar.json';
 import aciData from '../data/aci/code_factors.json';
 import { IBC_TO_ACI_MAP } from '../data/ibc_mapping';
 import { VariableInput } from '../components/VariableInput';
+import { ConcreteCrossSection } from '../components/ConcreteCrossSection';
 
 // Type assertion for rebar
 const rebars = rebarData as Record<string, { diameter: number, area: number }>;
@@ -309,20 +310,37 @@ export const ConcreteDesign: React.FC = () => {
             {/* Output Section */}
             <div className="lg:col-span-2 space-y-6">
               <div className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm">
-                <h2 className="text-lg font-semibold text-gray-900 mb-4 border-b pb-2">Results: {aciYear}</h2>
+                <div className="flex items-center justify-between mb-4 border-b pb-2">
+                  <h2 className="text-lg font-semibold text-gray-900">Results: {aciYear}</h2>
+                </div>
                 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-                  <div className="p-4 bg-blue-50 rounded-lg border border-blue-100">
-                    <div className="text-sm text-blue-600 font-medium mb-1">Design Moment Capacity, φMn</div>
-                    <div className="text-3xl font-bold text-blue-900">{phiMn.toFixed(1)} <span className="text-lg font-normal">kip-ft</span></div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                  <div className="md:col-span-2 space-y-6">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="p-4 bg-blue-50 rounded-lg border border-blue-100">
+                        <div className="text-sm text-blue-600 font-medium mb-1">Design Moment Capacity, φMn</div>
+                        <div className="text-3xl font-bold text-blue-900">{phiMn.toFixed(1)} <span className="text-lg font-normal">kip-ft</span></div>
+                      </div>
+                      <div className="p-4 bg-gray-50 rounded-lg border border-gray-200 flex flex-col justify-center">
+                        <div className="text-sm text-gray-600 font-medium mb-1">Strength Reduction Factor, φ</div>
+                        <div className="text-3xl font-bold text-gray-900">{phi.toFixed(3)}</div>
+                      </div>
+                    </div>
                   </div>
-                  <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
-                    <div className="text-sm text-gray-600 font-medium mb-1">Strength Reduction Factor, φ</div>
-                    <div className="text-3xl font-bold text-gray-900">{phi.toFixed(3)}</div>
+                  
+                  <div className="md:col-span-1">
+                    <ConcreteCrossSection 
+                      width={width} 
+                      height={height} 
+                      cover={cover} 
+                      rebarDiameter={rebarProps.diameter} 
+                      rebarQty={rebarQty} 
+                      isSlab={false}
+                    />
                   </div>
                 </div>
 
-                <div className="space-y-4">
+                <div className="space-y-4 border-t border-gray-100 pt-4">
                   <h3 className="text-md font-medium text-gray-800">Detailed Calculations</h3>
                   <div className="bg-gray-50 rounded-md p-4 font-mono text-sm border border-gray-200">
                     <table className="w-full">
@@ -408,8 +426,22 @@ export const ConcreteDesign: React.FC = () => {
             {/* Output Section */}
             <div className="lg:col-span-2 space-y-6">
               <div className="bg-white p-8 rounded-lg border border-gray-200 shadow-sm h-full overflow-hidden">
-                <h2 className="text-xl font-semibold text-gray-900 mb-6 border-b pb-2">One-Way Slab Calculation: {aciYear}</h2>
+                <div className="flex items-center justify-between mb-6 border-b pb-2">
+                  <h2 className="text-xl font-semibold text-gray-900">One-Way Slab Calculation: {aciYear}</h2>
+                </div>
                 
+                {/* Visual Diagram */}
+                <div className="mb-8">
+                  <ConcreteCrossSection 
+                    width={12} 
+                    height={slabThickness} 
+                    cover={slabCover} 
+                    rebarDiameter={slabRebarProps.diameter} 
+                    rebarQty={12 / slabSpacing} 
+                    isSlab={true}
+                  />
+                </div>
+
                 {/* 1. Flexural Capacity Block */}
                 <div className="font-mono text-sm text-gray-800 space-y-4 mb-8">
                   <div className="border-l-4 border-blue-500 pl-4 py-1 mb-6 flex justify-between items-center bg-gray-50 pr-4">
