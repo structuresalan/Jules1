@@ -3,8 +3,11 @@ import { createContext } from 'react';
 export interface ProjectVariable {
   id: string;
   name: string;
-  value: number;
+  value: number; // The dynamically calculated or static value
+  formula?: string; // e.g. "=12*2" or "=Main_Span / 2"
   unit: string;
+  group: string;
+  color?: string; // Hex color code
 }
 
 export interface VariablesContextType {

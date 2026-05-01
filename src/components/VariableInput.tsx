@@ -47,16 +47,24 @@ export const VariableInput: React.FC<VariableInputProps> = ({ label, value, onCh
       </div>
 
       {isVariableMode ? (
-        <select 
-          value={selectedVarId} 
-          onChange={handleVarSelect}
-          className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2 bg-blue-50/50"
-        >
-          <option value="" disabled>Select a variable...</option>
-          {variables.map(v => (
-            <option key={v.id} value={v.id}>{v.name} ({v.value} {v.unit})</option>
-          ))}
-        </select>
+        <div className="relative">
+          <select 
+            value={selectedVarId} 
+            onChange={handleVarSelect}
+            className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2 bg-blue-50/50 appearance-none pl-8"
+          >
+            <option value="" disabled>Select a variable...</option>
+            {variables.map(v => (
+              <option key={v.id} value={v.id}>{v.name} ({v.value} {v.unit})</option>
+            ))}
+          </select>
+          {selectedVarId && (
+            <div 
+              className="absolute left-3 top-1/2 -translate-y-1/2 w-3 h-3 rounded-full pointer-events-none"
+              style={{ backgroundColor: variables.find(v => v.id === selectedVarId)?.color || '#64748b' }}
+            ></div>
+          )}
+        </div>
       ) : (
         <input 
           type="number" 
