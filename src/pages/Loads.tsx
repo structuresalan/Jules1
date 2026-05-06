@@ -7,6 +7,7 @@ import windData from '../data/asce/wind_factors.json';
 import { VariableInput } from '../components/VariableInput';
 import { WindZonesSVG } from '../components/WindZonesSVG';
 import { WindElevationSVG } from '../components/WindElevationSVG';
+import { WindPlanSVG } from '../components/WindPlanSVG';
 import windCpData from '../data/asce/wind_cp_tables.json';
 
 type ExposureCategory = "B" | "C" | "D";
@@ -135,28 +136,34 @@ export const Loads: React.FC = () => {
   const cp_windward = windCpData.wall_cp.windward;
   const cp_side = windCpData.wall_cp.side;
   
-  // Leeward Cp depends on L/B ratio
-  const lb_ratio = bldgLength / bldgWidth;
-  let cp_leeward = windCpData.wall_cp.leeward["0_to_1"]; // -0.5
-  if (lb_ratio > 1 && lb_ratio <= 2) {
-    cp_leeward = windCpData.wall_cp.leeward["1_to_2"]; // -0.3
-  } else if (lb_ratio > 2) {
-    cp_leeward = windCpData.wall_cp.leeward["greater_than_2"]; // -0.2
-  }
-  
   const G = windCpData.gust_effect_factor_G;
 
-  // Final Wall Pressures (p = q * G * Cp - qz * GCpi)
-  // Windward varies with height, but for roof calculation we use qz evaluated at h.
-  // We calculate the maximum positive and negative envelopes based on the internal pressure states.
-  const p_ww_max = qz * G * cp_windward - qz * gcpi_neg;
-  const p_ww_min = qz * G * cp_windward - qz * gcpi_pos;
+  // Helper to calculate MWFRS case based on wind direction
+  const calculateMWFRSCase = (windDirL: number, windDirB: number) => {
+    const lb_ratio = windDirL / windDirB;
+    let cp_leeward = windCpData.wall_cp.leeward["0_to_1"];
+    if (lb_ratio > 1 && lb_ratio <= 2) {
+      cp_leeward = windCpData.wall_cp.leeward["1_to_2"];
+    } else if (lb_ratio > 2) {
+      cp_leeward = windCpData.wall_cp.leeward["greater_than_2"];
+    }
 
-  const p_lw_max = qz * G * cp_leeward - qz * gcpi_neg;
-  const p_lw_min = qz * G * cp_leeward - qz * gcpi_pos;
+    const p_ww_max = qz * G * cp_windward - qz * gcpi_neg;
+    const p_ww_min = qz * G * cp_windward - qz * gcpi_pos;
 
-  const p_side_max = qz * G * cp_side - qz * gcpi_neg;
-  const p_side_min = qz * G * cp_side - qz * gcpi_pos;
+    const p_lw_max = qz * G * cp_leeward - qz * gcpi_neg;
+    const p_lw_min = qz * G * cp_leeward - qz * gcpi_pos;
+
+    const p_side_max = qz * G * cp_side - qz * gcpi_neg;
+    const p_side_min = qz * G * cp_side - qz * gcpi_pos;
+
+    return { lb_ratio, cp_leeward, p_ww_max, p_ww_min, p_lw_max, p_lw_min, p_side_max, p_side_min };
+  };
+
+  // Case 1: Wind X (Parallel to L) -> Length is L, Width is B
+  const caseX = calculateMWFRSCase(bldgLength, bldgWidth);
+  // Case 2: Wind Y (Parallel to B) -> Length is B, Width is L
+  const caseY = calculateMWFRSCase(bldgWidth, bldgLength);
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -594,13 +601,14 @@ export const Loads: React.FC = () => {
                 )}
                 
                 {windProcedure === "MWFRS (Directional)" && (
-                  <div className="mb-8">
+                  <div className="mb-8 grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <WindPlanSVG bldgL={bldgLength} bldgB={bldgWidth} />
                     <WindElevationSVG h={meanRoofHeight} L={bldgLength} roofPitch={0} />
                   </div>
                 )}
 
                 <div className="font-mono text-sm text-gray-800 space-y-4">
-                  <div className="border-l-4 border-blue-500 pl-4 py-1 mb-6">
+                  <div className="border-l-4 border-blue-500 pl-4 py-1 mb-6 mt-8">
                     <h3 className="font-bold text-gray-900 uppercase">Velocity Pressure (q<sub className="text-[10px]">z</sub>)</h3>
                   </div>
 
@@ -716,23 +724,24 @@ export const Loads: React.FC = () => {
 
                   {windProcedure === "MWFRS (Directional)" && (
                     <>
-                      <div className="border-l-4 border-blue-500 pl-4 py-1 mb-6 mt-8">
+                      <div className="border-l-4 border-blue-500 pl-4 py-1 mb-6 mt-12">
                         <h3 className="font-bold text-gray-900 uppercase">MWFRS Wall Pressures</h3>
                         <p className="text-xs text-gray-500 mt-1">p = q × G × C<sub className="text-[10px]">p</sub> - q<sub className="text-[10px]">i</sub> × (GC<sub className="text-[10px]">pi</sub>)</p>
                       </div>
                       
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-y-3 mb-6">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-y-3 mb-8">
                         <div>Enclosure Type</div>
                         <div><strong>{enclosureType}</strong></div>
                         <div>Internal Pressure (GC<sub className="text-[10px]">pi</sub>)</div>
                         <div><strong>±{gcpi_pos}</strong></div>
                         <div>Gust Effect Factor (G)</div>
                         <div><strong>{G}</strong></div>
-                        <div>L/B Ratio</div>
-                        <div><strong>{lb_ratio.toFixed(2)}</strong></div>
                       </div>
 
-                      <div className="bg-gray-50 rounded-md border border-gray-200 overflow-hidden">
+                      {/* Case X Table */}
+                      <h4 className="font-bold text-gray-900 mb-2 border-b border-gray-200 pb-1">Wind Case 1: X-Direction (Parallel to L)</h4>
+                      <div className="mb-2 text-xs text-gray-500">L/B Ratio = {caseX.lb_ratio.toFixed(2)} → Leeward Cp = {caseX.cp_leeward}</div>
+                      <div className="bg-gray-50 rounded-md border border-gray-200 overflow-hidden mb-8">
                         <table className="w-full text-left text-sm">
                           <thead className="bg-gray-100 border-b border-gray-200">
                             <tr>
@@ -744,28 +753,65 @@ export const Loads: React.FC = () => {
                           </thead>
                           <tbody className="divide-y divide-gray-200">
                             <tr className="bg-white">
-                              <td className="p-3 font-medium text-gray-900">Windward Wall</td>
+                              <td className="p-3 font-medium text-gray-900">Windward</td>
                               <td className="p-3">{cp_windward}</td>
-                              <td className="p-3 text-blue-700 font-bold">{p_ww_max.toFixed(1)}</td>
-                              <td className="p-3">{p_ww_min.toFixed(1)}</td>
+                              <td className="p-3 text-blue-700 font-bold">{caseX.p_ww_max.toFixed(1)}</td>
+                              <td className="p-3">{caseX.p_ww_min.toFixed(1)}</td>
                             </tr>
                             <tr className="bg-white">
-                              <td className="p-3 font-medium text-gray-900">Leeward Wall</td>
-                              <td className="p-3">{cp_leeward}</td>
-                              <td className="p-3">{p_lw_max.toFixed(1)}</td>
-                              <td className="p-3 text-blue-700 font-bold">{p_lw_min.toFixed(1)}</td>
+                              <td className="p-3 font-medium text-gray-900">Leeward</td>
+                              <td className="p-3">{caseX.cp_leeward}</td>
+                              <td className="p-3">{caseX.p_lw_max.toFixed(1)}</td>
+                              <td className="p-3 text-blue-700 font-bold">{caseX.p_lw_min.toFixed(1)}</td>
                             </tr>
                             <tr className="bg-white">
                               <td className="p-3 font-medium text-gray-900">Side Walls</td>
                               <td className="p-3">{cp_side}</td>
-                              <td className="p-3">{p_side_max.toFixed(1)}</td>
-                              <td className="p-3 text-blue-700 font-bold">{p_side_min.toFixed(1)}</td>
+                              <td className="p-3">{caseX.p_side_max.toFixed(1)}</td>
+                              <td className="p-3 text-blue-700 font-bold">{caseX.p_side_min.toFixed(1)}</td>
                             </tr>
                           </tbody>
                         </table>
                       </div>
+
+                      {/* Case Y Table */}
+                      <h4 className="font-bold text-gray-900 mb-2 border-b border-gray-200 pb-1">Wind Case 2: Y-Direction (Parallel to B)</h4>
+                      <div className="mb-2 text-xs text-gray-500">L/B Ratio = {caseY.lb_ratio.toFixed(2)} → Leeward Cp = {caseY.cp_leeward}</div>
+                      <div className="bg-gray-50 rounded-md border border-gray-200 overflow-hidden mb-4">
+                        <table className="w-full text-left text-sm">
+                          <thead className="bg-gray-100 border-b border-gray-200">
+                            <tr>
+                              <th className="p-3 font-semibold text-gray-700">Surface</th>
+                              <th className="p-3 font-semibold text-gray-700">C<sub className="text-[10px]">p</sub></th>
+                              <th className="p-3 font-semibold text-gray-700">p (Max) <span className="text-xs font-normal text-gray-500">psf</span></th>
+                              <th className="p-3 font-semibold text-gray-700">p (Min) <span className="text-xs font-normal text-gray-500">psf</span></th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-200">
+                            <tr className="bg-white">
+                              <td className="p-3 font-medium text-gray-900">Windward</td>
+                              <td className="p-3">{cp_windward}</td>
+                              <td className="p-3 text-blue-700 font-bold">{caseY.p_ww_max.toFixed(1)}</td>
+                              <td className="p-3">{caseY.p_ww_min.toFixed(1)}</td>
+                            </tr>
+                            <tr className="bg-white">
+                              <td className="p-3 font-medium text-gray-900">Leeward</td>
+                              <td className="p-3">{caseY.cp_leeward}</td>
+                              <td className="p-3">{caseY.p_lw_max.toFixed(1)}</td>
+                              <td className="p-3 text-blue-700 font-bold">{caseY.p_lw_min.toFixed(1)}</td>
+                            </tr>
+                            <tr className="bg-white">
+                              <td className="p-3 font-medium text-gray-900">Side Walls</td>
+                              <td className="p-3">{cp_side}</td>
+                              <td className="p-3">{caseY.p_side_max.toFixed(1)}</td>
+                              <td className="p-3 text-blue-700 font-bold">{caseY.p_side_min.toFixed(1)}</td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+
                       <div className="text-xs text-gray-500 mt-2 italic">
-                        * Note: Windward pressure varies with height z. Values shown are evaluated at mean roof height h = {meanRoofHeight}'. Positive indicates pressure towards surface, negative indicates suction away from surface.
+                        * Note: Windward pressure varies with height z. Values shown are conservatively evaluated at mean roof height h = {meanRoofHeight}'. Positive indicates pressure towards surface, negative indicates suction away from surface.
                       </div>
                     </>
                   )}
