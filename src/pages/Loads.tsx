@@ -120,12 +120,6 @@ export const Loads: React.FC = () => {
   // Ensure a isn't absurdly large relative to the building (can happen with weird inputs)
   a_dim = Math.min(a_dim, leastBldgDim / 2);
 
-  // Theoretical C&C Pressures (Mock GCp ranges based on zones for demonstration)
-  // Actual GCp values require effective wind area calculations and complex charts.
-  const p_zone1 = Math.round(qz * 1.0); // Rough interior pressure 
-  const p_zone2 = Math.round(qz * 1.8); // Rough edge pressure
-  const p_zone3 = Math.round(qz * 2.8); // Rough corner pressure
-
   // --- MWFRS Wall Pressures ---
   // Internal Pressure Coefficient
   const gcpi = (windCpData.gcpi as Record<string, number[]>)[enclosureType];
@@ -164,6 +158,23 @@ export const Loads: React.FC = () => {
   const caseX = calculateMWFRSCase(bldgLength, bldgWidth);
   // Case 2: Wind Y (Parallel to B) -> Length is B, Width is L
   const caseY = calculateMWFRSCase(bldgWidth, bldgLength);
+
+  // --- C&C Interpolation Engine ---
+  const calcGCp = (zoneKey: string, area: number, isPositive: boolean) => {
+    const data = (windCpData.cnc_gcp as Record<string, typeof windCpData.cnc_gcp.roof_zone_1>)[zoneKey];
+    const val10 = isPositive ? data.pos_10 : data.neg_10;
+    const val500 = isPositive ? data.pos_500 : data.neg_500;
+    
+    if (area <= 10) return val10;
+    if (area >= 500) return val500;
+    
+    // Logarithmic interpolation: C = C10 - (C10 - C500) * log10(A/10) / log10(500/10)
+    // Note: log10(500/10) = log10(50) ≈ 1.69897
+    const interp = val10 - (val10 - val500) * (Math.log10(area / 10) / Math.log10(50));
+    return Number(interp.toFixed(2));
+  };
+
+  const cncAreas = [10, 20, 50, 100, 500];
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -698,26 +709,59 @@ export const Loads: React.FC = () => {
                       </div>
 
                       <div className="border-l-4 border-blue-500 pl-4 py-1 mb-6">
-                        <h3 className="font-bold text-gray-900 uppercase">Design Pressures (Roof)</h3>
-                        <p className="text-xs text-gray-500 italic">Theoretical peak net pressures (p = qz × GCp)</p>
+                        <h3 className="font-bold text-gray-900 uppercase">Design Pressures (p = q × GC<sub className="text-[10px]">p</sub> - q<sub className="text-[10px]">i</sub> × GC<sub className="text-[10px]">pi</sub>)</h3>
                       </div>
 
-                      <div className="grid grid-cols-3 gap-4">
-                        <div className="bg-gray-50 p-4 border border-gray-200 rounded text-center">
-                          <div className="w-4 h-4 rounded bg-[#f8fafc] border border-gray-400 mx-auto mb-2"></div>
-                          <div className="text-gray-500 font-bold mb-1">Zone 1</div>
-                          <div className="text-xl font-bold text-gray-900">{p_zone1} psf</div>
-                        </div>
-                        <div className="bg-green-50 p-4 border border-green-200 rounded text-center">
-                          <div className="w-4 h-4 rounded bg-[#bbf7d0] border border-green-400 mx-auto mb-2"></div>
-                          <div className="text-green-800 font-bold mb-1">Zone 2</div>
-                          <div className="text-xl font-bold text-green-900">{p_zone2} psf</div>
-                        </div>
-                        <div className="bg-red-50 p-4 border border-red-200 rounded text-center">
-                          <div className="w-4 h-4 rounded bg-[#fca5a5] border border-red-400 mx-auto mb-2"></div>
-                          <div className="text-red-800 font-bold mb-1">Zone 3</div>
-                          <div className="text-xl font-bold text-red-900">{p_zone3} psf</div>
-                        </div>
+                      <div className="bg-gray-50 rounded-md border border-gray-200 overflow-x-auto mb-4">
+                        <table className="w-full text-left text-sm whitespace-nowrap">
+                          <thead className="bg-gray-100 border-b border-gray-200">
+                            <tr>
+                              <th className="p-2 font-semibold text-gray-700 border-r border-gray-200">Zone</th>
+                              <th className="p-2 font-semibold text-gray-700">Area <span className="text-[10px] font-normal">(sf)</span></th>
+                              <th className="p-2 font-semibold text-gray-700">+GC<sub className="text-[10px]">p</sub></th>
+                              <th className="p-2 font-semibold text-gray-700">-GC<sub className="text-[10px]">p</sub></th>
+                              <th className="p-2 font-semibold text-gray-700 text-blue-800 bg-blue-50/50">+p <span className="text-[10px] font-normal">(psf)</span></th>
+                              <th className="p-2 font-semibold text-gray-700 text-blue-800 bg-blue-50/50">-p <span className="text-[10px] font-normal">(psf)</span></th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-200">
+                            {[
+                              { label: 'Roof 1 (Interior)', key: 'roof_zone_1', color: '#f8fafc' },
+                              { label: 'Roof 2 (Edge)', key: 'roof_zone_2', color: '#bbf7d0' },
+                              { label: 'Roof 3 (Corner)', key: 'roof_zone_3', color: '#fca5a5' },
+                              { label: 'Wall 4 (Interior)', key: 'wall_zone_4', color: '#e2e8f0' },
+                              { label: 'Wall 5 (Corner)', key: 'wall_zone_5', color: '#cbd5e1' }
+                            ].map((zone) => (
+                              <React.Fragment key={zone.key}>
+                                {cncAreas.map((area, idx) => {
+                                  const gcpPos = calcGCp(zone.key, area, true);
+                                  const gcpNeg = calcGCp(zone.key, area, false);
+                                  // p = qz * GCp - qz * GCpi (calculating max envelopes)
+                                  const pPos = qz * gcpPos - qz * gcpi_neg;
+                                  const pNeg = qz * gcpNeg - qz * gcpi_pos;
+                                  
+                                  return (
+                                    <tr key={`${zone.key}-${area}`} className="bg-white hover:bg-blue-50/30">
+                                      {idx === 0 && (
+                                        <td rowSpan={cncAreas.length} className="p-2 font-medium text-gray-900 border-r border-gray-200 align-top bg-white">
+                                          <div className="flex items-center gap-2">
+                                            <div className="w-3 h-3 rounded-full border border-gray-400" style={{ backgroundColor: zone.color }}></div>
+                                            {zone.label}
+                                          </div>
+                                        </td>
+                                      )}
+                                      <td className="p-2 text-gray-600">{area === 10 ? '≤ 10' : area === 500 ? '≥ 500' : area}</td>
+                                      <td className="p-2">{gcpPos.toFixed(2)}</td>
+                                      <td className="p-2">{gcpNeg.toFixed(2)}</td>
+                                      <td className="p-2 font-bold text-blue-900 bg-blue-50/30">{pPos.toFixed(1)}</td>
+                                      <td className="p-2 font-bold text-blue-900 bg-blue-50/30">{pNeg.toFixed(1)}</td>
+                                    </tr>
+                                  );
+                                })}
+                              </React.Fragment>
+                            ))}
+                          </tbody>
+                        </table>
                       </div>
                     </>
                   )}
