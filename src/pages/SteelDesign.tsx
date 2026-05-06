@@ -5,6 +5,7 @@ import wShapesData from '../data/aisc/shapes_w.json';
 import aiscData from '../data/aisc/code_factors.json';
 import { IBC_TO_AISC_MAP } from '../data/ibc_mapping';
 import { VariableInput } from '../components/VariableInput';
+import { SteelCrossSection } from '../components/SteelCrossSection';
 
 // Type assertion for the imported JSON
 const shapes = wShapesData as Record<string, { d: number, tw: number, bf: number, tf: number, A: number, Zx: number }>;
@@ -17,6 +18,12 @@ export const SteelDesign: React.FC = () => {
   const [ibcYear, setIbcYear] = useState('IBC 2018');
   const [aiscYear, setAiscYear] = useState(IBC_TO_AISC_MAP['IBC 2018']);
   const [isOverridden, setIsOverridden] = useState(false);
+  const [activeTab, setActiveTab] = useState('Beam/Column');
+
+  const steelTabs = [
+    'Beam/Column', 'Composite Beam', 'Single Angle', 
+    'Base Plate', 'Anchorage'
+  ];
 
   // Rules of Thumb Toggle
   const [showQuickChecks, setShowQuickChecks] = useState(false);
@@ -141,6 +148,27 @@ export const SteelDesign: React.FC = () => {
         </div>
       </div>
 
+      {/* Navigation Sub-tabs */}
+      <div className="border-b border-gray-200 overflow-x-auto custom-scrollbar">
+        <nav className="-mb-px flex space-x-6 min-w-max px-2">
+          {steelTabs.map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`
+                whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors
+                ${activeTab === tab
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }
+              `}
+            >
+              {tab}
+            </button>
+          ))}
+        </nav>
+      </div>
+
       {showQuickChecks && (
         <div className="bg-indigo-50 border border-indigo-100 rounded-lg p-4 animate-in slide-in-from-top-2">
           <div className="flex items-center gap-2 mb-2 text-indigo-800">
@@ -167,12 +195,14 @@ export const SteelDesign: React.FC = () => {
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8" ref={targetRef}>
-        
-        {/* Input Section */}
-        <div className="lg:col-span-1 space-y-6">
-          <div className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4 border-b pb-2">Design Parameters</h2>
+      <div ref={targetRef} className="pt-2">
+        {activeTab === 'Beam/Column' && (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            
+            {/* Input Section */}
+            <div className="lg:col-span-1 space-y-6">
+              <div className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm">
+                <h2 className="text-lg font-semibold text-gray-900 mb-4 border-b pb-2">Design Parameters</h2>
             
             <div className="space-y-4">
               <div>
@@ -220,30 +250,40 @@ export const SteelDesign: React.FC = () => {
         {/* Output Section */}
         <div className="lg:col-span-2 space-y-6">
           <div className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4 border-b pb-2">Results: {aiscYear} ({method})</h2>
+            <div className="flex items-center justify-between mb-4 border-b pb-2">
+              <h2 className="text-lg font-semibold text-gray-900">Results: {aiscYear} ({method})</h2>
+            </div>
             
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-              <div className={`p-4 rounded-lg border ${isOk ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'} md:col-span-3`}>
-                <div className={`text-sm font-medium mb-1 ${isOk ? 'text-green-800' : 'text-red-800'}`}>Interaction Ratio (H1-1)</div>
-                <div className={`text-3xl font-bold flex items-center gap-4 ${isOk ? 'text-green-900' : 'text-red-900'}`}>
-                  {interaction.toFixed(3)}
-                  <span className={`text-lg px-3 py-1 rounded-full ${isOk ? 'bg-green-100' : 'bg-red-100'}`}>
-                    {isOk ? 'PASS' : 'FAIL'}
-                  </span>
+              <div className="md:col-span-2 space-y-6">
+                <div className={`p-4 rounded-lg border ${isOk ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
+                  <div className={`text-sm font-medium mb-1 ${isOk ? 'text-green-800' : 'text-red-800'}`}>Interaction Ratio (H1-1)</div>
+                  <div className={`text-3xl font-bold flex items-center gap-4 ${isOk ? 'text-green-900' : 'text-red-900'}`}>
+                    {interaction.toFixed(3)}
+                    <span className={`text-lg px-3 py-1 rounded-full ${isOk ? 'bg-green-100' : 'bg-red-100'}`}>
+                      {isOk ? 'PASS' : 'FAIL'}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                    <div className="text-sm text-gray-600 font-medium mb-1">Tension Capacity</div>
+                    <div className="text-xl font-bold text-gray-900">{designTension.toFixed(1)} <span className="text-sm font-normal">kips</span></div>
+                  </div>
+                  <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                    <div className="text-sm text-gray-600 font-medium mb-1">Moment Capacity</div>
+                    <div className="text-xl font-bold text-gray-900">{designMoment.toFixed(1)} <span className="text-sm font-normal">kip-ft</span></div>
+                  </div>
                 </div>
               </div>
-
-              <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
-                <div className="text-sm text-gray-600 font-medium mb-1">Tension Capacity</div>
-                <div className="text-xl font-bold text-gray-900">{designTension.toFixed(1)} <span className="text-sm font-normal">kips</span></div>
-              </div>
-              <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
-                <div className="text-sm text-gray-600 font-medium mb-1">Moment Capacity</div>
-                <div className="text-xl font-bold text-gray-900">{designMoment.toFixed(1)} <span className="text-sm font-normal">kip-ft</span></div>
+              
+              <div className="md:col-span-1">
+                <SteelCrossSection d={d} bf={bf} tf={tf} tw={tw} />
               </div>
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-4 border-t border-gray-100 pt-4">
               <h3 className="text-md font-medium text-gray-800">Section Properties ({section})</h3>
               <div className="bg-gray-50 rounded-md p-4 font-mono text-sm border border-gray-200 grid grid-cols-2 gap-4">
                 <div>A = {area} in²</div>
@@ -272,6 +312,16 @@ export const SteelDesign: React.FC = () => {
           </div>
         </div>
 
+          </div>
+        )}
+
+        {/* Placeholders for other tabs */}
+        {activeTab !== 'Beam/Column' && (
+          <div className="p-12 text-center border-2 border-dashed border-gray-200 rounded-lg">
+            <h3 className="text-lg font-medium text-gray-900">{activeTab} Design</h3>
+            <p className="mt-2 text-sm text-gray-500">This AISC 360 calculation module is under construction.</p>
+          </div>
+        )}
       </div>
     </div>
   );
