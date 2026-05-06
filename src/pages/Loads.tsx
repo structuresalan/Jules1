@@ -3,6 +3,8 @@ import { Wind, Download } from 'lucide-react';
 import { usePDF } from 'react-to-pdf';
 import snowData from '../data/asce/snow_factors.json';
 import { IBC_TO_ASCE_MAP } from '../data/ibc_mapping';
+import windData from '../data/asce/wind_factors.json';
+import { VariableInput } from '../components/VariableInput';
 
 type ExposureCategory = "B" | "C" | "D";
 type RoofExposure = "Fully Exposed" | "Partially Exposed" | "Sheltered";
@@ -69,6 +71,39 @@ export const Loads: React.FC = () => {
 
   // Final Sloped Roof Snow Load
   const ps = Cs * pf;
+
+
+  // --- Wind Load Logic ---
+  const activeWindData = (windData as Record<string, typeof windData["ASCE 7-16"]>)[asceYear];
+  
+  // Wind Inputs
+  const [vWind, setVWind] = useState(115); // mph
+  const [meanRoofHeight, setMeanRoofHeight] = useState(30); // ft
+  const [windStructureType, setWindStructureType] = useState<string>("MWFRS (Building)");
+  const [windExposure, setWindExposure] = useState<ExposureCategory>("C");
+  const [kzt, setKzt] = useState(1.0); // Topographic factor
+  const [groundElevation, setGroundElevation] = useState(0); // ft (For Ke calculation in ASCE 7-16+)
+
+  // Wind Math
+  const Kd = activeWindData.directionality_factor_Kd[windStructureType as keyof typeof activeWindData.directionality_factor_Kd];
+  const alpha = activeWindData.exposure_constants[windExposure].alpha;
+  const zg = activeWindData.exposure_constants[windExposure].zg;
+
+  // Calculate Kz (Exposure Coefficient)
+  const z = Math.max(15, meanRoofHeight); // ASCE 7 limits z to minimum 15ft for calculations
+  const Kz = z < 15 
+    ? 2.01 * Math.pow(15 / zg, 2 / alpha) 
+    : 2.01 * Math.pow(z / zg, 2 / alpha);
+  
+  // Calculate Ke (Ground Elevation Factor) - Introduced in ASCE 7-16
+  const isAscePre16 = asceYear === 'ASCE 7-10' || asceYear === 'ASCE 7-05';
+  let Ke = 1.0;
+  if (!isAscePre16 && groundElevation > 0) {
+    Ke = Math.exp(-0.0000362 * groundElevation);
+  }
+
+  // Velocity Pressure (qz) in psf
+  const qz = 0.00256 * Kz * kzt * Kd * Ke * Math.pow(vWind, 2);
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -422,8 +457,150 @@ export const Loads: React.FC = () => {
           </div>
         )}
         
+        {activeTab === 'Wind' && (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            {/* Input Section */}
+            <div className="lg:col-span-1 space-y-6">
+              <div className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm">
+                <h2 className="text-lg font-semibold text-gray-900 mb-4 border-b pb-2">Wind Parameters</h2>
+                
+                <div className="space-y-4">
+                  <VariableInput label="Basic Wind Speed, V" value={vWind} onChange={setVWind} unit="mph" />
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <VariableInput label="Mean Roof Height, h" value={meanRoofHeight} onChange={setMeanRoofHeight} unit="ft" />
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Exposure Category</label>
+                      <select 
+                        value={windExposure} 
+                        onChange={(e) => setWindExposure(e.target.value as ExposureCategory)}
+                        className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2 bg-gray-50"
+                      >
+                        <option value="B">Exposure B</option>
+                        <option value="C">Exposure C</option>
+                        <option value="D">Exposure D</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Structure Type</label>
+                    <select 
+                      value={windStructureType} 
+                      onChange={(e) => setWindStructureType(e.target.value)}
+                      className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2 bg-gray-50"
+                    >
+                      {Object.keys(activeWindData.directionality_factor_Kd).map(type => (
+                        <option key={type} value={type}>{type}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="pt-4 border-t border-gray-200">
+                    <h3 className="text-sm font-semibold text-gray-900 mb-3">Topography & Elevation</h3>
+                    <div className="space-y-4">
+                      <VariableInput label="Topographic Factor, Kzt" value={kzt} onChange={setKzt} step="0.1" />
+                      {!isAscePre16 && (
+                        <VariableInput label="Ground Elevation, Ze" value={groundElevation} onChange={setGroundElevation} unit="ft" />
+                      )}
+                    </div>
+                  </div>
+
+                </div>
+              </div>
+            </div>
+
+            {/* Output Section */}
+            <div className="lg:col-span-2 space-y-6">
+              <div className="bg-white p-8 rounded-lg border border-gray-200 shadow-sm h-full">
+                <h2 className="text-xl font-semibold text-gray-900 mb-6 border-b pb-2">Velocity Pressure Output: {asceYear}</h2>
+                
+                <div className="font-mono text-sm text-gray-800 space-y-4">
+                  <div className="border-l-4 border-blue-500 pl-4 py-1 mb-6">
+                    <h3 className="font-bold text-gray-900 uppercase">Velocity Pressure Calculation</h3>
+                    <p className="text-xs text-gray-500 mt-1">Determine base pressure qz at mean roof height h = {meanRoofHeight} ft</p>
+                  </div>
+
+                  {/* Coefficients Block */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-y-3 mb-6">
+                    <div>Basic Wind Speed (V)</div>
+                    <div>V = <strong>{vWind} mph</strong></div>
+
+                    <div>Wind Directionality Factor</div>
+                    <div>K<sub className="text-[10px]">d</sub> = <strong>{Kd.toFixed(2)}</strong> <span className="text-xs text-gray-500">({windStructureType})</span></div>
+
+                    <div>Topographic Factor</div>
+                    <div>K<sub className="text-[10px]">zt</sub> = <strong>{kzt.toFixed(2)}</strong></div>
+
+                    {!isAscePre16 ? (
+                      <>
+                        <div>Ground Elevation Factor</div>
+                        <div>K<sub className="text-[10px]">e</sub> = <strong>{Ke.toFixed(3)}</strong> <span className="text-xs text-gray-500">(z_e = {groundElevation} ft)</span></div>
+                      </>
+                    ) : (
+                      <>
+                        <div>Ground Elevation Factor</div>
+                        <div>K<sub className="text-[10px]">e</sub> = <strong>N/A</strong> <span className="text-xs text-gray-500">(Not used in {asceYear})</span></div>
+                      </>
+                    )}
+                  </div>
+
+                  <div className="my-4 border-t border-gray-200"></div>
+
+                  {/* Kz Derivation */}
+                  <div className="space-y-2">
+                    <div className="text-gray-500">Velocity Pressure Exposure Coefficient (K<sub className="text-[10px]">z</sub>)</div>
+                    <div>Exposure Category = <strong>{windExposure}</strong></div>
+                    <div>α = {alpha.toFixed(1)}, z<sub className="text-[10px]">g</sub> = {zg} ft</div>
+                    
+                    {z < 15 ? (
+                      <>
+                        <div className="mt-2 text-xs italic text-gray-500">Note: z &lt; 15 ft, using minimum height of 15 ft for calculation.</div>
+                        <div>K<sub className="text-[10px]">z</sub> = 2.01 × (15 / z<sub className="text-[10px]">g</sub>)<sup>2/α</sup></div>
+                        <div>K<sub className="text-[10px]">z</sub> = 2.01 × (15 / {zg})<sup>2/{alpha.toFixed(1)}</sup> = <strong>{Kz.toFixed(3)}</strong></div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="mt-2">K<sub className="text-[10px]">z</sub> = 2.01 × (z / z<sub className="text-[10px]">g</sub>)<sup>2/α</sup></div>
+                        <div>K<sub className="text-[10px]">z</sub> = 2.01 × ({z} / {zg})<sup>2/{alpha.toFixed(1)}</sup> = <strong>{Kz.toFixed(3)}</strong></div>
+                      </>
+                    )}
+                  </div>
+
+                  <div className="my-4 border-t border-gray-200"></div>
+
+                  {/* Final qz calculation */}
+                  <div className="p-4 bg-gray-50 border border-gray-200 rounded">
+                    <div className="text-gray-500 mb-2">Velocity Pressure Eq.</div>
+                    
+                    {!isAscePre16 ? (
+                      <div>q<sub className="text-[10px]">z</sub> = 0.00256 × K<sub className="text-[10px]">z</sub> × K<sub className="text-[10px]">zt</sub> × K<sub className="text-[10px]">d</sub> × K<sub className="text-[10px]">e</sub> × V²</div>
+                    ) : (
+                      <div>q<sub className="text-[10px]">z</sub> = 0.00256 × K<sub className="text-[10px]">z</sub> × K<sub className="text-[10px]">zt</sub> × K<sub className="text-[10px]">d</sub> × V²</div>
+                    )}
+                    
+                    {!isAscePre16 ? (
+                      <div className="mb-4">q<sub className="text-[10px]">z</sub> = 0.00256 × {Kz.toFixed(3)} × {kzt.toFixed(2)} × {Kd.toFixed(2)} × {Ke.toFixed(3)} × {vWind}²</div>
+                    ) : (
+                      <div className="mb-4">q<sub className="text-[10px]">z</sub> = 0.00256 × {Kz.toFixed(3)} × {kzt.toFixed(2)} × {Kd.toFixed(2)} × {vWind}²</div>
+                    )}
+                    
+                    <div className="flex justify-between items-end border-t border-gray-200 pt-4">
+                      <div className="font-bold text-gray-900">Final Velocity Pressure</div>
+                      <div className="text-3xl font-bold text-blue-900 border-b-2 border-blue-900 pb-1">
+                        q<sub className="text-sm">z</sub> = {qz.toFixed(2)} psf
+                      </div>
+                    </div>
+                  </div>
+
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+        
         {/* Placeholders for other tabs */}
-        {activeTab !== 'Snow' && (
+        {activeTab !== 'Snow' && activeTab !== 'Wind' && (
           <div className="p-12 text-center border-2 border-dashed border-gray-200 rounded-lg">
             <h3 className="text-lg font-medium text-gray-900">{activeTab} Loads</h3>
             <p className="mt-2 text-sm text-gray-500">This calculation module is under construction.</p>
