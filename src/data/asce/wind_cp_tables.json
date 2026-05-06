@@ -1,0 +1,17 @@
+{
+  "wall_cp": {
+    "windward": 0.8,
+    "leeward": {
+      "0_to_1": -0.5,
+      "1_to_2": -0.3,
+      "greater_than_2": -0.2
+    },
+    "side": -0.7
+  },
+  "gcpi": {
+    "Enclosed": [0.18, -0.18],
+    "Partially Enclosed": [0.55, -0.55],
+    "Open": [0.0, 0.0]
+  },
+  "gust_effect_factor_G": 0.85
+}

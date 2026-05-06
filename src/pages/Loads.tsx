@@ -6,6 +6,8 @@ import { IBC_TO_ASCE_MAP } from '../data/ibc_mapping';
 import windData from '../data/asce/wind_factors.json';
 import { VariableInput } from '../components/VariableInput';
 import { WindZonesSVG } from '../components/WindZonesSVG';
+import { WindElevationSVG } from '../components/WindElevationSVG';
+import windCpData from '../data/asce/wind_cp_tables.json';
 
 type ExposureCategory = "B" | "C" | "D";
 type RoofExposure = "Fully Exposed" | "Partially Exposed" | "Sheltered";
@@ -82,14 +84,14 @@ export const Loads: React.FC = () => {
   const [meanRoofHeight, setMeanRoofHeight] = useState(30); // ft
   const [bldgLength, setBldgLength] = useState(100); // ft (L - parallel to ridge usually)
   const [bldgWidth, setBldgWidth] = useState(60); // ft (B - normal to ridge)
-  const [windProcedure, setWindProcedure] = useState<string>("Components & Cladding");
-  const [windStructureType, setWindStructureType] = useState<string>("MWFRS (Building)");
+  const [windProcedure, setWindProcedure] = useState<string>("MWFRS (Directional)");
   const [windExposure, setWindExposure] = useState<ExposureCategory>("C");
+  const [enclosureType, setEnclosureType] = useState<string>("Enclosed");
   const [kzt, setKzt] = useState(1.0); // Topographic factor
   const [groundElevation, setGroundElevation] = useState(0); // ft (For Ke calculation in ASCE 7-16+)
 
   // Wind Math
-  const Kd = activeWindData.directionality_factor_Kd[windStructureType as keyof typeof activeWindData.directionality_factor_Kd];
+  const Kd = 0.85; // Hardcoded for Building MWFRS/C&C per user request
   const alpha = activeWindData.exposure_constants[windExposure].alpha;
   const zg = activeWindData.exposure_constants[windExposure].zg;
 
@@ -122,6 +124,39 @@ export const Loads: React.FC = () => {
   const p_zone1 = Math.round(qz * 1.0); // Rough interior pressure 
   const p_zone2 = Math.round(qz * 1.8); // Rough edge pressure
   const p_zone3 = Math.round(qz * 2.8); // Rough corner pressure
+
+  // --- MWFRS Wall Pressures ---
+  // Internal Pressure Coefficient
+  const gcpi = (windCpData.gcpi as Record<string, number[]>)[enclosureType];
+  const gcpi_pos = gcpi[0];
+  const gcpi_neg = gcpi[1];
+  
+  // External Pressure Coefficients (Cp)
+  const cp_windward = windCpData.wall_cp.windward;
+  const cp_side = windCpData.wall_cp.side;
+  
+  // Leeward Cp depends on L/B ratio
+  const lb_ratio = bldgLength / bldgWidth;
+  let cp_leeward = windCpData.wall_cp.leeward["0_to_1"]; // -0.5
+  if (lb_ratio > 1 && lb_ratio <= 2) {
+    cp_leeward = windCpData.wall_cp.leeward["1_to_2"]; // -0.3
+  } else if (lb_ratio > 2) {
+    cp_leeward = windCpData.wall_cp.leeward["greater_than_2"]; // -0.2
+  }
+  
+  const G = windCpData.gust_effect_factor_G;
+
+  // Final Wall Pressures (p = q * G * Cp - qz * GCpi)
+  // Windward varies with height, but for roof calculation we use qz evaluated at h.
+  // We calculate the maximum positive and negative envelopes based on the internal pressure states.
+  const p_ww_max = qz * G * cp_windward - qz * gcpi_neg;
+  const p_ww_min = qz * G * cp_windward - qz * gcpi_pos;
+
+  const p_lw_max = qz * G * cp_leeward - qz * gcpi_neg;
+  const p_lw_min = qz * G * cp_leeward - qz * gcpi_pos;
+
+  const p_side_max = qz * G * cp_side - qz * gcpi_neg;
+  const p_side_min = qz * G * cp_side - qz * gcpi_pos;
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -520,15 +555,15 @@ export const Loads: React.FC = () => {
                       </select>
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Structure Type (Kd)</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Enclosure Type (GCpi)</label>
                       <select 
-                        value={windStructureType} 
-                        onChange={(e) => setWindStructureType(e.target.value)}
+                        value={enclosureType} 
+                        onChange={(e) => setEnclosureType(e.target.value)}
                         className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2 bg-gray-50"
                       >
-                        {Object.keys(activeWindData.directionality_factor_Kd).map(type => (
-                          <option key={type} value={type}>{type}</option>
-                        ))}
+                        <option>Enclosed</option>
+                        <option>Partially Enclosed</option>
+                        <option>Open</option>
                       </select>
                     </div>
                   </div>
@@ -557,6 +592,12 @@ export const Loads: React.FC = () => {
                     <WindZonesSVG L={bldgLength} B={bldgWidth} a={a_dim} />
                   </div>
                 )}
+                
+                {windProcedure === "MWFRS (Directional)" && (
+                  <div className="mb-8">
+                    <WindElevationSVG h={meanRoofHeight} L={bldgLength} roofPitch={0} />
+                  </div>
+                )}
 
                 <div className="font-mono text-sm text-gray-800 space-y-4">
                   <div className="border-l-4 border-blue-500 pl-4 py-1 mb-6">
@@ -569,7 +610,7 @@ export const Loads: React.FC = () => {
                     <div>V = <strong>{vWind} mph</strong></div>
 
                     <div>Wind Directionality Factor</div>
-                    <div>K<sub className="text-[10px]">d</sub> = <strong>{Kd.toFixed(2)}</strong> <span className="text-xs text-gray-500">({windStructureType})</span></div>
+                    <div>K<sub className="text-[10px]">d</sub> = <strong>{Kd.toFixed(2)}</strong> <span className="text-xs text-gray-500">(Building)</span></div>
 
                     <div>Topographic Factor</div>
                     <div>K<sub className="text-[10px]">zt</sub> = <strong>{kzt.toFixed(2)}</strong></div>
@@ -669,6 +710,62 @@ export const Loads: React.FC = () => {
                           <div className="text-red-800 font-bold mb-1">Zone 3</div>
                           <div className="text-xl font-bold text-red-900">{p_zone3} psf</div>
                         </div>
+                      </div>
+                    </>
+                  )}
+
+                  {windProcedure === "MWFRS (Directional)" && (
+                    <>
+                      <div className="border-l-4 border-blue-500 pl-4 py-1 mb-6 mt-8">
+                        <h3 className="font-bold text-gray-900 uppercase">MWFRS Wall Pressures</h3>
+                        <p className="text-xs text-gray-500 mt-1">p = q × G × C<sub className="text-[10px]">p</sub> - q<sub className="text-[10px]">i</sub> × (GC<sub className="text-[10px]">pi</sub>)</p>
+                      </div>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-y-3 mb-6">
+                        <div>Enclosure Type</div>
+                        <div><strong>{enclosureType}</strong></div>
+                        <div>Internal Pressure (GC<sub className="text-[10px]">pi</sub>)</div>
+                        <div><strong>±{gcpi_pos}</strong></div>
+                        <div>Gust Effect Factor (G)</div>
+                        <div><strong>{G}</strong></div>
+                        <div>L/B Ratio</div>
+                        <div><strong>{lb_ratio.toFixed(2)}</strong></div>
+                      </div>
+
+                      <div className="bg-gray-50 rounded-md border border-gray-200 overflow-hidden">
+                        <table className="w-full text-left text-sm">
+                          <thead className="bg-gray-100 border-b border-gray-200">
+                            <tr>
+                              <th className="p-3 font-semibold text-gray-700">Surface</th>
+                              <th className="p-3 font-semibold text-gray-700">C<sub className="text-[10px]">p</sub></th>
+                              <th className="p-3 font-semibold text-gray-700">p (Max) <span className="text-xs font-normal text-gray-500">psf</span></th>
+                              <th className="p-3 font-semibold text-gray-700">p (Min) <span className="text-xs font-normal text-gray-500">psf</span></th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-200">
+                            <tr className="bg-white">
+                              <td className="p-3 font-medium text-gray-900">Windward Wall</td>
+                              <td className="p-3">{cp_windward}</td>
+                              <td className="p-3 text-blue-700 font-bold">{p_ww_max.toFixed(1)}</td>
+                              <td className="p-3">{p_ww_min.toFixed(1)}</td>
+                            </tr>
+                            <tr className="bg-white">
+                              <td className="p-3 font-medium text-gray-900">Leeward Wall</td>
+                              <td className="p-3">{cp_leeward}</td>
+                              <td className="p-3">{p_lw_max.toFixed(1)}</td>
+                              <td className="p-3 text-blue-700 font-bold">{p_lw_min.toFixed(1)}</td>
+                            </tr>
+                            <tr className="bg-white">
+                              <td className="p-3 font-medium text-gray-900">Side Walls</td>
+                              <td className="p-3">{cp_side}</td>
+                              <td className="p-3">{p_side_max.toFixed(1)}</td>
+                              <td className="p-3 text-blue-700 font-bold">{p_side_min.toFixed(1)}</td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+                      <div className="text-xs text-gray-500 mt-2 italic">
+                        * Note: Windward pressure varies with height z. Values shown are evaluated at mean roof height h = {meanRoofHeight}'. Positive indicates pressure towards surface, negative indicates suction away from surface.
                       </div>
                     </>
                   )}
