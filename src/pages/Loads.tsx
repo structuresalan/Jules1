@@ -5,6 +5,7 @@ import snowData from '../data/asce/snow_factors.json';
 import { IBC_TO_ASCE_MAP } from '../data/ibc_mapping';
 import windData from '../data/asce/wind_factors.json';
 import { VariableInput } from '../components/VariableInput';
+import { WindZonesSVG } from '../components/WindZonesSVG';
 
 type ExposureCategory = "B" | "C" | "D";
 type RoofExposure = "Fully Exposed" | "Partially Exposed" | "Sheltered";
@@ -79,6 +80,9 @@ export const Loads: React.FC = () => {
   // Wind Inputs
   const [vWind, setVWind] = useState(115); // mph
   const [meanRoofHeight, setMeanRoofHeight] = useState(30); // ft
+  const [bldgLength, setBldgLength] = useState(100); // ft (L - parallel to ridge usually)
+  const [bldgWidth, setBldgWidth] = useState(60); // ft (B - normal to ridge)
+  const [windProcedure, setWindProcedure] = useState<string>("Components & Cladding");
   const [windStructureType, setWindStructureType] = useState<string>("MWFRS (Building)");
   const [windExposure, setWindExposure] = useState<ExposureCategory>("C");
   const [kzt, setKzt] = useState(1.0); // Topographic factor
@@ -104,6 +108,20 @@ export const Loads: React.FC = () => {
 
   // Velocity Pressure (qz) in psf
   const qz = 0.00256 * Kz * kzt * Kd * Ke * Math.pow(vWind, 2);
+
+  // ASCE Edge Dimension 'a' Calculation
+  const leastBldgDim = Math.min(bldgLength, bldgWidth);
+  const a_calc1 = 0.10 * leastBldgDim;
+  const a_calc2 = 0.40 * meanRoofHeight;
+  let a_dim = Math.max(Math.min(a_calc1, a_calc2), 3, 0.04 * leastBldgDim);
+  // Ensure a isn't absurdly large relative to the building (can happen with weird inputs)
+  a_dim = Math.min(a_dim, leastBldgDim / 2);
+
+  // Theoretical C&C Pressures (Mock GCp ranges based on zones for demonstration)
+  // Actual GCp values require effective wind area calculations and complex charts.
+  const p_zone1 = Math.round(qz * 1.0); // Rough interior pressure 
+  const p_zone2 = Math.round(qz * 1.8); // Rough edge pressure
+  const p_zone3 = Math.round(qz * 2.8); // Rough corner pressure
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -468,6 +486,11 @@ export const Loads: React.FC = () => {
                   <VariableInput label="Basic Wind Speed, V" value={vWind} onChange={setVWind} unit="mph" />
 
                   <div className="grid grid-cols-2 gap-4">
+                    <VariableInput label="Building Length, L" value={bldgLength} onChange={setBldgLength} unit="ft" />
+                    <VariableInput label="Building Width, B" value={bldgWidth} onChange={setBldgWidth} unit="ft" />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
                     <VariableInput label="Mean Roof Height, h" value={meanRoofHeight} onChange={setMeanRoofHeight} unit="ft" />
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Exposure Category</label>
@@ -483,17 +506,31 @@ export const Loads: React.FC = () => {
                     </div>
                   </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Structure Type</label>
-                    <select 
-                      value={windStructureType} 
-                      onChange={(e) => setWindStructureType(e.target.value)}
-                      className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2 bg-gray-50"
-                    >
-                      {Object.keys(activeWindData.directionality_factor_Kd).map(type => (
-                        <option key={type} value={type}>{type}</option>
-                      ))}
-                    </select>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Wind Procedure</label>
+                      <select 
+                        value={windProcedure} 
+                        onChange={(e) => setWindProcedure(e.target.value)}
+                        className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2 bg-gray-50"
+                      >
+                        <option>Components & Cladding</option>
+                        <option>MWFRS (Directional)</option>
+                        <option>MWFRS (Envelope)</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Structure Type (Kd)</label>
+                      <select 
+                        value={windStructureType} 
+                        onChange={(e) => setWindStructureType(e.target.value)}
+                        className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2 bg-gray-50"
+                      >
+                        {Object.keys(activeWindData.directionality_factor_Kd).map(type => (
+                          <option key={type} value={type}>{type}</option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
 
                   <div className="pt-4 border-t border-gray-200">
@@ -513,12 +550,17 @@ export const Loads: React.FC = () => {
             {/* Output Section */}
             <div className="lg:col-span-2 space-y-6">
               <div className="bg-white p-8 rounded-lg border border-gray-200 shadow-sm h-full">
-                <h2 className="text-xl font-semibold text-gray-900 mb-6 border-b pb-2">Velocity Pressure Output: {asceYear}</h2>
+                <h2 className="text-xl font-semibold text-gray-900 mb-6 border-b pb-2">Wind Load Output: {asceYear}</h2>
                 
+                {windProcedure === "Components & Cladding" && (
+                  <div className="mb-8">
+                    <WindZonesSVG L={bldgLength} B={bldgWidth} a={a_dim} />
+                  </div>
+                )}
+
                 <div className="font-mono text-sm text-gray-800 space-y-4">
                   <div className="border-l-4 border-blue-500 pl-4 py-1 mb-6">
-                    <h3 className="font-bold text-gray-900 uppercase">Velocity Pressure Calculation</h3>
-                    <p className="text-xs text-gray-500 mt-1">Determine base pressure qz at mean roof height h = {meanRoofHeight} ft</p>
+                    <h3 className="font-bold text-gray-900 uppercase">Velocity Pressure (q<sub className="text-[10px]">z</sub>)</h3>
                   </div>
 
                   {/* Coefficients Block */}
@@ -570,7 +612,7 @@ export const Loads: React.FC = () => {
                   <div className="my-4 border-t border-gray-200"></div>
 
                   {/* Final qz calculation */}
-                  <div className="p-4 bg-gray-50 border border-gray-200 rounded">
+                  <div className="p-4 bg-gray-50 border border-gray-200 rounded mb-8">
                     <div className="text-gray-500 mb-2">Velocity Pressure Eq.</div>
                     
                     {!isAscePre16 ? (
@@ -592,6 +634,44 @@ export const Loads: React.FC = () => {
                       </div>
                     </div>
                   </div>
+
+                  {windProcedure === "Components & Cladding" && (
+                    <>
+                      <div className="border-l-4 border-blue-500 pl-4 py-1 mb-6 mt-8">
+                        <h3 className="font-bold text-gray-900 uppercase">C&C Edge Dimension 'a'</h3>
+                      </div>
+                      
+                      <div className="space-y-2 mb-8">
+                        <div>Least horizontal bldg dimension = <strong>{leastBldgDim} ft</strong></div>
+                        <div>a = max( min(0.1 × {leastBldgDim}, 0.4 × {meanRoofHeight}), 3, 0.04 × {leastBldgDim} )</div>
+                        <div>a = max( min({a_calc1.toFixed(1)}, {a_calc2.toFixed(1)}), 3, {(0.04 * leastBldgDim).toFixed(1)} )</div>
+                        <div className="font-bold text-lg mt-2 text-gray-900">a = {a_dim.toFixed(1)} ft</div>
+                      </div>
+
+                      <div className="border-l-4 border-blue-500 pl-4 py-1 mb-6">
+                        <h3 className="font-bold text-gray-900 uppercase">Design Pressures (Roof)</h3>
+                        <p className="text-xs text-gray-500 italic">Theoretical peak net pressures (p = qz × GCp)</p>
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-4">
+                        <div className="bg-gray-50 p-4 border border-gray-200 rounded text-center">
+                          <div className="w-4 h-4 rounded bg-[#f8fafc] border border-gray-400 mx-auto mb-2"></div>
+                          <div className="text-gray-500 font-bold mb-1">Zone 1</div>
+                          <div className="text-xl font-bold text-gray-900">{p_zone1} psf</div>
+                        </div>
+                        <div className="bg-green-50 p-4 border border-green-200 rounded text-center">
+                          <div className="w-4 h-4 rounded bg-[#bbf7d0] border border-green-400 mx-auto mb-2"></div>
+                          <div className="text-green-800 font-bold mb-1">Zone 2</div>
+                          <div className="text-xl font-bold text-green-900">{p_zone2} psf</div>
+                        </div>
+                        <div className="bg-red-50 p-4 border border-red-200 rounded text-center">
+                          <div className="w-4 h-4 rounded bg-[#fca5a5] border border-red-400 mx-auto mb-2"></div>
+                          <div className="text-red-800 font-bold mb-1">Zone 3</div>
+                          <div className="text-xl font-bold text-red-900">{p_zone3} psf</div>
+                        </div>
+                      </div>
+                    </>
+                  )}
 
                 </div>
               </div>
