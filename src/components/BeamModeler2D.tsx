@@ -344,6 +344,7 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
     svgX: number;
     svgY: number;
   } | null>(null);
+  const [hasInitializedValidation, setHasInitializedValidation] = useState(false);
 
   const [activePanel, setActivePanel] = useState<BeamPanel>('Design options');
   const [displayOptions, setDisplayOptions] = useState<Record<DisplayKey, boolean>>({
@@ -448,6 +449,14 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
       date: new Date().toISOString().slice(0, 10),
       ...defaults,
     });
+  }, []);
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      setHasInitializedValidation(true);
+    }, 250);
+
+    return () => window.clearTimeout(timeout);
   }, []);
 
   useEffect(() => {
@@ -671,6 +680,7 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
   }, [deflectionLimit, fy, internalSections, ky, kz, lbyy, lbzz, loadFactors, method, section, shapeDatabase, sortedNodes, totalDeflectionLimit, unbracedLength]);
 
   const canRunDesign = requiredFieldIssues.length === 0;
+  const shouldShowValidationBanner = hasInitializedValidation && !canRunDesign;
 
   const analysis = useMemo(() => {
     if (!canRunDesign) return null;
@@ -2317,7 +2327,7 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
           </div>
         </div>
 
-        {!canRunDesign && (
+        {shouldShowValidationBanner && (
           <div className="border-b border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
             <div className="font-semibold">Complete required fields before running steel beam results.</div>
             <ul className="mt-2 list-disc space-y-1 pl-5 text-xs">
@@ -2332,9 +2342,13 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
           <div className="space-y-4 p-4">
             {canRunDesign ? (
               <div className="overflow-x-auto">{renderDiagram()}</div>
-            ) : (
+            ) : hasInitializedValidation ? (
               <div className="rounded-lg border border-dashed border-amber-300 bg-white p-8 text-center text-sm text-amber-800">
                 Results and diagrams are paused until required fields are complete.
+              </div>
+            ) : (
+              <div className="rounded-lg border border-gray-200 bg-white p-8 text-center text-sm text-gray-500">
+                Loading steel beam workspace...
               </div>
             )}
             {canRunDesign && (displayOptions.moment || displayOptions.shear || displayOptions.deflection) && (

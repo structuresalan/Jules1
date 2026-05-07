@@ -1,13 +1,13 @@
-# Fix Steel Page Print Report Flash
+# Fix Steel Required Fields Banner Flash
 
 Replace this file:
 - src/components/BeamModeler2D.tsx
 
 Commit message:
-Prevent steel print report flash
+Delay steel validation banner on page load
 
 What changed:
-- The hidden printable steel report now has an inline display:none guard.
-- The screen CSS also uses display:none !important for the print-only report container.
-- The print media CSS still shows the report when printing.
-- This prevents the hidden report/output content from flashing for a split second when navigating to Steel Design.
+- The required-fields warning no longer appears during the first split second of opening Steel Design.
+- The validation banner now waits briefly until the Steel Beam workspace has initialized.
+- If fields are truly missing/invalid after initialization, the warning still appears.
+- Replaces the initial invalid placeholder with a professional "Loading steel beam workspace..." message during startup.
