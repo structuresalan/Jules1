@@ -1,4 +1,4 @@
-# Required and Optional Steel Fields
+# Optional Steel Fields Default to Null
 
 Replace/add these files:
 - src/components/BeamModeler2D.tsx
@@ -6,26 +6,23 @@ Replace/add these files:
 - src/utils/reportHeaderDefaults.ts
 
 Commit message:
-Add required optional steel field validation
+Default optional steel fields to null
 
 What changed:
-- Adds a red * to required Steel Beam fields.
-- Adds (optional) labels to workflow/report fields like member type, material type, design rule, search, sway, seismic, and some stability/reporting fields.
-- Adds a validation banner listing missing/invalid required fields.
-- Diagrams/results do not run until required fields are valid.
-- Save Output, Preview Output, and Print Output are disabled until required fields are valid.
-- Optional fields do not block calculations.
+- Optional Steel Beam fields now start as Null instead of a design-looking default.
+- Optional dropdowns now include a Null option.
+- Optional numeric fields start blank and show Null in reports/output until changed.
+- Required fields still block calculations if missing/invalid.
+- Optional fields still do not block calculations.
 
-Required fields currently include:
-- Method
-- Selected section
-- Fy
-- Unbraced Lb
-- Internal sections
-- At least two nodes
-- Positive beam length
-- At least two supports
-- Live and total deflection limits
-- Ky-y / Kz-z
-- Lb y-y / Lb z-z
-- Valid load factors
+Optional fields defaulting to Null include:
+- Member type
+- Material type
+- Design rule
+- Shape family filter
+- Lcomp top
+- Lcomp bottom
+- Ltorque
+- y sway
+- z sway
+- Seismic design rule
