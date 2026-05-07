@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { AlertCircle, CheckCircle2, Download, Plus, Trash2 } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Download, Plus, Printer, Trash2 } from 'lucide-react';
 import wShapesData from '../data/aisc/shapes_w.json';
 import aiscData from '../data/aisc/code_factors.json';
 
@@ -121,6 +121,13 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
   const [includeModel, setIncludeModel] = useState(true);
   const [includeCalculations, setIncludeCalculations] = useState(true);
   const [includeResults, setIncludeResults] = useState(true);
+  const [includeSelfWeight, setIncludeSelfWeight] = useState(true);
+  const [showOutputPreview, setShowOutputPreview] = useState(false);
+  const [reportProject, setReportProject] = useState('');
+  const [reportJobRef, setReportJobRef] = useState('');
+  const [reportSectionName, setReportSectionName] = useState('Steel Beam');
+  const [reportSheetNumber, setReportSheetNumber] = useState('1');
+  const [reportCalcBy, setReportCalcBy] = useState('');
 
   const [activePanel, setActivePanel] = useState<BeamPanel>('Design options');
   const [displayOptions, setDisplayOptions] = useState<Record<DisplayKey, boolean>>({
@@ -148,6 +155,11 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
   const sortedNodes = useMemo(() => [...nodes].sort((a, b) => a.x - b.x), [nodes]);
   const selectedShape = shapes[section] ?? shapes[shapeNames[0]] ?? { A: 10, Zx: 50 };
   const aiscFactors = (aiscData as Record<string, typeof aiscData['AISC 360-16']>)[activeAiscYear] ?? aiscData['AISC 360-16'];
+  const sectionDepth = Math.max(Number(section.match(/W\s*(\d+(?:\.\d+)?)/i)?.[1] ?? 12), 1);
+  const estimatedSx = Math.max(selectedShape.Zx * 0.87, 0.1);
+  const estimatedIx = Math.max(estimatedSx * (sectionDepth / 2), selectedShape.Zx, 0.1);
+  const elasticModulus = 29000;
+  const selfWeightKipPerFt = (selectedShape.A * 490) / 144 / 1000;
 
   const addNode = () => {
     const lastX = sortedNodes.length ? sortedNodes[sortedNodes.length - 1].x : 0;
@@ -242,6 +254,16 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
     const pointLoads: PointLoadAnalysis[] = [];
     const distributedLoads: DistributedLoadAnalysis[] = [];
 
+    if (includeSelfWeight) {
+      const selfWeightFactor = loadFactors.D;
+      distributedLoads.push({
+        x1: beamStart,
+        x2: beamEnd,
+        w: selfWeightKipPerFt * selfWeightFactor,
+        label: `Self weight D${selfWeightFactor !== 1 ? `×${selfWeightFactor.toFixed(2)}` : ''}`,
+      });
+    }
+
     loads.forEach((load) => {
       const fromNode = nodes.find((node) => node.id === load.fromNodeId);
       const toNode = nodes.find((node) => node.id === load.toNodeId) ?? fromNode;
@@ -322,7 +344,7 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
       maxMoment,
       totalVerticalLoad,
     };
-  }, [sortedNodes, loads, nodes, loadFactors]);
+  }, [sortedNodes, loads, nodes, loadFactors, includeSelfWeight, selfWeightKipPerFt]);
 
   const nominalMoment = (fy * selectedShape.Zx) / 12;
   const designMoment = method === 'LRFD' ? aiscFactors.phi_b * nominalMoment : nominalMoment / aiscFactors.omega_b;
@@ -334,6 +356,61 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
   const isPassing = controllingUtilization <= 1;
   const liveDeflectionLimit = analysis ? (analysis.fullLength * 12) / Math.max(deflectionLimit, 1) : 0;
   const totalServiceDeflectionLimit = analysis ? (analysis.fullLength * 12) / Math.max(totalDeflectionLimit, 1) : 0;
+  const reportDate = new Date().toLocaleDateString();
+  const maximumDeflection = useMemo(() => {
+    if (!analysis || analysis.xs.length < 2) return { value: 0, position: 0 };
+
+    const startIn = analysis.beamStart * 12;
+    const endIn = analysis.beamEnd * 12;
+    const lengthIn = Math.max(endIn - startIn, 1);
+    const curvature = analysis.moment.map((momentValue) => (momentValue * 12) / (elasticModulus * estimatedIx));
+    const slope: number[] = new Array(analysis.xs.length).fill(0);
+    const rawDeflection: number[] = new Array(analysis.xs.length).fill(0);
+
+    for (let index = 1; index < analysis.xs.length; index += 1) {
+      const dx = (analysis.xs[index] - analysis.xs[index - 1]) * 12;
+      slope[index] = slope[index - 1] + ((curvature[index - 1] + curvature[index]) / 2) * dx;
+      rawDeflection[index] = rawDeflection[index - 1] + ((slope[index - 1] + slope[index]) / 2) * dx;
+    }
+
+    let maxValue = 0;
+    let maxPosition = analysis.beamStart;
+    const endCorrection = rawDeflection[rawDeflection.length - 1];
+
+    analysis.xs.forEach((x, index) => {
+      const xIn = x * 12;
+      const corrected = rawDeflection[index] - ((xIn - startIn) / lengthIn) * endCorrection;
+      if (Math.abs(corrected) > Math.abs(maxValue)) {
+        maxValue = corrected;
+        maxPosition = x;
+      }
+    });
+
+    return { value: Math.abs(maxValue), position: maxPosition };
+  }, [analysis, elasticModulus, estimatedIx]);
+
+  const deflectionUtilization = maximumDeflection.value / Math.max(totalServiceDeflectionLimit, 0.001);
+  const reportElementLoads = [
+    ...(includeSelfWeight ? [{ id: 'self-weight', element: 1, loadCase: 'Dead', loadType: 'Self weight', orientation: 'Global Z', description: `${selfWeightKipPerFt.toFixed(3)} kips/ft` }] : []),
+    ...loads.map((load, index) => {
+      const fromNode = nodes.find((node) => node.id === load.fromNodeId);
+      const toNode = nodes.find((node) => node.id === load.toNodeId);
+      const caseName = load.loadCase === 'D' ? 'Dead' : load.loadCase === 'L' ? 'Live' : load.loadCase === 'S' ? 'Snow' : 'Wind';
+      const loadType = load.type === 'Point' ? 'Point load' : load.type === 'Line' ? 'UDL' : 'Area load';
+      const location = load.type === 'Point'
+        ? `${load.magnitude.toFixed(2)} ${loadUnit(load)} at ${(fromNode?.x ?? 0).toFixed(2)} ft`
+        : `${load.magnitude.toFixed(2)} ${loadUnit(load)} from ${(fromNode?.x ?? 0).toFixed(2)} ft to ${(toNode?.x ?? 0).toFixed(2)} ft`;
+
+      return {
+        id: load.id,
+        element: index + 1,
+        loadCase: caseName,
+        loadType,
+        orientation: load.direction === 'Down' ? 'Global Z' : 'Global -Z',
+        description: location,
+      };
+    }),
+  ];
 
   const xToSvg = (x: number, width: number, start: number, length: number) => 80 + ((x - start) / Math.max(length, 1)) * (width - 160);
 
@@ -496,6 +573,10 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
             <div className="mt-1 font-semibold">{activeAiscYear}</div>
             <div className="mt-1 text-xs text-blue-700">Use the steel page selector in the top-right header to change the governing code edition.</div>
           </div>
+          <label className="flex items-center gap-2 rounded border border-gray-200 bg-white p-3 text-sm font-medium text-gray-700">
+            <input type="checkbox" checked={includeSelfWeight} onChange={(event) => setIncludeSelfWeight(event.target.checked)} />
+            Include member self weight as a dead load
+          </label>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <label className="text-sm font-medium text-gray-700">
               Method
@@ -723,25 +804,295 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
     }
 
     return (
-      <div className="space-y-3 text-sm">
-        <label className="flex items-center gap-2 rounded border border-gray-200 bg-white p-3"><input type="checkbox" checked={includeModel} onChange={(event) => setIncludeModel(event.target.checked)} />Include beam model graphic</label>
-        <label className="flex items-center gap-2 rounded border border-gray-200 bg-white p-3"><input type="checkbox" checked={includeCalculations} onChange={(event) => setIncludeCalculations(event.target.checked)} />Include calculation steps</label>
-        <label className="flex items-center gap-2 rounded border border-gray-200 bg-white p-3"><input type="checkbox" checked={includeResults} onChange={(event) => setIncludeResults(event.target.checked)} />Include utilization summary</label>
+      <div className="space-y-4 text-sm">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+          <label className="font-medium text-gray-700">Project<input value={reportProject} onChange={(event) => setReportProject(event.target.value)} className="mt-1 w-full rounded border border-gray-300 p-2 text-sm" placeholder="Project name" /></label>
+          <label className="font-medium text-gray-700">Job Ref.<input value={reportJobRef} onChange={(event) => setReportJobRef(event.target.value)} className="mt-1 w-full rounded border border-gray-300 p-2 text-sm" placeholder="Job reference" /></label>
+          <label className="font-medium text-gray-700">Section<input value={reportSectionName} onChange={(event) => setReportSectionName(event.target.value)} className="mt-1 w-full rounded border border-gray-300 p-2 text-sm" /></label>
+          <label className="font-medium text-gray-700">Sheet no./rev.<input value={reportSheetNumber} onChange={(event) => setReportSheetNumber(event.target.value)} className="mt-1 w-full rounded border border-gray-300 p-2 text-sm" /></label>
+          <label className="font-medium text-gray-700">Calc. by<input value={reportCalcBy} onChange={(event) => setReportCalcBy(event.target.value)} className="mt-1 w-full rounded border border-gray-300 p-2 text-sm" placeholder="Initials" /></label>
+        </div>
+        <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
+          <label className="flex items-center gap-2 rounded border border-gray-200 bg-white p-3"><input type="checkbox" checked={includeModel} onChange={(event) => setIncludeModel(event.target.checked)} />Include beam model graphic</label>
+          <label className="flex items-center gap-2 rounded border border-gray-200 bg-white p-3"><input type="checkbox" checked={includeCalculations} onChange={(event) => setIncludeCalculations(event.target.checked)} />Include calculation steps</label>
+          <label className="flex items-center gap-2 rounded border border-gray-200 bg-white p-3"><input type="checkbox" checked={includeResults} onChange={(event) => setIncludeResults(event.target.checked)} />Include utilization summary</label>
+        </div>
       </div>
     );
   };
 
+
+  const renderReportBeamDiagram = (mode: 'geometry' | 'loading' | 'moment' | 'shear' | 'deflection') => {
+    const width = 760;
+    const height = 150;
+    const beamY = 72;
+    const start = analysis?.beamStart ?? sortedNodes[0]?.x ?? 0;
+    const end = analysis?.beamEnd ?? sortedNodes[sortedNodes.length - 1]?.x ?? 30;
+    const length = Math.max(end - start, 1);
+    const mapX = (x: number) => 60 + ((x - start) / length) * (width - 120);
+    const momentPeak = Math.max(...(analysis?.moment.map((value) => Math.abs(value)) ?? [0]), 1);
+    const shearPeak = Math.max(...(analysis?.shear.map((value) => Math.abs(value)) ?? [0]), 1);
+    const plotBaseY = 102;
+
+    const plotPoints = mode === 'moment' && analysis
+      ? analysis.xs.map((x, index) => `${mapX(x)},${plotBaseY - (analysis.moment[index] / momentPeak) * 42}`).join(' ')
+      : mode === 'shear' && analysis
+        ? analysis.xs.map((x, index) => `${mapX(x)},${plotBaseY - (analysis.shear[index] / shearPeak) * 42}`).join(' ')
+        : mode === 'deflection' && analysis
+          ? analysis.xs.map((x, index) => `${mapX(x)},${plotBaseY + analysis.deflectionShape[index] * 30}`).join(' ')
+          : '';
+
+    return (
+      <svg viewBox={`0 0 ${width} ${height}`} className="report-diagram">
+        <defs>
+          <marker id={`reportArrow-${mode}`} markerWidth="7" markerHeight="7" refX="3.5" refY="6" orient="auto">
+            <polygon points="0 0, 7 0, 3.5 7" fill="#111827" />
+          </marker>
+        </defs>
+        <line x1="45" y1={beamY} x2={width - 45} y2={beamY} stroke="#111827" strokeWidth="2" />
+        {sortedNodes.map((node, index) => {
+          const x = mapX(node.x);
+          return (
+            <g key={`report-node-${node.id}`}>
+              <line x1={x} y1={beamY - 8} x2={x} y2={beamY + 12} stroke="#6b7280" strokeDasharray="3,3" />
+              <text x={x} y={beamY - 14} fontSize="9" textAnchor="middle" fill="#4b5563">{index + 1}</text>
+              {node.support === 'Fixed' ? (
+                <rect x={x - 5} y={beamY - 20} width="10" height="20" fill="none" stroke="#111827" />
+              ) : node.support === 'Pinned' ? (
+                <polygon points={`${x},${beamY + 1} ${x - 10},${beamY + 18} ${x + 10},${beamY + 18}`} fill="none" stroke="#111827" />
+              ) : node.support === 'Roller' ? (
+                <g><polygon points={`${x},${beamY + 1} ${x - 10},${beamY + 15} ${x + 10},${beamY + 15}`} fill="none" stroke="#111827" /><circle cx={x - 5} cy={beamY + 20} r="3" fill="none" stroke="#111827" /><circle cx={x + 5} cy={beamY + 20} r="3" fill="none" stroke="#111827" /></g>
+              ) : (
+                <circle cx={x} cy={beamY} r="3" fill="#111827" />
+              )}
+            </g>
+          );
+        })}
+        {mode === 'loading' && analysis?.distributedLoads.map((load, index) => {
+          const x1 = mapX(load.x1);
+          const x2 = mapX(load.x2);
+          return (
+            <g key={`report-dist-${index}`}>
+              <rect x={x1} y="32" width={Math.max(x2 - x1, 1)} height={beamY - 32} fill="#fed7aa" stroke="#fb923c" opacity="0.75" />
+              {Array.from({ length: Math.max(2, Math.min(8, Math.round((x2 - x1) / 70))) }, (_unused, arrowIndex) => {
+                const count = Math.max(2, Math.min(8, Math.round((x2 - x1) / 70)));
+                const arrowX = x1 + ((x2 - x1) * arrowIndex) / Math.max(count - 1, 1);
+                return <line key={arrowIndex} x1={arrowX} y1="32" x2={arrowX} y2={beamY - 4} stroke="#111827" markerEnd={`url(#reportArrow-${mode})`} />;
+              })}
+              <text x={(x1 + x2) / 2} y="25" fontSize="9" textAnchor="middle">{Math.abs(load.w).toFixed(2)} k/ft</text>
+            </g>
+          );
+        })}
+        {mode === 'loading' && analysis?.pointLoads.map((load, index) => {
+          const x = mapX(load.x);
+          return (
+            <g key={`report-point-${index}`}>
+              <line x1={x} y1="24" x2={x} y2={beamY - 4} stroke="#111827" strokeWidth="1.5" markerEnd={`url(#reportArrow-${mode})`} />
+              <text x={x} y="16" fontSize="9" textAnchor="middle">{Math.abs(load.p).toFixed(2)} k</text>
+            </g>
+          );
+        })}
+        {plotPoints && <polyline points={plotPoints} fill="none" stroke="#111827" strokeWidth="2" />}
+        {plotPoints && <line x1="45" y1={plotBaseY} x2={width - 45} y2={plotBaseY} stroke="#9ca3af" strokeDasharray="4,4" />}
+        <text x="60" y="136" fontSize="9" fill="#4b5563">Length = {analysis?.fullLength.toFixed(2) ?? '0.00'} ft</text>
+      </svg>
+    );
+  };
+
+  const renderPrintableReport = () => (
+    <div className="print-sheet">
+      <div className="report-header-grid">
+        <div className="report-brand">
+          <div className="report-logo">SC</div>
+          <div>
+            <div className="report-brand-name">StrucCalc</div>
+            <div className="report-muted">Steel calculation output</div>
+          </div>
+        </div>
+        <div className="report-cell"><span>Project</span><strong>{reportProject || ' '}</strong></div>
+        <div className="report-cell"><span>Job Ref.</span><strong>{reportJobRef || ' '}</strong></div>
+        <div className="report-cell"><span>Section</span><strong>{reportSectionName || ' '}</strong></div>
+        <div className="report-cell"><span>Sheet no./rev.</span><strong>{reportSheetNumber || ' '}</strong></div>
+        <div className="report-cell"><span>Calc. by</span><strong>{reportCalcBy || ' '}</strong></div>
+        <div className="report-cell"><span>Date</span><strong>{reportDate}</strong></div>
+        <div className="report-cell"><span>Chk'd by</span><strong> </strong></div>
+        <div className="report-cell"><span>App'd by</span><strong> </strong></div>
+      </div>
+
+      <section className="report-section report-title-section">
+        <h1>STEEL BEAM ANALYSIS &amp; DESIGN (AISC 360)</h1>
+        <p>In accordance with {activeAiscYear} using the {method} method</p>
+      </section>
+
+      <section className="report-section">
+        <h2>ANALYSIS</h2>
+        <h3>Geometry</h3>
+        {includeModel && <div className="report-diagram-wrap">{renderReportBeamDiagram('geometry')}</div>}
+        <table className="report-table">
+          <thead><tr><th>Span</th><th>Length (ft)</th><th>Section</th><th>Start Support</th><th>End Support</th></tr></thead>
+          <tbody>
+            <tr><td>1</td><td>{analysis?.fullLength.toFixed(2) ?? '0.00'}</td><td>{section}</td><td>{analysis ? supportLabel(analysis.leftSupport.support) : '-'}</td><td>{analysis ? supportLabel(analysis.rightSupport.support) : '-'}</td></tr>
+            <tr><td colSpan={5}>{section}: Area {selectedShape.A.toFixed(2)} in², Plastic section modulus Zx {selectedShape.Zx.toFixed(2)} in³, estimated Ix {estimatedIx.toFixed(2)} in⁴</td></tr>
+            <tr><td colSpan={5}>Steel: Density 490 lb/ft³, Young's modulus {elasticModulus.toLocaleString()} ksi, Fy {fy.toFixed(0)} ksi</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section className="report-section">
+        <h3>Loading</h3>
+        <p>{includeSelfWeight ? 'Self weight included' : 'Self weight not included'}</p>
+        {includeModel && <div className="report-diagram-wrap">{renderReportBeamDiagram('loading')}</div>}
+        <h3>Load combination factors</h3>
+        <table className="report-table report-factor-table">
+          <thead><tr><th>Load combination</th><th>Self Weight</th><th>Dead</th><th>Live</th><th>Snow</th><th>Wind</th></tr></thead>
+          <tbody><tr><td>{method} design combination</td><td>{includeSelfWeight ? loadFactors.D.toFixed(2) : '0.00'}</td><td>{loadFactors.D.toFixed(2)}</td><td>{loadFactors.L.toFixed(2)}</td><td>{loadFactors.S.toFixed(2)}</td><td>{loadFactors.W.toFixed(2)}</td></tr></tbody>
+        </table>
+        <h3>Element Loads</h3>
+        <table className="report-table">
+          <thead><tr><th>Element</th><th>Load case</th><th>Load Type</th><th>Orientation</th><th>Description</th></tr></thead>
+          <tbody>
+            {reportElementLoads.length === 0 ? <tr><td colSpan={5}>No element loads entered.</td></tr> : reportElementLoads.map((load) => (
+              <tr key={load.id}><td>{load.element}</td><td>{load.loadCase}</td><td>{load.loadType}</td><td>{load.orientation}</td><td>{load.description}</td></tr>
+            ))}
+          </tbody>
+        </table>
+      </section>
+
+      {includeResults && (
+        <section className="report-section report-page-break">
+          <h2>Results</h2>
+          <h3>Forces</h3>
+          <div className="report-result-grid">
+            <div><strong>{analysis?.maxMoment.toFixed(2) ?? '0.00'}</strong><span>Moment envelope (kip-ft)</span></div>
+            <div><strong>{analysis?.maxShear.toFixed(2) ?? '0.00'}</strong><span>Shear envelope (kips)</span></div>
+            <div><strong>{maximumDeflection.value.toFixed(3)}</strong><span>Estimated deflection envelope (in)</span></div>
+          </div>
+          <div className="report-diagram-wrap">{renderReportBeamDiagram('moment')}</div>
+          <div className="report-diagram-wrap">{renderReportBeamDiagram('shear')}</div>
+          <h3>Member results</h3>
+          <table className="report-table">
+            <thead><tr><th>Member</th><th>Position (ft)</th><th>Local deflection (in)</th><th>Reaction A (k)</th><th>Reaction B (k)</th></tr></thead>
+            <tbody><tr><td>Member 1</td><td>{maximumDeflection.position.toFixed(2)} max</td><td>{maximumDeflection.value.toFixed(3)}</td><td>{analysis?.ra.toFixed(2) ?? '0.00'}</td><td>{analysis?.rb.toFixed(2) ?? '0.00'}</td></tr></tbody>
+          </table>
+          <h3>Safety factors</h3>
+          <table className="report-table report-compact-table">
+            <tbody>
+              <tr><td>Shear</td><td>{method === 'LRFD' ? `φv = ${aiscFactors.phi_b.toFixed(2)}` : `Ωv = ${aiscFactors.omega_b.toFixed(2)}`}</td></tr>
+              <tr><td>Flexure</td><td>{method === 'LRFD' ? `φb = ${aiscFactors.phi_b.toFixed(2)}` : `Ωb = ${aiscFactors.omega_b.toFixed(2)}`}</td></tr>
+              <tr><td>Tensile yielding</td><td>{method === 'LRFD' ? `φt = ${aiscFactors.phi_t.toFixed(2)}` : `Ωt = ${aiscFactors.omega_t.toFixed(2)}`}</td></tr>
+            </tbody>
+          </table>
+        </section>
+      )}
+
+      {includeCalculations && (
+        <section className="report-section report-page-break">
+          <h2>Member 1 design</h2>
+          <h3>Section details</h3>
+          <div className="report-two-col">
+            <div>
+              <p>Section type; {section}</p>
+              <p>Steel yield stress; Fy = {fy.toFixed(0)} ksi</p>
+              <p>Modulus of elasticity; E = {elasticModulus.toLocaleString()} ksi</p>
+              <p>Estimated section depth, d = {sectionDepth.toFixed(2)} in</p>
+              <p>Area of section, A = {selectedShape.A.toFixed(2)} in²</p>
+              <p>Plastic section modulus about x-axis, Zx = {selectedShape.Zx.toFixed(2)} in³</p>
+              <p>Estimated second moment of area about x-axis, Ix = {estimatedIx.toFixed(2)} in⁴</p>
+            </div>
+            <svg viewBox="0 0 130 110" className="report-section-sketch">
+              <rect x="20" y="12" width="90" height="13" fill="#e5e7eb" stroke="#111827" />
+              <rect x="56" y="25" width="18" height="58" fill="#e5e7eb" stroke="#111827" />
+              <rect x="20" y="83" width="90" height="13" fill="#e5e7eb" stroke="#111827" />
+              <text x="65" y="106" fontSize="8" textAnchor="middle">{section}</text>
+            </svg>
+          </div>
+          <h3>Design of members for shear</h3>
+          <p>Required shear strength; Vr,x = {analysis?.maxShear.toFixed(2) ?? '0.00'} kips</p>
+          <p>Nominal shear strength; Vn,x = 0.6 × Fy × A = {nominalShear.toFixed(2)} kips</p>
+          <p>Design shear strength; Vc,x = {designShear.toFixed(2)} kips</p>
+          <p>Vr,x / Vc,x = {formatRatio(shearUtilization)}</p>
+          <p className={shearUtilization <= 1 ? 'report-pass' : 'report-fail'}>{shearUtilization <= 1 ? 'PASS - Design shear strength exceeds required shear strength' : 'FAIL - Required shear strength exceeds design shear strength'}</p>
+          <h3>Design of members for flexure</h3>
+          <p>Required flexural strength; Mr,x = {analysis?.maxMoment.toFixed(2) ?? '0.00'} kip-ft</p>
+          <p>Nominal flexural strength; Mn,x = Fy × Zx = {nominalMoment.toFixed(2)} kip-ft</p>
+          <p>Unbraced length; Lb = {unbracedLength.toFixed(2)} ft</p>
+          <p>Design flexural strength; Mc,x = {designMoment.toFixed(2)} kip-ft</p>
+          <p>Mr,x / Mc,x = {formatRatio(momentUtilization)}</p>
+          <p className={momentUtilization <= 1 ? 'report-pass' : 'report-fail'}>{momentUtilization <= 1 ? 'PASS - Design flexural strength exceeds required flexural strength' : 'FAIL - Required flexural strength exceeds design flexural strength'}</p>
+          <h3>Design of members for x-x axis deflection</h3>
+          <p>Maximum deflection; δx = {maximumDeflection.value.toFixed(3)} in at {maximumDeflection.position.toFixed(2)} ft</p>
+          <p>Allowable deflection; δx,Allowable = L / {totalDeflectionLimit} = {totalServiceDeflectionLimit.toFixed(3)} in</p>
+          <p>δx / δx,Allowable = {formatRatio(deflectionUtilization)}</p>
+          <p className={deflectionUtilization <= 1 ? 'report-pass' : 'report-fail'}>{deflectionUtilization <= 1 ? 'PASS - Design deflection is within the selected limit' : 'FAIL - Design deflection exceeds the selected limit'}</p>
+          <p className="report-muted">Deflection and section-property values are preliminary estimates based on available section data and should be verified before construction use.</p>
+        </section>
+      )}
+    </div>
+  );
+
+  const printStyles = (
+    <style>{`
+      .beam-print-report { display: none; }
+      .beam-screen-report .print-sheet { margin: 0 auto; max-width: 8.5in; }
+      .print-sheet { background: white; color: #111827; font-family: Arial, Helvetica, sans-serif; font-size: 11px; line-height: 1.25; padding: 0.25in; }
+      .report-header-grid { display: grid; grid-template-columns: 2.1fr 1.7fr 1.2fr; border: 1px solid #111827; }
+      .report-brand { grid-row: span 3; display: flex; align-items: center; gap: 10px; padding: 10px; border-right: 1px solid #111827; }
+      .report-logo { width: 34px; height: 28px; border: 2px solid #0369a1; color: #0369a1; display: flex; align-items: center; justify-content: center; font-weight: 800; }
+      .report-brand-name { font-size: 18px; font-weight: 800; }
+      .report-muted { color: #4b5563; font-size: 10px; }
+      .report-cell { min-height: 34px; padding: 4px 6px; border-right: 1px solid #111827; border-bottom: 1px solid #111827; display: flex; flex-direction: column; gap: 4px; }
+      .report-cell span { font-size: 9px; color: #374151; }
+      .report-cell strong { min-height: 12px; font-size: 11px; }
+      .report-section { border: 1px solid #111827; border-top: 0; padding: 16px 22px; break-inside: avoid; }
+      .report-title-section { border-top: 1px solid #111827; margin-top: 8px; }
+      .report-section h1 { margin: 0 0 8px; font-size: 15px; text-decoration: underline; }
+      .report-section h2 { margin: 0 0 14px; font-size: 14px; text-decoration: underline; }
+      .report-section h3 { margin: 14px 0 8px; font-size: 12px; }
+      .report-table { width: 100%; border-collapse: collapse; margin: 8px 0 10px; }
+      .report-table th, .report-table td { border: 1px solid #111827; padding: 3px 5px; vertical-align: top; }
+      .report-table th { font-weight: 700; background: #f3f4f6; }
+      .report-factor-table { max-width: 560px; }
+      .report-compact-table { max-width: 360px; }
+      .report-diagram-wrap { margin: 8px 0 14px; text-align: center; }
+      .report-diagram { width: 100%; max-height: 170px; border: 0; }
+      .report-result-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 10px 0; }
+      .report-result-grid div { border: 1px solid #111827; padding: 8px; display: flex; flex-direction: column; gap: 5px; }
+      .report-result-grid strong { font-size: 20px; }
+      .report-two-col { display: grid; grid-template-columns: 1fr 160px; gap: 18px; align-items: start; }
+      .report-section-sketch { width: 150px; height: 130px; }
+      .report-pass { font-weight: 700; color: #166534; }
+      .report-fail { font-weight: 700; color: #991b1b; }
+      .report-page-break { break-before: page; }
+      @media print {
+        @page { size: letter; margin: 0.35in; }
+        body * { visibility: hidden !important; }
+        .beam-print-report, .beam-print-report * { visibility: visible !important; }
+        .beam-print-report { display: block !important; position: absolute; left: 0; top: 0; width: 100%; }
+        .print-sheet { padding: 0; font-size: 10.5px; }
+        .report-section { break-inside: avoid; }
+        .report-page-break { break-before: page; }
+      }
+    `}</style>
+  );
+
   return (
     <div className="space-y-6">
+      {printStyles}
+      <div className="beam-print-report">{renderPrintableReport()}</div>
       <div className="rounded-lg border border-gray-200 bg-white shadow-sm overflow-hidden">
         <div className="flex flex-col gap-3 border-b border-gray-200 bg-gray-50 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <h2 className="text-lg font-semibold text-blue-700 italic">Steel Beam Analysis & Design</h2>
             <p className="text-sm text-gray-500">2D beam workspace for supports, loads, envelopes, and section utilization.</p>
           </div>
-          <button className="inline-flex w-fit items-center gap-2 rounded border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100">
-            <Download size={16} /> Preview output
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button onClick={() => setShowOutputPreview((prev) => !prev)} className="inline-flex w-fit items-center gap-2 rounded border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100">
+              <Download size={16} /> {showOutputPreview ? 'Hide output' : 'Preview output'}
+            </button>
+            <button onClick={() => window.print()} className="inline-flex w-fit items-center gap-2 rounded bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700">
+              <Printer size={16} /> Print output
+            </button>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 gap-0 xl:grid-cols-[minmax(0,1fr)_220px]">
@@ -834,6 +1185,21 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
           </div>
         </div>
       </div>
+
+      {showOutputPreview && (
+        <div className="beam-screen-report rounded-lg border border-gray-200 bg-gray-100 p-4 shadow-sm">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900">Printable output preview</h3>
+              <p className="text-sm text-gray-500">This is the report layout that will be sent to print.</p>
+            </div>
+            <button onClick={() => window.print()} className="inline-flex items-center gap-2 rounded bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700">
+              <Printer size={16} /> Print output
+            </button>
+          </div>
+          {renderPrintableReport()}
+        </div>
+      )}
     </div>
   );
 };
