@@ -1,26 +1,28 @@
-# Account Creation and Sign Out
+# Invite Code Signup
 
 Replace/add these files:
-- src/firebase.ts
 - src/context/AuthContext.tsx
 - src/context/authContextInstance.ts
 - src/pages/Login.tsx
-- src/pages/ProjectHome.tsx
+- .env.example
 
 Commit message:
-Add account creation and project sign out
+Add invite code signup
 
 What changed:
-- Login page now has two tabs:
-  - Sign in
-  - Create account
-- Create account uses Firebase Email/Password authentication.
-- If VITE_ALLOWED_EMAIL is set, only that exact email can create an account.
-- Project homepage now shows the signed-in email.
-- Project homepage now has a Sign Out button.
-- Sidebar sign out remains available on the inner app pages.
+- Create Account now asks for a Signup code.
+- Any email can create an account if VITE_ALLOWED_EMAIL is blank or deleted.
+- Signup still requires the correct invite code from Vercel:
+  VITE_SIGNUP_INVITE_CODE
+- Existing users can still sign in normally without entering the signup code.
 
-Important:
-- In Firebase Authentication > Sign-in method, Email/Password must be enabled.
-- Keep all VITE_FIREBASE_* variables in Vercel.
-- Keep VITE_ALLOWED_EMAIL if you still want only one approved account.
+Vercel setup:
+1. Delete or blank out VITE_ALLOWED_EMAIL if you want any email to be allowed.
+2. Add this variable:
+   VITE_SIGNUP_INVITE_CODE
+3. Set its value to the code you want to give testers, for example:
+   STRUCT2026
+4. Redeploy after saving the variable.
+
+Note:
+This is a frontend invite-code gate. It is good for limiting casual tester signups. For stronger production-grade invite security, move invite validation into a backend/Firebase Cloud Function later.

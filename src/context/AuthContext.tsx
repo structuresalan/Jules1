@@ -14,11 +14,22 @@ const getAllowedEmail = () =>
     .trim()
     .toLowerCase();
 
+const getSignupInviteCode = () =>
+  String(import.meta.env.VITE_SIGNUP_INVITE_CODE || '')
+    .trim();
+
 const isAllowedEmail = (email: string) => {
   const allowedEmail = getAllowedEmail();
   if (!allowedEmail) return true;
 
   return email.trim().toLowerCase() === allowedEmail;
+};
+
+const isValidInviteCode = (inviteCode = '') => {
+  const requiredInviteCode = getSignupInviteCode();
+  if (!requiredInviteCode) return true;
+
+  return inviteCode.trim() === requiredInviteCode;
 };
 
 const isAllowedUser = (candidate: User | null) => {
@@ -31,7 +42,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
   const authConfigured = Boolean(auth);
 
-  const createAccount = async (email: string, password: string) => {
+  const createAccount = async (email: string, password: string, inviteCode = '') => {
     const activeAuth = auth;
     const normalizedEmail = email.trim();
 
@@ -41,6 +52,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     if (!isAllowedEmail(normalizedEmail)) {
       throw new Error('This email is not authorized to create a SimplifyStruct account.');
+    }
+
+    if (!isValidInviteCode(inviteCode)) {
+      throw new Error('Invalid signup code.');
     }
 
     const credential = await createUserWithEmailAndPassword(activeAuth, normalizedEmail, password);

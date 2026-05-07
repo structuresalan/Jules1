@@ -12,6 +12,7 @@ export const Login: React.FC = () => {
   const [email, setEmail] = useState(import.meta.env.VITE_ALLOWED_EMAIL || '');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [inviteCode, setInviteCode] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -32,7 +33,7 @@ export const Login: React.FC = () => {
 
     try {
       if (authMode === 'create') {
-        await createAccount(email, password);
+        await createAccount(email, password, inviteCode);
       } else {
         await login(email, password);
       }
@@ -50,6 +51,7 @@ export const Login: React.FC = () => {
     setErrorMessage('');
     setPassword('');
     setConfirmPassword('');
+    setInviteCode('');
   };
 
   return (
@@ -134,19 +136,34 @@ export const Login: React.FC = () => {
           </label>
 
           {authMode === 'create' && (
-            <label className="block text-sm font-medium text-gray-700">
-              Confirm password
-              <input
-                type="password"
-                value={confirmPassword}
-                onChange={(event) => setConfirmPassword(event.target.value)}
-                className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
-                placeholder="Confirm password"
-                autoComplete="new-password"
-                minLength={6}
-                required
-              />
-            </label>
+            <>
+              <label className="block text-sm font-medium text-gray-700">
+                Confirm password
+                <input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(event) => setConfirmPassword(event.target.value)}
+                  className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                  placeholder="Confirm password"
+                  autoComplete="new-password"
+                  minLength={6}
+                  required
+                />
+              </label>
+
+              <label className="block text-sm font-medium text-gray-700">
+                Signup code
+                <input
+                  type="text"
+                  value={inviteCode}
+                  onChange={(event) => setInviteCode(event.target.value)}
+                  className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                  placeholder="Enter invite code"
+                  autoComplete="off"
+                  required
+                />
+              </label>
+            </>
           )}
 
           <button
@@ -166,7 +183,7 @@ export const Login: React.FC = () => {
 
         {authMode === 'create' && (
           <p className="mt-4 text-center text-xs text-gray-500">
-            If VITE_ALLOWED_EMAIL is set, only that exact email can create an account.
+            Only users with the signup code can create an account.
           </p>
         )}
       </div>
