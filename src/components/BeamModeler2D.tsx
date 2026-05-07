@@ -1,8 +1,8 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { AlertCircle, CheckCircle2, Download, Plus, Printer, Save, Trash2, X } from 'lucide-react';
 import wShapesData from '../data/aisc/shapes_w.json';
 import aiscData from '../data/aisc/code_factors.json';
-import { getActiveProject, getProjectDocuments, getSessionMode, overwriteProjectDocument, saveNewProjectDocument, type ProjectDocument } from '../utils/projectDocuments';
+import { consumeOpenProjectDocumentRequest, getActiveProject, getProjectDocuments, getSessionMode, overwriteProjectDocument, saveNewProjectDocument, type ProjectDocument } from '../utils/projectDocuments';
 
 type SupportType = 'None' | 'Pinned' | 'Roller' | 'Fixed';
 type LoadType = 'Point' | 'Line' | 'Area';
@@ -158,6 +158,8 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
 
   const [loads, setLoads] = useState<BeamLoad[]>([]);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [editingDocumentId, setEditingDocumentId] = useState('');
+  const [loadedDocumentName, setLoadedDocumentName] = useState('');
 
   const sortedNodes = useMemo(() => [...nodes].sort((a, b) => a.x - b.x), [nodes]);
   const selectedShape = shapes[section] ?? shapes[shapeNames[0]] ?? { A: 10, Zx: 50 };
@@ -167,6 +169,42 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
   const estimatedIx = Math.max(estimatedSx * (sectionDepth / 2), selectedShape.Zx, 0.1);
   const elasticModulus = 29000;
   const selfWeightKipPerFt = (selectedShape.A * 490) / 144 / 1000;
+
+  useEffect(() => {
+    const documentToOpen = consumeOpenProjectDocumentRequest();
+    if (!documentToOpen || documentToOpen.type !== 'Steel Beam Design') return;
+
+    const savedInputs = documentToOpen.inputs as {
+      method?: DesignMethod;
+      section?: string;
+      fy?: number;
+      unbracedLength?: number;
+      deflectionLimit?: number;
+      totalDeflectionLimit?: number;
+      includeSelfWeight?: boolean;
+      loadFactors?: Record<LoadCase, number>;
+      nodes?: BeamNode[];
+      loads?: BeamLoad[];
+    };
+
+    if (savedInputs.method) setMethod(savedInputs.method);
+    if (savedInputs.section && shapes[savedInputs.section]) setSection(savedInputs.section);
+    if (typeof savedInputs.fy === 'number') setFy(savedInputs.fy);
+    if (typeof savedInputs.unbracedLength === 'number') setUnbracedLength(savedInputs.unbracedLength);
+    if (typeof savedInputs.deflectionLimit === 'number') setDeflectionLimit(savedInputs.deflectionLimit);
+    if (typeof savedInputs.totalDeflectionLimit === 'number') setTotalDeflectionLimit(savedInputs.totalDeflectionLimit);
+    if (typeof savedInputs.includeSelfWeight === 'boolean') setIncludeSelfWeight(savedInputs.includeSelfWeight);
+    if (savedInputs.loadFactors) setLoadFactors(savedInputs.loadFactors);
+    if (Array.isArray(savedInputs.nodes) && savedInputs.nodes.length >= 2) setNodes(savedInputs.nodes);
+    if (Array.isArray(savedInputs.loads)) setLoads(savedInputs.loads);
+
+    setEditingDocumentId(documentToOpen.id);
+    setLoadedDocumentName(documentToOpen.name);
+    setDocumentName(documentToOpen.name);
+    setSelectedDocumentId(documentToOpen.id);
+    setSaveMode('overwrite');
+    setSaveMessage(`Opened "${documentToOpen.name}" for editing. Save Output can overwrite this document when you are done.`);
+  }, []);
 
   const addNode = () => {
     const lastX = sortedNodes.length ? sortedNodes[sortedNodes.length - 1].x : 0;
@@ -1109,6 +1147,11 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
       setSaveMessage('Open or create a project before saving calculation output. Quick calculations can be printed, but they are not saved to project documents.');
     }
 
+    if (editingDocumentId) {
+      setSaveMode('overwrite');
+      setSelectedDocumentId(editingDocumentId);
+    }
+
     if (!documentName.trim()) {
       setDocumentName(`${section} Beam Design`);
     }
@@ -1168,15 +1211,22 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
         return;
       }
 
-      overwriteProjectDocument(selectedDocumentId, payload);
-      setSaveMessage('Existing project document overwritten.');
+      const overwrittenDocument = overwriteProjectDocument(selectedDocumentId, payload);
+      if (overwrittenDocument) {
+        setEditingDocumentId(overwrittenDocument.id);
+        setLoadedDocumentName(overwrittenDocument.name);
+      }
+      setSaveMessage('Existing editable project document overwritten.');
     } else {
       const savedDocument = saveNewProjectDocument({
         ...payload,
         projectId: activeProject.id,
       });
       setSelectedDocumentId(savedDocument.id);
-      setSaveMessage('Saved as a new project document.');
+      setEditingDocumentId(savedDocument.id);
+      setLoadedDocumentName(savedDocument.name);
+      setSaveMode('overwrite');
+      setSaveMessage('Saved as a new editable project document.');
     }
 
     refreshProjectDocuments();
@@ -1239,6 +1289,11 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
           <div>
             <h2 className="text-lg font-semibold text-blue-700 italic">Steel Beam Analysis & Design</h2>
             <p className="text-sm text-gray-500">2D beam workspace for supports, loads, envelopes, and section utilization.</p>
+            {loadedDocumentName && (
+              <div className="mt-2 inline-flex rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
+                Editing saved document: {loadedDocumentName}
+              </div>
+            )}
           </div>
           <div className="flex flex-wrap gap-2">
             <button onClick={openSaveOutputModal} className="inline-flex w-fit items-center gap-2 rounded border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-medium text-blue-700 hover:bg-blue-100">
@@ -1360,7 +1415,7 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
             <div className="flex items-start justify-between border-b border-gray-200 p-5">
               <div>
                 <h3 className="text-lg font-semibold text-gray-900">Save calculation output</h3>
-                <p className="mt-1 text-sm text-gray-500">Save this beam report into the active project as a project document.</p>
+                <p className="mt-1 text-sm text-gray-500">Save the report and current editable inputs into the active project as a project document.</p>
               </div>
               <button onClick={() => setShowSaveOutputModal(false)} className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700">
                 <X size={20} />
@@ -1380,7 +1435,7 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
                     <input type="radio" checked={saveMode === 'new'} onChange={() => setSaveMode('new')} />
                     <span className="font-semibold text-gray-900">Save as new document</span>
                   </div>
-                  <p className="mt-2 text-sm text-gray-500">Create a new saved output in the active project.</p>
+                  <p className="mt-2 text-sm text-gray-500">Create a new editable saved calculation in the active project.</p>
                 </label>
 
                 <label className={`cursor-pointer rounded-lg border p-4 ${saveMode === 'overwrite' ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-100' : 'border-gray-200 bg-white'}`}>
@@ -1388,7 +1443,7 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
                     <input type="radio" checked={saveMode === 'overwrite'} onChange={() => setSaveMode('overwrite')} />
                     <span className="font-semibold text-gray-900">Overwrite existing document</span>
                   </div>
-                  <p className="mt-2 text-sm text-gray-500">Replace an existing saved output with this report.</p>
+                  <p className="mt-2 text-sm text-gray-500">Replace an existing saved calculation with the current inputs and output.</p>
                 </label>
               </div>
 
@@ -1421,7 +1476,7 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
               )}
 
               <div className="rounded bg-gray-50 p-3 text-xs text-gray-600">
-                Saved documents are stored in this browser for now. The output can be reviewed from the Documents page.
+                Saved documents are stored in this browser for now. The document can be opened from the Documents page for editing later.
               </div>
             </div>
 

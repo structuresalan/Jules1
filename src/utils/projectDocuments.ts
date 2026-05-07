@@ -26,6 +26,7 @@ const PROJECTS_STORAGE_KEY = 'struccalc.projects.v3';
 const ACTIVE_PROJECT_KEY = 'struccalc.activeProject.v3';
 const SESSION_MODE_KEY = 'struccalc.sessionMode.v3';
 const DOCUMENTS_STORAGE_KEY = 'struccalc.projectDocuments.v1';
+const OPEN_DOCUMENT_STORAGE_KEY = 'struccalc.openDocument.v1';
 
 const makeDocumentId = () => `doc_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 
@@ -193,4 +194,20 @@ export const exportDocumentHtml = (document: ProjectDocument) => {
   anchor.download = `${document.name.replace(/[^a-z0-9-_]+/gi, '_')}.html`;
   anchor.click();
   URL.revokeObjectURL(url);
+};
+
+
+export const requestOpenProjectDocument = (documentId: string) => {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(OPEN_DOCUMENT_STORAGE_KEY, documentId);
+};
+
+export const consumeOpenProjectDocumentRequest = () => {
+  if (typeof window === 'undefined') return null;
+
+  const documentId = window.localStorage.getItem(OPEN_DOCUMENT_STORAGE_KEY);
+  if (!documentId) return null;
+
+  window.localStorage.removeItem(OPEN_DOCUMENT_STORAGE_KEY);
+  return getDocumentById(documentId);
 };

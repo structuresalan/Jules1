@@ -1,9 +1,11 @@
 import React, { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Copy, Download, FileText, Pencil, Search, Trash2 } from 'lucide-react';
 import {
   deleteProjectDocument,
   duplicateProjectDocument,
   exportDocumentHtml,
+  requestOpenProjectDocument,
   formatDocumentDate,
   getActiveProject,
   getProjectDocuments,
@@ -12,6 +14,7 @@ import {
 } from '../utils/projectDocuments';
 
 export const Documents: React.FC = () => {
+  const navigate = useNavigate();
   const activeProject = getActiveProject();
   const [documents, setDocuments] = useState<ProjectDocument[]>(() =>
     activeProject ? getProjectDocuments(activeProject.id) : [],
@@ -58,6 +61,17 @@ export const Documents: React.FC = () => {
     setRenamingId(null);
     setRenameValue('');
     refreshDocuments();
+  };
+
+  const handleOpen = (document: ProjectDocument) => {
+    requestOpenProjectDocument(document.id);
+
+    if (document.module === 'Steel') {
+      navigate('/steel');
+      return;
+    }
+
+    navigate(document.sourcePath || '/dashboard');
   };
 
   const handleDelete = (documentId: string) => {
@@ -154,6 +168,7 @@ export const Documents: React.FC = () => {
                     <td className="border-b border-gray-100 px-4 py-3 font-mono text-xs text-gray-500">{document.sourcePath}</td>
                     <td className="border-b border-gray-100 px-4 py-3">
                       <div className="flex justify-end gap-2">
+                        <button onClick={() => handleOpen(document)} className="rounded border border-blue-200 bg-blue-50 px-2 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100" title="Open editable calculation">Open/Edit</button>
                         <button onClick={() => exportDocumentHtml(document)} className="rounded border border-gray-200 bg-white p-1.5 text-gray-600 hover:bg-gray-50" title="Export HTML"><Download size={15} /></button>
                         <button onClick={() => startRename(document)} className="rounded border border-gray-200 bg-white p-1.5 text-gray-600 hover:bg-gray-50" title="Rename"><Pencil size={15} /></button>
                         <button onClick={() => handleDuplicate(document.id)} className="rounded border border-gray-200 bg-white p-1.5 text-gray-600 hover:bg-gray-50" title="Duplicate"><Copy size={15} /></button>
