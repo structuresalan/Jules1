@@ -17,6 +17,7 @@ const isAllowedUser = (candidate: User | null) => {
   const allowedEmail = getAllowedEmail();
   if (!candidate) return true;
   if (!allowedEmail) return true;
+
   return candidate.email?.trim().toLowerCase() === allowedEmail;
 };
 
@@ -26,14 +27,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const authConfigured = Boolean(auth);
 
   const login = async (email: string, password: string) => {
-    if (!auth) {
+    const activeAuth = auth;
+
+    if (!activeAuth) {
       throw new Error('Firebase is not configured yet. Add the Firebase environment variables in Vercel before logging in.');
     }
 
-    const credential = await signInWithEmailAndPassword(auth, email.trim(), password);
+    const credential = await signInWithEmailAndPassword(activeAuth, email.trim(), password);
 
     if (!isAllowedUser(credential.user)) {
-      await signOut(auth);
+      await signOut(activeAuth);
       setUser(null);
       throw new Error('This email is not authorized for SimplifyStruct.');
     }
@@ -42,9 +45,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = async () => {
-    if (auth) {
-      await signOut(auth);
+    const activeAuth = auth;
+
+    if (activeAuth) {
+      await signOut(activeAuth);
     }
+
     setUser(null);
   };
 
@@ -59,14 +65,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   useEffect(() => {
-    if (!auth) {
+    const activeAuth = auth;
+
+    if (!activeAuth) {
       setLoading(false);
       return;
     }
 
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+    const unsubscribe = onAuthStateChanged(activeAuth, async (firebaseUser) => {
       if (firebaseUser && !isAllowedUser(firebaseUser)) {
-        await signOut(auth);
+        await signOut(activeAuth);
         setUser(null);
         setLoading(false);
         return;
