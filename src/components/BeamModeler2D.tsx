@@ -451,14 +451,6 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
   }, []);
 
   useEffect(() => {
-    const timeout = window.setTimeout(() => {
-      setHasInitializedValidation(true);
-    }, 1200);
-
-    return () => window.clearTimeout(timeout);
-  }, []);
-
-  useEffect(() => {
     let cancelled = false;
 
     const loadAiscShapeDatabase = async () => {
@@ -2325,16 +2317,6 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
           </div>
         </div>
 
-        {shouldShowValidationBanner && (
-          <div className="border-b border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-            <div className="font-semibold">Complete required fields before running steel beam results.</div>
-            <ul className="mt-2 list-disc space-y-1 pl-5 text-xs">
-              {requiredFieldIssues.map((issue) => (
-                <li key={issue}>{issue}</li>
-              ))}
-            </ul>
-          </div>
-        )}
 
         <div className="grid grid-cols-1 gap-0 xl:grid-cols-[minmax(0,1fr)_220px]">
           <div className="space-y-4 p-4">

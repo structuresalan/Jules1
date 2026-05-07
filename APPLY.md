@@ -1,13 +1,12 @@
-# Remove Steel Page Layout Shift
+# Final Fix for Steel Layout Shift Build Errors
 
 Replace this file:
 - src/components/BeamModeler2D.tsx
 
 Commit message:
-Remove steel page layout shift on load
+Fix steel layout shift build errors
 
 What changed:
-- The main beam diagram area now renders immediately instead of swapping from a placeholder into the beam figure.
-- Removes the top required-fields banner that could insert itself into the page after a delay.
-- Required-field validation still exists through disabled Save/Preview/Print buttons and detailed validation logic.
-- This should stop the quick page adjustment/flash when opening Steel Design from the dashboard.
+- Fully removes the leftover validation-initialization effect.
+- Fully removes the leftover shouldShowValidationBanner conditional.
+- Keeps the beam diagram rendered immediately to avoid the page adjustment/flash.
