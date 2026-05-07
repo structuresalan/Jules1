@@ -1,13 +1,14 @@
-# Fix Duplicate fieldLabel Build Error
+# Optional Steel Fields Default to ~
 
 Replace this file:
 - src/components/BeamModeler2D.tsx
 
 Commit message:
-Fix duplicate steel field label helper
+Change optional steel defaults to tilde
 
 What changed:
-- Removes the duplicate fieldLabel declaration that caused:
-  TS2451: Cannot redeclare block-scoped variable 'fieldLabel'
-- Keeps the optional fields defaulting to Null.
-- Keeps required field validation.
+- Optional Steel Beam fields now use ~ instead of Null.
+- Optional dropdowns now start with ~.
+- Optional numeric fields start blank and show ~ in reports/output until changed.
+- Required fields still use * and still block calculations if missing/invalid.
+- Optional fields still do not block calculations.

@@ -14,11 +14,11 @@ type LoadCase = 'D' | 'L' | 'S' | 'W';
 type DesignMethod = 'LRFD' | 'ASD';
 type DisplayKey = 'loading' | 'moment' | 'shear' | 'deflection';
 type BeamPanel = 'Design options' | 'Nodes' | 'Loading' | 'Combinations' | 'Deflection criteria' | 'Output options';
-type MemberType = 'Null' | 'Beam' | 'Girder' | 'Joist' | 'Lintel' | 'Other';
-type MaterialType = 'Null' | 'Hot Rolled Steel' | 'Cold Formed Steel' | 'Built-up Steel' | 'Other';
-type DesignRule = 'Null' | 'Typical' | 'Conservative' | 'Custom';
-type SwayOption = 'Null' | 'No' | 'Yes';
-type SeismicDesignRule = 'Null' | 'None' | 'AISC Seismic' | 'Project Specific';
+type MemberType = '~' | 'Beam' | 'Girder' | 'Joist' | 'Lintel' | 'Other';
+type MaterialType = '~' | 'Hot Rolled Steel' | 'Cold Formed Steel' | 'Built-up Steel' | 'Other';
+type DesignRule = '~' | 'Typical' | 'Conservative' | 'Custom';
+type SwayOption = '~' | 'No' | 'Yes';
+type SeismicDesignRule = '~' | 'None' | 'AISC Seismic' | 'Project Specific';
 type ReportHeaderSaveScope = 'document' | 'default';
 
 interface SteelShape {
@@ -47,7 +47,7 @@ interface SteelShape {
 
 
 const optionalDisplay = (value: string | number | null | undefined, suffix = '') => {
-  if (value === null || value === undefined || value === '') return 'Null';
+  if (value === null || value === undefined || value === '') return '~';
   return `${value}${suffix}`;
 };
 
@@ -61,7 +61,7 @@ const parseOptionalNumber = (value: string) => {
 };
 
 const formatOptionalNumber = (value: number | null, decimals = 2, suffix = '') => {
-  if (value === null) return 'Null';
+  if (value === null) return '~';
 
   return `${value.toFixed(decimals)}${suffix}`;
 };
@@ -277,9 +277,9 @@ interface BeamModeler2DProps {
 export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 360-16' }) => {
   const activeAiscYear = Object.prototype.hasOwnProperty.call(aiscData, aiscYear) ? aiscYear : 'AISC 360-16';
   const [method, setMethod] = useState<DesignMethod>('LRFD');
-  const [memberType, setMemberType] = useState<MemberType>('Null');
-  const [materialType, setMaterialType] = useState<MaterialType>('Null');
-  const [designRule, setDesignRule] = useState<DesignRule>('Null');
+  const [memberType, setMemberType] = useState<MemberType>('~');
+  const [materialType, setMaterialType] = useState<MaterialType>('~');
+  const [designRule, setDesignRule] = useState<DesignRule>('~');
   const [internalSections, setInternalSections] = useState(97);
   const [ky, setKy] = useState(1);
   const [kz, setKz] = useState(1);
@@ -288,12 +288,12 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
   const [lCompTop, setLCompTop] = useState<number | null>(null);
   const [lCompBottom, setLCompBottom] = useState<number | null>(null);
   const [lTorque, setLTorque] = useState<number | null>(null);
-  const [ySway, setYSway] = useState<SwayOption>('Null');
-  const [zSway, setZSway] = useState<SwayOption>('Null');
-  const [seismicDesignRule, setSeismicDesignRule] = useState<SeismicDesignRule>('Null');
+  const [ySway, setYSway] = useState<SwayOption>('~');
+  const [zSway, setZSway] = useState<SwayOption>('~');
+  const [seismicDesignRule, setSeismicDesignRule] = useState<SeismicDesignRule>('~');
   const [section, setSection] = useState(seedShapeNames[1] ?? seedShapeNames[0] ?? 'W12X26');
   const [shapeDatabase, setShapeDatabase] = useState<Record<string, SteelShape>>(seedShapes);
-  const [shapeTypeFilter, setShapeTypeFilter] = useState('Null');
+  const [shapeTypeFilter, setShapeTypeFilter] = useState('~');
   const [shapeSearch, setShapeSearch] = useState('');
   const [shapeDatabaseSource, setShapeDatabaseSource] = useState('Seed W-shape database');
   const [shapeDatabaseError, setShapeDatabaseError] = useState('');
@@ -360,7 +360,7 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
   const shapeTypeOptions = useMemo(() => {
     const availableTypes = Array.from(new Set(shapeNames.map((name) => shapeDatabase[name]?.Type || 'Other')));
 
-    return ['Null', 'All', ...preferredShapeTypeOrder.filter((type) => availableTypes.includes(type)), ...availableTypes.filter((type) => !preferredShapeTypeOrder.includes(type)).sort()];
+    return ['~', 'All', ...preferredShapeTypeOrder.filter((type) => availableTypes.includes(type)), ...availableTypes.filter((type) => !preferredShapeTypeOrder.includes(type)).sort()];
   }, [shapeDatabase, shapeNames]);
 
   const filteredShapeNames = useMemo(() => {
@@ -368,7 +368,7 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
 
     return shapeNames.filter((name) => {
       const shape = shapeDatabase[name];
-      const matchesType = shapeTypeFilter === 'Null' || shapeTypeFilter === 'All' || (shape?.Type || 'Other') === shapeTypeFilter;
+      const matchesType = shapeTypeFilter === '~' || shapeTypeFilter === 'All' || (shape?.Type || 'Other') === shapeTypeFilter;
       const matchesSearch = !search || name.toLowerCase().includes(search);
 
       return matchesType && matchesSearch;
@@ -1280,7 +1280,7 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
               <label className="text-sm font-medium text-gray-700">
                 {fieldLabel('Member type')}
                 <select value={memberType} onChange={(event) => setMemberType(event.target.value as MemberType)} className="mt-1 w-full rounded border border-gray-300 bg-white p-2 text-sm">
-                  <option>Null</option>
+                  <option>~</option>
                   <option>Beam</option>
                   <option>Girder</option>
                   <option>Joist</option>
@@ -1291,7 +1291,7 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
               <label className="text-sm font-medium text-gray-700">
                 {fieldLabel('Material type')}
                 <select value={materialType} onChange={(event) => setMaterialType(event.target.value as MaterialType)} className="mt-1 w-full rounded border border-gray-300 bg-white p-2 text-sm">
-                  <option>Null</option>
+                  <option>~</option>
                   <option>Hot Rolled Steel</option>
                   <option>Cold Formed Steel</option>
                   <option>Built-up Steel</option>
@@ -1301,7 +1301,7 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
               <label className="text-sm font-medium text-gray-700">
                 {fieldLabel('Design rule')}
                 <select value={designRule} onChange={(event) => setDesignRule(event.target.value as DesignRule)} className="mt-1 w-full rounded border border-gray-300 bg-white p-2 text-sm">
-                  <option>Null</option>
+                  <option>~</option>
                   <option>Typical</option>
                   <option>Conservative</option>
                   <option>Custom</option>
@@ -1315,7 +1315,7 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
               </label>
               <label className="text-sm font-medium text-gray-700">
                 {fieldLabel('Search section')}
-                <input value={shapeSearch} onChange={(event) => setShapeSearch(event.target.value)} className="mt-1 w-full rounded border border-gray-300 bg-white p-2 text-sm" placeholder="Null / W12, HSS, L4..." />
+                <input value={shapeSearch} onChange={(event) => setShapeSearch(event.target.value)} className="mt-1 w-full rounded border border-gray-300 bg-white p-2 text-sm" placeholder="~/ W12, HSS, L4..." />
               </label>
               <label className="text-sm font-medium text-gray-700">
                 {fieldLabel('Selected section', true)}
@@ -1325,7 +1325,7 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
               </label>
               <div className="rounded border border-gray-200 bg-gray-50 p-2 text-xs text-gray-600 sm:col-span-3">
                 <div><span className="font-semibold">Shape database:</span> {shapeDatabaseSource}</div>
-                <div>{shapeTypeFilter === 'Null' || shapeTypeFilter === 'All' ? shapeNames.length : filteredShapeNames.length} section{(shapeTypeFilter === 'Null' || shapeTypeFilter === 'All' ? shapeNames.length : filteredShapeNames.length) === 1 ? '' : 's'} shown{shapeDatabaseError ? `; fallback reason: ${shapeDatabaseError}` : ''}.</div>
+                <div>{shapeTypeFilter === '~' || shapeTypeFilter === 'All' ? shapeNames.length : filteredShapeNames.length} section{(shapeTypeFilter === '~' || shapeTypeFilter === 'All' ? shapeNames.length : filteredShapeNames.length) === 1 ? '' : 's'} shown{shapeDatabaseError ? `; fallback reason: ${shapeDatabaseError}` : ''}.</div>
               </div>
               <label className="text-sm font-medium text-gray-700">{fieldLabel('Internal sections', true)}<input type="number" min={3} value={internalSections} onChange={(event) => setInternalSections(Number(event.target.value))} className="mt-1 w-full rounded border border-gray-300 p-2 text-sm" /></label>
               <label className="text-sm font-medium text-gray-700">{fieldLabel('Fy (ksi)', true)}<input type="number" value={fy} onChange={(event) => setFy(Number(event.target.value))} className="mt-1 w-full rounded border border-gray-300 p-2 text-sm" /></label>
@@ -1340,9 +1340,9 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
               <label className="text-sm font-medium text-gray-700">{fieldLabel('Lb z-z (ft)', true)}<input type="number" value={lbzz} onChange={(event) => setLbzz(Number(event.target.value))} className="mt-1 w-full rounded border border-gray-300 p-2 text-sm" /></label>
               <label className="text-sm font-medium text-gray-700">{fieldLabel('Ky-y', true)}<input type="number" step="0.05" value={ky} onChange={(event) => setKy(Number(event.target.value))} className="mt-1 w-full rounded border border-gray-300 p-2 text-sm" /></label>
               <label className="text-sm font-medium text-gray-700">{fieldLabel('Kz-z', true)}<input type="number" step="0.05" value={kz} onChange={(event) => setKz(Number(event.target.value))} className="mt-1 w-full rounded border border-gray-300 p-2 text-sm" /></label>
-              <label className="text-sm font-medium text-gray-700">{fieldLabel('Lcomp top (ft)')}<input type="number" placeholder="Null" value={optionalNumberInputValue(lCompTop)} onChange={(event) => setLCompTop(parseOptionalNumber(event.target.value))} className="mt-1 w-full rounded border border-gray-300 p-2 text-sm" /></label>
-              <label className="text-sm font-medium text-gray-700">{fieldLabel('Lcomp bottom (ft)')}<input type="number" placeholder="Null" value={optionalNumberInputValue(lCompBottom)} onChange={(event) => setLCompBottom(parseOptionalNumber(event.target.value))} className="mt-1 w-full rounded border border-gray-300 p-2 text-sm" /></label>
-              <label className="text-sm font-medium text-gray-700">{fieldLabel('Ltorque (ft)')}<input type="number" placeholder="Null" value={optionalNumberInputValue(lTorque)} onChange={(event) => setLTorque(parseOptionalNumber(event.target.value))} className="mt-1 w-full rounded border border-gray-300 p-2 text-sm" /></label>
+              <label className="text-sm font-medium text-gray-700">{fieldLabel('Lcomp top (ft)')}<input type="number" placeholder="~" value={optionalNumberInputValue(lCompTop)} onChange={(event) => setLCompTop(parseOptionalNumber(event.target.value))} className="mt-1 w-full rounded border border-gray-300 p-2 text-sm" /></label>
+              <label className="text-sm font-medium text-gray-700">{fieldLabel('Lcomp bottom (ft)')}<input type="number" placeholder="~" value={optionalNumberInputValue(lCompBottom)} onChange={(event) => setLCompBottom(parseOptionalNumber(event.target.value))} className="mt-1 w-full rounded border border-gray-300 p-2 text-sm" /></label>
+              <label className="text-sm font-medium text-gray-700">{fieldLabel('Ltorque (ft)')}<input type="number" placeholder="~" value={optionalNumberInputValue(lTorque)} onChange={(event) => setLTorque(parseOptionalNumber(event.target.value))} className="mt-1 w-full rounded border border-gray-300 p-2 text-sm" /></label>
             </div>
           </div>
 
@@ -1352,7 +1352,7 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
               <label className="text-sm font-medium text-gray-700">
                 {fieldLabel('y sway')}
                 <select value={ySway} onChange={(event) => setYSway(event.target.value as SwayOption)} className="mt-1 w-full rounded border border-gray-300 bg-white p-2 text-sm">
-                  <option>Null</option>
+                  <option>~</option>
                   <option>No</option>
                   <option>Yes</option>
                 </select>
@@ -1360,7 +1360,7 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
               <label className="text-sm font-medium text-gray-700">
                 {fieldLabel('z sway')}
                 <select value={zSway} onChange={(event) => setZSway(event.target.value as SwayOption)} className="mt-1 w-full rounded border border-gray-300 bg-white p-2 text-sm">
-                  <option>Null</option>
+                  <option>~</option>
                   <option>No</option>
                   <option>Yes</option>
                 </select>
@@ -1368,7 +1368,7 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
               <label className="text-sm font-medium text-gray-700">
                 {fieldLabel('Seismic design rule')}
                 <select value={seismicDesignRule} onChange={(event) => setSeismicDesignRule(event.target.value as SeismicDesignRule)} className="mt-1 w-full rounded border border-gray-300 bg-white p-2 text-sm">
-                  <option>Null</option>
+                  <option>~</option>
                   <option>None</option>
                   <option>AISC Seismic</option>
                   <option>Project Specific</option>
