@@ -10,11 +10,22 @@ export interface ProjectVariable {
   color?: string; // Hex color code
 }
 
-export interface VariablesContextType {
+export interface ProjectVariableTable {
+  id: string;
+  name: string;
+  isEnabled: boolean; // Only enabled tables make their variables valid across modules
   variables: ProjectVariable[];
-  addVariable: (variable: Omit<ProjectVariable, 'id'>) => void;
-  updateVariable: (id: string, variable: Partial<Omit<ProjectVariable, 'id'>>) => void;
-  deleteVariable: (id: string) => void;
+}
+
+export interface VariablesContextType {
+  variableTables: ProjectVariableTable[];
+  variables: ProjectVariable[];
+  addVariableTable: (name?: string) => void;
+  updateVariableTable: (id: string, table: Partial<Omit<ProjectVariableTable, 'id' | 'variables'>>) => void;
+  deleteVariableTable: (id: string) => void;
+  addVariable: (tableId: string, variable: Omit<ProjectVariable, 'id'>) => void;
+  updateVariable: (tableId: string, id: string, variable: Partial<Omit<ProjectVariable, 'id'>>) => void;
+  deleteVariable: (tableId: string, id: string) => void;
 }
 
 export const VariablesContext = createContext<VariablesContextType | undefined>(undefined);

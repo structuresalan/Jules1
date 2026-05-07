@@ -10,10 +10,10 @@ export const WindElevationSVG: React.FC<WindElevationSVGProps> = ({ h, L, roofPi
   const safeH = Math.max(h, 10);
   const safeL = Math.max(L, 10);
 
-  const padX = Math.max(safeL) * 0.22;
-  const padY = Math.max(safeH) * 0.28;
+  const padX = Math.max(safeL * 0.18, 10);
+  const padY = Math.max(safeH * 0.24, 8);
   const viewBoxW = safeL + padX * 2;
-  const viewBoxH = safeH + padY * 2.2;
+  const viewBoxH = safeH + padY * 2.35;
 
   const x0 = padX;
   const y0 = padY + safeH;
@@ -23,10 +23,10 @@ export const WindElevationSVG: React.FC<WindElevationSVGProps> = ({ h, L, roofPi
   const yRoofEdge = padY + roofRise;
   const yPeak = padY;
   const diagramScale = Math.max(viewBoxW, viewBoxH);
-  const fontSize = Math.max(4.5, diagramScale * 0.04);
-  const dimFontSize = Math.max(3.8, diagramScale * 0.032);
-  const strokeW = Math.max(0.45, diagramScale * 0.006);
-  const mag = Math.max(safeH, safeL) * 0.16;
+  const fontSize = Math.max(4.5, diagramScale * 0.035);
+  const dimFontSize = Math.max(3.8, diagramScale * 0.028);
+  const strokeW = Math.max(0.45, diagramScale * 0.0055);
+  const mag = Math.max(safeH, safeL) * 0.13;
 
   const drawDistributedLoad = (
     startX: number,
@@ -37,7 +37,7 @@ export const WindElevationSVG: React.FC<WindElevationSVGProps> = ({ h, L, roofPi
     direction: 'right' | 'left' | 'up' | 'down',
     color: string,
     label: string,
-    labelPos: 'start' | 'center' | 'end'
+    labelPos: 'start' | 'center' | 'end',
   ) => {
     const isVertical = Math.abs(startX - endX) < 0.001;
     const length = isVertical ? Math.abs(endY - startY) : Math.abs(endX - startX);
@@ -103,12 +103,12 @@ export const WindElevationSVG: React.FC<WindElevationSVGProps> = ({ h, L, roofPi
     });
 
     const lx = isVertical
-      ? (direction === 'right' ? startX - magnitude - padX * 0.18 : startX + magnitude + padX * 0.18)
+      ? (direction === 'right' ? startX - magnitude - padX * 0.12 : startX + magnitude + padX * 0.12)
       : (labelPos === 'center' ? (startX + endX) / 2 : (labelPos === 'start' ? startX : endX));
 
     const ly = isVertical
       ? (labelPos === 'center' ? (startY + endY) / 2 : (labelPos === 'start' ? startY : endY))
-      : (direction === 'up' ? startY - magnitude - padY * 0.20 : startY + magnitude + padY * 0.20);
+      : (direction === 'up' ? startY - magnitude - padY * 0.14 : startY + magnitude + padY * 0.14);
 
     return (
       <g>
@@ -123,16 +123,16 @@ export const WindElevationSVG: React.FC<WindElevationSVGProps> = ({ h, L, roofPi
   };
 
   return (
-    <div className="w-full rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+    <div className="w-full overflow-hidden rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
       <div className="mb-3 flex items-center justify-between gap-3">
         <div>
           <div className="text-sm font-semibold text-gray-900">Elevation View - Wind Pressures</div>
-          <div className="text-xs text-gray-500">Wall and roof pressure directions shown larger for review.</div>
+          <div className="text-xs text-gray-500">Wall and roof pressure directions scaled to fit this panel.</div>
         </div>
         <div className="rounded bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-700">h={h.toFixed(1)} ft</div>
       </div>
 
-      <svg viewBox={`0 0 ${viewBoxW} ${viewBoxH}`} className="h-[420px] w-full min-w-[620px]">
+      <svg viewBox={`0 0 ${viewBoxW} ${viewBoxH}`} className="h-[360px] w-full" preserveAspectRatio="xMidYMid meet">
         <defs>
           <marker id="elevationArrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
             <polygon points="0 0, 8 3, 0 6" fill="#2563eb" />
@@ -148,24 +148,24 @@ export const WindElevationSVG: React.FC<WindElevationSVGProps> = ({ h, L, roofPi
         )}
 
         {drawDistributedLoad(x0, y0, x0, padY, mag, 'right', '#2563eb', 'windward', 'center')}
-        {drawDistributedLoad(x0 + safeL, y0, x0 + safeL, padY, mag * 0.75, 'right', '#2563eb', 'leeward', 'center')}
-        {drawDistributedLoad(x0, padY, x0 + safeL, padY, mag * 0.85, 'up', '#7c3aed', 'roof uplift', 'center')}
+        {drawDistributedLoad(x0 + safeL, y0, x0 + safeL, padY, mag * 0.65, 'right', '#2563eb', 'leeward', 'center')}
+        {drawDistributedLoad(x0, padY, x0 + safeL, padY, mag * 0.72, 'up', '#7c3aed', 'roof uplift', 'center')}
 
         <g stroke="#cbd5e1" strokeWidth={strokeW * 0.6}>
-          <line x1={x0 + safeL + padX * 0.35} y1={y0} x2={x0 + safeL + padX * 0.35} y2={padY} />
-          <line x1={x0 + safeL + padX * 0.25} y1={y0} x2={x0 + safeL + padX * 0.45} y2={y0} />
-          <line x1={x0 + safeL + padX * 0.25} y1={padY} x2={x0 + safeL + padX * 0.45} y2={padY} />
-          <text x={x0 + safeL + padX * 0.48} y={y0 - safeH / 2} fontSize={dimFontSize} fill="#64748b" dominantBaseline="middle" stroke="none">h</text>
+          <line x1={x0 + safeL + padX * 0.26} y1={y0} x2={x0 + safeL + padX * 0.26} y2={padY} />
+          <line x1={x0 + safeL + padX * 0.18} y1={y0} x2={x0 + safeL + padX * 0.34} y2={y0} />
+          <line x1={x0 + safeL + padX * 0.18} y1={padY} x2={x0 + safeL + padX * 0.34} y2={padY} />
+          <text x={x0 + safeL + padX * 0.38} y={y0 - safeH / 2} fontSize={dimFontSize} fill="#64748b" dominantBaseline="middle" stroke="none">h</text>
 
-          <line x1={x0} y1={y0 + padY * 0.30} x2={x0 + safeL} y2={y0 + padY * 0.30} />
-          <line x1={x0} y1={y0 + padY * 0.22} x2={x0} y2={y0 + padY * 0.38} />
-          <line x1={x0 + safeL} y1={y0 + padY * 0.22} x2={x0 + safeL} y2={y0 + padY * 0.38} />
-          <text x={x0 + safeL / 2} y={y0 + padY * 0.52} fontSize={dimFontSize} fill="#64748b" textAnchor="middle" stroke="none">L = {L.toFixed(1)} ft</text>
+          <line x1={x0} y1={y0 + padY * 0.28} x2={x0 + safeL} y2={y0 + padY * 0.28} />
+          <line x1={x0} y1={y0 + padY * 0.20} x2={x0} y2={y0 + padY * 0.36} />
+          <line x1={x0 + safeL} y1={y0 + padY * 0.20} x2={x0 + safeL} y2={y0 + padY * 0.36} />
+          <text x={x0 + safeL / 2} y={y0 + padY * 0.48} fontSize={dimFontSize} fill="#64748b" textAnchor="middle" stroke="none">L = {L.toFixed(1)} ft</text>
         </g>
 
-        <g transform={`translate(${x0 - padX * 0.78}, ${y0 - safeH / 2})`}>
-          <line x1="0" y1="0" x2={mag * 0.85} y2="0" stroke="#0f172a" strokeWidth={strokeW * 1.3} markerEnd="url(#elevationArrow)" />
-          <text x={mag * 0.42} y={-padY * 0.28} fontSize={fontSize} fill="#0f172a" textAnchor="middle" fontWeight="800">WIND</text>
+        <g transform={`translate(${x0 - padX * 0.64}, ${y0 - safeH / 2})`}>
+          <line x1="0" y1="0" x2={mag * 0.72} y2="0" stroke="#0f172a" strokeWidth={strokeW * 1.3} markerEnd="url(#elevationArrow)" />
+          <text x={mag * 0.36} y={-padY * 0.20} fontSize={fontSize} fill="#0f172a" textAnchor="middle" fontWeight="800">WIND</text>
         </g>
       </svg>
     </div>
