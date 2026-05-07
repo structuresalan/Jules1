@@ -1,0 +1,329 @@
+import React, { useMemo, useState } from 'react';
+import { Calculator, Clock3, FileText, FolderOpen, Plus, Search, Trash2 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { useProjects, type ProjectCalculationType } from '../context/ProjectContext';
+
+const formatDateTime = (isoDate: string) => {
+  if (!isoDate) return '-';
+
+  try {
+    return new Intl.DateTimeFormat(undefined, {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    }).format(new Date(isoDate));
+  } catch {
+    return isoDate;
+  }
+};
+
+export const ProjectHome: React.FC = () => {
+  const navigate = useNavigate();
+  const { projects, createProject, openProject, deleteProject, startQuickCalculation } = useProjects();
+
+  const [selectedMode, setSelectedMode] = useState<'new' | 'existing' | 'quick'>('new');
+  const [searchText, setSearchText] = useState('');
+  const [projectName, setProjectName] = useState('');
+  const [projectNumber, setProjectNumber] = useState('');
+  const [client, setClient] = useState('');
+  const [location, setLocation] = useState('');
+  const [description, setDescription] = useState('');
+  const [calculationType, setCalculationType] = useState<ProjectCalculationType>('Mixed');
+
+  const filteredProjects = useMemo(() => {
+    const query = searchText.trim().toLowerCase();
+    if (!query) return projects;
+
+    return projects.filter((project) => {
+      const haystack = [
+        project.name,
+        project.projectNumber,
+        project.client,
+        project.location,
+        project.status,
+        project.calculationType,
+      ].join(' ').toLowerCase();
+
+      return haystack.includes(query);
+    });
+  }, [projects, searchText]);
+
+  const handleCreateProject = (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!projectName.trim()) return;
+
+    createProject({
+      name: projectName,
+      projectNumber,
+      client,
+      location,
+      description,
+      calculationType,
+    });
+
+    navigate('/workspace');
+  };
+
+  const handleOpenProject = (projectId: string) => {
+    openProject(projectId);
+    navigate('/workspace');
+  };
+
+  const handleQuickCalculations = () => {
+    startQuickCalculation();
+    navigate('/quick');
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-50 text-gray-900">
+      <div className="mx-auto flex min-h-screen w-full max-w-7xl flex-col px-6 py-8">
+        <header className="mb-8 flex flex-col gap-4 border-b border-gray-200 pb-6 md:flex-row md:items-end md:justify-between">
+          <div>
+            <div className="mb-3 flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-600 text-lg font-bold text-white">SC</div>
+              <div>
+                <h1 className="text-3xl font-bold tracking-tight">StrucCalc Projects</h1>
+                <p className="text-sm text-gray-500">Choose how you want to start your calculation session.</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+            <div className="font-semibold">Project data is saved locally in this browser.</div>
+            <div className="text-xs text-blue-700">Saved projects will appear here next time you open the site on this device.</div>
+          </div>
+        </header>
+
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+          <button
+            onClick={() => setSelectedMode('new')}
+            className={`rounded-xl border p-5 text-left shadow-sm transition ${selectedMode === 'new' ? 'border-blue-500 bg-white ring-2 ring-blue-100' : 'border-gray-200 bg-white hover:border-gray-300'}`}
+          >
+            <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+              <Plus size={22} />
+            </div>
+            <h2 className="text-lg font-semibold">New Project</h2>
+            <p className="mt-2 text-sm text-gray-500">Create a saved project folder for calculations, reports, and future reference.</p>
+          </button>
+
+          <button
+            onClick={() => setSelectedMode('existing')}
+            className={`rounded-xl border p-5 text-left shadow-sm transition ${selectedMode === 'existing' ? 'border-blue-500 bg-white ring-2 ring-blue-100' : 'border-gray-200 bg-white hover:border-gray-300'}`}
+          >
+            <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-lg bg-gray-100 text-gray-700">
+              <FolderOpen size={22} />
+            </div>
+            <h2 className="text-lg font-semibold">Existing Project</h2>
+            <p className="mt-2 text-sm text-gray-500">Open a saved project from a details-style project list.</p>
+          </button>
+
+          <button
+            onClick={handleQuickCalculations}
+            className={`rounded-xl border p-5 text-left shadow-sm transition ${selectedMode === 'quick' ? 'border-blue-500 bg-white ring-2 ring-blue-100' : 'border-gray-200 bg-white hover:border-gray-300'}`}
+          >
+            <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-lg bg-amber-50 text-amber-600">
+              <Calculator size={22} />
+            </div>
+            <h2 className="text-lg font-semibold">Quick Calculations</h2>
+            <p className="mt-2 text-sm text-gray-500">Jump into the calculators without creating or saving a project record.</p>
+          </button>
+        </div>
+
+        <main className="mt-6 flex-1">
+          {selectedMode === 'new' && (
+            <form onSubmit={handleCreateProject} className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+              <div className="mb-6 flex items-start gap-3">
+                <FileText className="mt-1 text-blue-600" size={22} />
+                <div>
+                  <h2 className="text-xl font-semibold">Create a new project</h2>
+                  <p className="mt-1 text-sm text-gray-500">Enter basic details now. You can refine the project later.</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <label className="text-sm font-medium text-gray-700">
+                  Project name
+                  <input
+                    value={projectName}
+                    onChange={(event) => setProjectName(event.target.value)}
+                    className="mt-1 w-full rounded-md border border-gray-300 p-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                    placeholder="Example: Office Building Framing"
+                    required
+                  />
+                </label>
+
+                <label className="text-sm font-medium text-gray-700">
+                  Project number
+                  <input
+                    value={projectNumber}
+                    onChange={(event) => setProjectNumber(event.target.value)}
+                    className="mt-1 w-full rounded-md border border-gray-300 p-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                    placeholder="Auto-filled if left blank"
+                  />
+                </label>
+
+                <label className="text-sm font-medium text-gray-700">
+                  Client
+                  <input
+                    value={client}
+                    onChange={(event) => setClient(event.target.value)}
+                    className="mt-1 w-full rounded-md border border-gray-300 p-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                    placeholder="Client name"
+                  />
+                </label>
+
+                <label className="text-sm font-medium text-gray-700">
+                  Location
+                  <input
+                    value={location}
+                    onChange={(event) => setLocation(event.target.value)}
+                    className="mt-1 w-full rounded-md border border-gray-300 p-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                    placeholder="City, State"
+                  />
+                </label>
+
+                <label className="text-sm font-medium text-gray-700">
+                  Calculation focus
+                  <select
+                    value={calculationType}
+                    onChange={(event) => setCalculationType(event.target.value as ProjectCalculationType)}
+                    className="mt-1 w-full rounded-md border border-gray-300 bg-white p-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                  >
+                    <option>Mixed</option>
+                    <option>Steel</option>
+                    <option>Concrete</option>
+                    <option>Loads</option>
+                  </select>
+                </label>
+
+                <label className="text-sm font-medium text-gray-700 md:col-span-2">
+                  Notes / description
+                  <textarea
+                    value={description}
+                    onChange={(event) => setDescription(event.target.value)}
+                    className="mt-1 min-h-24 w-full rounded-md border border-gray-300 p-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                    placeholder="Optional project notes"
+                  />
+                </label>
+              </div>
+
+              <div className="mt-6 flex flex-wrap items-center justify-end gap-3 border-t border-gray-100 pt-5">
+                <button
+                  type="button"
+                  onClick={() => setSelectedMode('existing')}
+                  className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                >
+                  View Existing Projects
+                </button>
+                <button
+                  type="submit"
+                  className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  disabled={!projectName.trim()}
+                >
+                  Save Project & Open
+                </button>
+              </div>
+            </form>
+          )}
+
+          {selectedMode === 'existing' && (
+            <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
+              <div className="flex flex-col gap-3 border-b border-gray-200 p-4 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <h2 className="text-xl font-semibold">Existing projects</h2>
+                  <p className="mt-1 text-sm text-gray-500">Details view, similar to a file explorer list.</p>
+                </div>
+
+                <label className="relative w-full md:w-80">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                  <input
+                    value={searchText}
+                    onChange={(event) => setSearchText(event.target.value)}
+                    className="w-full rounded-md border border-gray-300 py-2 pl-9 pr-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                    placeholder="Search projects..."
+                  />
+                </label>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="min-w-[980px] w-full border-collapse text-sm">
+                  <thead className="bg-gray-50 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+                    <tr>
+                      <th className="border-b border-gray-200 px-4 py-3">Name</th>
+                      <th className="border-b border-gray-200 px-4 py-3">Project No.</th>
+                      <th className="border-b border-gray-200 px-4 py-3">Client</th>
+                      <th className="border-b border-gray-200 px-4 py-3">Location</th>
+                      <th className="border-b border-gray-200 px-4 py-3">Type</th>
+                      <th className="border-b border-gray-200 px-4 py-3">Status</th>
+                      <th className="border-b border-gray-200 px-4 py-3">Created</th>
+                      <th className="border-b border-gray-200 px-4 py-3">Last Modified</th>
+                      <th className="border-b border-gray-200 px-4 py-3 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredProjects.length === 0 ? (
+                      <tr>
+                        <td colSpan={9} className="px-4 py-10 text-center text-gray-500">
+                          {projects.length === 0 ? 'No saved projects yet. Create a new project to see it here.' : 'No projects match your search.'}
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredProjects.map((project) => (
+                        <tr key={project.id} className="hover:bg-blue-50/50">
+                          <td className="border-b border-gray-100 px-4 py-3">
+                            <div className="font-semibold text-gray-900">{project.name}</div>
+                            {project.description && <div className="mt-1 line-clamp-1 max-w-xs text-xs text-gray-500">{project.description}</div>}
+                          </td>
+                          <td className="border-b border-gray-100 px-4 py-3 font-mono text-xs text-gray-700">{project.projectNumber}</td>
+                          <td className="border-b border-gray-100 px-4 py-3 text-gray-700">{project.client || '-'}</td>
+                          <td className="border-b border-gray-100 px-4 py-3 text-gray-700">{project.location || '-'}</td>
+                          <td className="border-b border-gray-100 px-4 py-3 text-gray-700">{project.calculationType}</td>
+                          <td className="border-b border-gray-100 px-4 py-3">
+                            <span className="rounded-full bg-green-50 px-2 py-1 text-xs font-semibold text-green-700">{project.status}</span>
+                          </td>
+                          <td className="border-b border-gray-100 px-4 py-3 text-xs text-gray-600">{formatDateTime(project.createdAt)}</td>
+                          <td className="border-b border-gray-100 px-4 py-3 text-xs text-gray-600">
+                            <div className="flex items-center gap-1">
+                              <Clock3 size={13} className="text-gray-400" />
+                              {formatDateTime(project.updatedAt)}
+                            </div>
+                          </td>
+                          <td className="border-b border-gray-100 px-4 py-3">
+                            <div className="flex justify-end gap-2">
+                              <button
+                                onClick={() => handleOpenProject(project.id)}
+                                className="rounded border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100"
+                              >
+                                Open
+                              </button>
+                              <button
+                                onClick={() => deleteProject(project.id)}
+                                className="rounded border border-gray-200 bg-white p-1.5 text-gray-500 hover:border-red-200 hover:bg-red-50 hover:text-red-600"
+                                title="Delete project"
+                              >
+                                <Trash2 size={15} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-gray-200 px-4 py-3 text-sm text-gray-500">
+                <span>{filteredProjects.length} project{filteredProjects.length === 1 ? '' : 's'} shown</span>
+                <button onClick={() => setSelectedMode('new')} className="rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700">
+                  New Project
+                </button>
+              </div>
+            </div>
+          )}
+        </main>
+      </div>
+    </div>
+  );
+};
