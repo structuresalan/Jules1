@@ -212,16 +212,6 @@ const fieldLabel = (label: string, required = false) => (
   </span>
 );
 
-const fieldLabel = (label: string, required = false) => (
-  <span>
-    {label}{' '}
-    {required ? (
-      <span className="font-bold text-red-600" title="Required">*</span>
-    ) : (
-      <span className="font-normal text-gray-400">(optional)</span>
-    )}
-  </span>
-);
 
 const degreesFromSupport = (support: SupportType): Pick<BeamNode, 'dofX' | 'dofZ' | 'dofRotation'> => {
   if (support === 'Fixed') return { dofX: 'Fixed', dofZ: 'Fixed', dofRotation: 'Fixed' };
