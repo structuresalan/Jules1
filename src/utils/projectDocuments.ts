@@ -164,36 +164,52 @@ export const formatDocumentDate = (isoDate: string) => {
   }
 };
 
-export const exportDocumentHtml = (document: ProjectDocument) => {
-  const html = `<!doctype html>
+export const printProjectDocumentPdf = (document: ProjectDocument) => {
+  const printWindow = window.open('', '_blank', 'noopener,noreferrer');
+
+  if (!printWindow) {
+    window.print();
+    return;
+  }
+
+  printWindow.document.write(`<!doctype html>
 <html>
 <head>
   <meta charset="utf-8" />
   <title>${document.name}</title>
   <style>
-    body { font-family: Arial, Helvetica, sans-serif; margin: 24px; color: #111827; }
-    .document-meta { margin-bottom: 18px; padding: 12px; border: 1px solid #d1d5db; background: #f9fafb; }
+    @page { size: letter; margin: 0.35in; }
+    body { font-family: Arial, Helvetica, sans-serif; margin: 0; color: #111827; background: white; }
+    .document-meta { margin-bottom: 18px; padding: 12px; border: 1px solid #111827; background: #f9fafb; }
     .document-meta h1 { margin: 0 0 8px; font-size: 22px; }
+    .document-meta-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; font-size: 11px; }
+    .print-hint { margin-top: 10px; font-size: 10px; color: #4b5563; }
+    @media print {
+      .no-print { display: none !important; }
+      body { margin: 0; }
+    }
   </style>
 </head>
 <body>
+  <div class="no-print" style="padding:12px; border-bottom:1px solid #d1d5db; margin-bottom:16px;">
+    <button onclick="window.print()" style="padding:8px 12px; font-weight:700;">Print / Save as PDF</button>
+    <span style="margin-left:8px; font-size:12px; color:#4b5563;">Choose “Save as PDF” in the print dialog.</span>
+  </div>
   <div class="document-meta">
     <h1>${document.name}</h1>
-    <div>Type: ${document.type}</div>
-    <div>Module: ${document.module}</div>
-    <div>Saved: ${formatDocumentDate(document.updatedAt)}</div>
+    <div class="document-meta-grid">
+      <div><strong>Type:</strong> ${document.type}</div>
+      <div><strong>Module:</strong> ${document.module}</div>
+      <div><strong>Saved:</strong> ${formatDocumentDate(document.updatedAt)}</div>
+    </div>
   </div>
   ${document.reportHtml}
 </body>
-</html>`;
+</html>`);
 
-  const blob = new Blob([html], { type: 'text/html' });
-  const url = URL.createObjectURL(blob);
-  const anchor = window.document.createElement('a');
-  anchor.href = url;
-  anchor.download = `${document.name.replace(/[^a-z0-9-_]+/gi, '_')}.html`;
-  anchor.click();
-  URL.revokeObjectURL(url);
+  printWindow.document.close();
+  printWindow.focus();
+  setTimeout(() => printWindow.print(), 250);
 };
 
 

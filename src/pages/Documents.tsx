@@ -4,7 +4,7 @@ import { Copy, Download, FileText, Pencil, Search, Trash2 } from 'lucide-react';
 import {
   deleteProjectDocument,
   duplicateProjectDocument,
-  exportDocumentHtml,
+  printProjectDocumentPdf,
   requestOpenProjectDocument,
   formatDocumentDate,
   getActiveProject,
@@ -169,7 +169,7 @@ export const Documents: React.FC = () => {
                     <td className="border-b border-gray-100 px-4 py-3">
                       <div className="flex justify-end gap-2">
                         <button onClick={() => handleOpen(document)} className="rounded border border-blue-200 bg-blue-50 px-2 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100" title="Open editable calculation">Open/Edit</button>
-                        <button onClick={() => exportDocumentHtml(document)} className="rounded border border-gray-200 bg-white p-1.5 text-gray-600 hover:bg-gray-50" title="Export HTML"><Download size={15} /></button>
+                        <button onClick={() => printProjectDocumentPdf(document)} className="rounded border border-gray-200 bg-white p-1.5 text-gray-600 hover:bg-gray-50" title="Print / Save PDF"><Download size={15} /></button>
                         <button onClick={() => startRename(document)} className="rounded border border-gray-200 bg-white p-1.5 text-gray-600 hover:bg-gray-50" title="Rename"><Pencil size={15} /></button>
                         <button onClick={() => handleDuplicate(document.id)} className="rounded border border-gray-200 bg-white p-1.5 text-gray-600 hover:bg-gray-50" title="Duplicate"><Copy size={15} /></button>
                         <button onClick={() => handleDelete(document.id)} className="rounded border border-gray-200 bg-white p-1.5 text-gray-500 hover:border-red-200 hover:bg-red-50 hover:text-red-600" title="Delete"><Trash2 size={15} /></button>

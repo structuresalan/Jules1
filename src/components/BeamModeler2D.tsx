@@ -107,6 +107,15 @@ const loadToLineMagnitude = (load: BeamLoad) => {
 
 const formatRatio = (value: number) => (Number.isFinite(value) ? value.toFixed(3) : '0.000');
 
+const formatAxisValue = (value: number) => {
+  if (!Number.isFinite(value)) return '0';
+  const absValue = Math.abs(value);
+  if (absValue >= 100) return value.toFixed(0);
+  if (absValue >= 10) return value.toFixed(1);
+  return value.toFixed(2);
+};
+
+
 interface BeamModeler2DProps {
   aiscYear?: string;
 }
@@ -135,6 +144,7 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
   const [selectedDocumentId, setSelectedDocumentId] = useState('');
   const [projectDocuments, setProjectDocuments] = useState<ProjectDocument[]>([]);
   const [saveMessage, setSaveMessage] = useState('');
+  const [saveSucceeded, setSaveSucceeded] = useState(false);
 
   const [activePanel, setActivePanel] = useState<BeamPanel>('Design options');
   const [displayOptions, setDisplayOptions] = useState<Record<DisplayKey, boolean>>({
@@ -587,47 +597,74 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
 
   const renderResultDiagram = (mode: 'moment' | 'shear' | 'deflection') => {
     const width = 620;
-    const height = 210;
+    const height = 230;
     const start = analysis?.beamStart ?? sortedNodes[0]?.x ?? 0;
     const end = analysis?.beamEnd ?? sortedNodes[sortedNodes.length - 1]?.x ?? 30;
     const length = Math.max(end - start, 1);
-    const mapX = (x: number) => 56 + ((x - start) / length) * (width - 112);
-    const baselineY = 148;
+    const leftPad = 74;
+    const rightPad = 28;
+    const topPad = 34;
+    const bottomPad = 38;
+    const plotTop = topPad;
+    const plotBottom = height - bottomPad;
+    const baselineY = (plotTop + plotBottom) / 2;
+    const mapX = (x: number) => leftPad + ((x - start) / length) * (width - leftPad - rightPad);
+
+    const momentPeak = Math.max(...(analysis?.moment.map((value) => Math.abs(value)) ?? [0]), 1);
+    const shearPeak = Math.max(...(analysis?.shear.map((value) => Math.abs(value)) ?? [0]), 1);
 
     const config = mode === 'moment'
       ? {
           title: 'Moment diagram',
           color: '#16a34a',
-          peak: Math.max(...(analysis?.moment.map((value) => Math.abs(value)) ?? [0]), 1),
+          unit: 'kip-ft',
+          peak: momentPeak,
           values: analysis?.moment ?? [],
           valueText: `${analysis?.maxMoment.toFixed(2) ?? '0.00'} kip-ft max`,
+          yLabel: 'Moment (kip-ft)',
         }
       : mode === 'shear'
         ? {
             title: 'Shear diagram',
             color: '#f97316',
-            peak: Math.max(...(analysis?.shear.map((value) => Math.abs(value)) ?? [0]), 1),
+            unit: 'k',
+            peak: shearPeak,
             values: analysis?.shear ?? [],
             valueText: `${analysis?.maxShear.toFixed(2) ?? '0.00'} k max`,
+            yLabel: 'Shear (k)',
           }
         : {
             title: 'Deflection diagram',
             color: '#7c3aed',
-            peak: 1,
-            values: analysis?.deflectionShape ?? [],
+            unit: 'in',
+            peak: Math.max(maximumDeflection.value, 0.001),
+            values: analysis?.deflectionShape.map((shape) => shape * maximumDeflection.value) ?? [],
             valueText: `${maximumDeflection.value.toFixed(3)} in max`,
+            yLabel: 'Deflection (in)',
           };
+
+    const yScale = mode === 'deflection'
+      ? (value: number) => baselineY + (value / Math.max(config.peak, 0.001)) * 54
+      : (value: number) => baselineY - (value / Math.max(config.peak, 0.001)) * 58;
 
     const points = analysis
       ? analysis.xs
-          .map((x, index) => {
-            const y = mode === 'deflection'
-              ? baselineY + config.values[index] * 34
-              : baselineY - (config.values[index] / config.peak) * 52;
-            return `${mapX(x)},${y}`;
-          })
+          .map((x, index) => `${mapX(x)},${yScale(config.values[index] ?? 0)}`)
           .join(' ')
       : '';
+
+    const xTicks = analysis ? [analysis.beamStart, analysis.beamStart + analysis.fullLength / 2, analysis.beamEnd] : [0, 0, 0];
+    const yTicks = mode === 'deflection'
+      ? [
+          { value: 0, y: baselineY },
+          { value: config.peak / 2, y: yScale(config.peak / 2) },
+          { value: config.peak, y: yScale(config.peak) },
+        ]
+      : [
+          { value: config.peak, y: yScale(config.peak) },
+          { value: 0, y: baselineY },
+          { value: -config.peak, y: yScale(-config.peak) },
+        ];
 
     return (
       <div className="rounded-lg border border-gray-200 bg-white p-3 shadow-sm">
@@ -635,13 +672,35 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
           <div className="text-sm font-semibold text-gray-900">{config.title}</div>
           <div className="text-xs font-semibold" style={{ color: config.color }}>{config.valueText}</div>
         </div>
-        <svg viewBox={`0 0 ${width} ${height}`} className="h-[200px] w-full min-w-[320px]">
+        <svg viewBox={`0 0 ${width} ${height}`} className="h-[220px] w-full min-w-[320px]">
           <rect x="1" y="1" width={width - 2} height={height - 2} rx="10" fill="#f8fafc" stroke="#e2e8f0" />
-          <line x1="36" y1={baselineY} x2={width - 24} y2={baselineY} stroke="#cbd5e1" strokeDasharray="5,5" />
-          <line x1="56" y1="30" x2="56" y2={height - 34} stroke="#e5e7eb" />
+          <line x1={leftPad} y1={plotTop} x2={leftPad} y2={plotBottom} stroke="#9ca3af" />
+          <line x1={leftPad} y1={baselineY} x2={width - rightPad} y2={baselineY} stroke="#cbd5e1" strokeDasharray="5,5" />
+
+          {yTicks.map((tick) => (
+            <g key={`${mode}-${tick.value}`}>
+              <line x1={leftPad - 5} y1={tick.y} x2={width - rightPad} y2={tick.y} stroke="#e5e7eb" />
+              <text x={leftPad - 9} y={tick.y + 4} fontSize="10" textAnchor="end" fill="#475569">
+                {formatAxisValue(tick.value)}
+              </text>
+            </g>
+          ))}
+
+          {xTicks.map((tick) => {
+            const x = mapX(tick);
+            return (
+              <g key={`${mode}-x-${tick}`}>
+                <line x1={x} y1={baselineY - 4} x2={x} y2={plotBottom + 5} stroke="#e5e7eb" />
+                <text x={x} y={height - 15} fontSize="10" textAnchor="middle" fill="#475569">
+                  {formatAxisValue(tick)} ft
+                </text>
+              </g>
+            );
+          })}
+
           {points && <polyline points={points} fill="none" stroke={config.color} strokeWidth="3" />}
-          <text x="58" y="22" fontSize="11" fill="#64748b">0</text>
-          <text x={width - 28} y={height - 16} fontSize="11" textAnchor="end" fill="#64748b">L = {analysis?.fullLength.toFixed(2) ?? '0.00'} ft</text>
+          <text x={leftPad} y="20" fontSize="11" fill="#64748b">{config.yLabel}</text>
+          <text x={width - rightPad} y={height - 15} fontSize="11" textAnchor="end" fill="#64748b">Position (ft)</text>
         </svg>
       </div>
     );
@@ -907,28 +966,49 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
 
   const renderReportBeamDiagram = (mode: 'geometry' | 'loading' | 'moment' | 'shear' | 'deflection') => {
     const width = 760;
-    const height = 150;
-    const beamY = 72;
+    const height = 165;
+    const beamY = 76;
     const start = analysis?.beamStart ?? sortedNodes[0]?.x ?? 0;
     const end = analysis?.beamEnd ?? sortedNodes[sortedNodes.length - 1]?.x ?? 30;
     const length = Math.max(end - start, 1);
-    const mapX = (x: number) => 60 + ((x - start) / length) * (width - 120);
+    const mapX = (x: number) => 72 + ((x - start) / length) * (width - 132);
     const momentPeak = Math.max(...(analysis?.moment.map((value) => Math.abs(value)) ?? [0]), 1);
     const shearPeak = Math.max(...(analysis?.shear.map((value) => Math.abs(value)) ?? [0]), 1);
-    const plotBaseY = 102;
+    const plotBaseY = 104;
+
+    const reportConfig = mode === 'moment'
+      ? { peak: momentPeak, unit: 'kip-ft', label: 'Moment (kip-ft)', values: analysis?.moment ?? [] }
+      : mode === 'shear'
+        ? { peak: shearPeak, unit: 'k', label: 'Shear (k)', values: analysis?.shear ?? [] }
+        : { peak: Math.max(maximumDeflection.value, 0.001), unit: 'in', label: 'Deflection (in)', values: analysis?.deflectionShape.map((shape) => shape * maximumDeflection.value) ?? [] };
 
     const plotPoints = mode === 'moment' && analysis
       ? analysis.xs.map((x, index) => `${mapX(x)},${plotBaseY - (analysis.moment[index] / momentPeak) * 42}`).join(' ')
       : mode === 'shear' && analysis
         ? analysis.xs.map((x, index) => `${mapX(x)},${plotBaseY - (analysis.shear[index] / shearPeak) * 42}`).join(' ')
         : mode === 'deflection' && analysis
-          ? analysis.xs.map((x, index) => `${mapX(x)},${plotBaseY + analysis.deflectionShape[index] * 30}`).join(' ')
+          ? analysis.xs.map((x, index) => `${mapX(x)},${plotBaseY + ((analysis.deflectionShape[index] * maximumDeflection.value) / Math.max(maximumDeflection.value, 0.001)) * 30}`).join(' ')
           : '';
+
+    const showAxes = mode === 'moment' || mode === 'shear' || mode === 'deflection';
 
     return (
       <svg viewBox={`0 0 ${width} ${height}`} className="report-diagram">
-        <line x1="45" y1={beamY} x2={width - 45} y2={beamY} stroke="#111827" strokeWidth="2" />
-        {sortedNodes.map((node, index) => {
+        {showAxes && (
+          <>
+            <line x1="60" y1="30" x2="60" y2="135" stroke="#111827" />
+            <line x1="60" y1={plotBaseY} x2={width - 45} y2={plotBaseY} stroke="#9ca3af" strokeDasharray="4,4" />
+            <text x="62" y="22" fontSize="9" fill="#111827">{reportConfig.label}</text>
+            <text x="55" y={mode === 'deflection' ? plotBaseY + 34 : plotBaseY - 38} fontSize="8" textAnchor="end">{formatAxisValue(reportConfig.peak)}</text>
+            <text x="55" y={plotBaseY + 3} fontSize="8" textAnchor="end">0</text>
+            {mode !== 'deflection' && <text x="55" y={plotBaseY + 45} fontSize="8" textAnchor="end">-{formatAxisValue(reportConfig.peak)}</text>}
+            <text x="72" y="154" fontSize="8" fill="#4b5563">0 ft</text>
+            <text x={width - 45} y="154" fontSize="8" textAnchor="end" fill="#4b5563">{analysis?.fullLength.toFixed(2) ?? '0.00'} ft</text>
+          </>
+        )}
+
+        {!showAxes && <line x1="45" y1={beamY} x2={width - 45} y2={beamY} stroke="#111827" strokeWidth="2" />}
+        {showAxes ? null : sortedNodes.map((node, index) => {
           const x = mapX(node.x);
           return (
             <g key={`report-node-${node.id}`}>
@@ -991,8 +1071,7 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
           );
         })}
         {plotPoints && <polyline points={plotPoints} fill="none" stroke="#111827" strokeWidth="2" />}
-        {plotPoints && <line x1="45" y1={plotBaseY} x2={width - 45} y2={plotBaseY} stroke="#9ca3af" strokeDasharray="4,4" />}
-        <text x="60" y="136" fontSize="9" fill="#4b5563">Length = {analysis?.fullLength.toFixed(2) ?? '0.00'} ft</text>
+        {!showAxes && <text x="60" y="150" fontSize="9" fill="#4b5563">Length = {analysis?.fullLength.toFixed(2) ?? '0.00'} ft</text>}
       </svg>
     );
   };
@@ -1142,6 +1221,7 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
 
     refreshProjectDocuments();
     setSaveMessage('');
+    setSaveSucceeded(false);
 
     if (!activeProject || getSessionMode() === 'quick') {
       setSaveMessage('Open or create a project before saving calculation output. Quick calculations can be printed, but they are not saved to project documents.');
@@ -1199,6 +1279,7 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
     const activeProject = getActiveProject();
 
     if (!activeProject || getSessionMode() === 'quick') {
+      setSaveSucceeded(false);
       setSaveMessage('No active project is selected. Go to Projects, create/open a project, then save this output.');
       return;
     }
@@ -1207,6 +1288,7 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
 
     if (saveMode === 'overwrite') {
       if (!selectedDocumentId) {
+        setSaveSucceeded(false);
         setSaveMessage('Select an existing document to overwrite.');
         return;
       }
@@ -1216,6 +1298,7 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
         setEditingDocumentId(overwrittenDocument.id);
         setLoadedDocumentName(overwrittenDocument.name);
       }
+      setSaveSucceeded(true);
       setSaveMessage('Existing editable project document overwritten.');
     } else {
       const savedDocument = saveNewProjectDocument({
@@ -1226,6 +1309,7 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
       setEditingDocumentId(savedDocument.id);
       setLoadedDocumentName(savedDocument.name);
       setSaveMode('overwrite');
+      setSaveSucceeded(true);
       setSaveMessage('Saved as a new editable project document.');
     }
 
@@ -1482,7 +1566,7 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
 
             <div className="flex justify-end gap-3 border-t border-gray-200 p-5">
               <button onClick={() => setShowSaveOutputModal(false)} className="rounded border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
-                Cancel
+                {saveSucceeded ? 'Close' : 'Cancel'}
               </button>
               <button onClick={handleSaveOutput} className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
                 Save
