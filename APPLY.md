@@ -1,13 +1,29 @@
-# Reserve Steel Result Diagram Space
+# Visual Map Marker Status Colors
 
 Replace this file:
-- src/components/BeamModeler2D.tsx
+- src/pages/Documents.tsx
 
 Commit message:
-Reserve steel result diagram space
+Add visual map marker status colors
 
 What changed:
-- The moment/shear/deflection result diagram area now reserves space from the first render.
-- This prevents the lower Steel Beam input/selected-section area from dropping down after the async steel database and validation state settle.
-- No yellow warning box, no loading overlay, and no placeholder text is shown in the reserved area.
-- The result diagrams still appear normally once calculations are ready.
+- Adds marker statuses:
+  - Unknown
+  - Draft
+  - Pass
+  - Review
+  - Fail
+- Marker create/edit form now includes a Status dropdown.
+- Visual Map markers are color-coded by status:
+  - Pass = green
+  - Review = amber
+  - Fail = red
+  - Draft = gray
+  - Unknown = blue
+- Marker side panel shows status.
+- Marker hover preview shows status.
+- Marker list shows status badges.
+- Visual board cards show the board’s primary status and a small status summary.
+- Visual board detail panel shows counts for each status.
+
+Existing markers default to Unknown until edited.

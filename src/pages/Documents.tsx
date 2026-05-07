@@ -34,6 +34,7 @@ type DocumentsView = 'list' | 'visual';
 type VisualBoardKind = 'Plan' | 'Elevation' | 'Site Photo' | 'Other';
 type VisualMarkerStyle = 'Pin' | 'Arrow';
 type VisualMarkerDirection = 'Up' | 'Down' | 'Left' | 'Right';
+type VisualMarkerStatus = 'Pass' | 'Review' | 'Fail' | 'Draft' | 'Unknown';
 
 interface VisualBoard {
   id: string;
@@ -58,6 +59,7 @@ interface VisualMarker {
   yPercent: number;
   style?: VisualMarkerStyle;
   direction?: VisualMarkerDirection;
+  status?: VisualMarkerStatus;
   createdAt: string;
   updatedAt: string;
 }
@@ -155,6 +157,52 @@ const markerArrowSymbol = (direction: VisualMarkerDirection | undefined) => {
 
 const normalizeMarkerStyle = (style: VisualMarker['style']): VisualMarkerStyle => style || 'Pin';
 const normalizeMarkerDirection = (direction: VisualMarker['direction']): VisualMarkerDirection => direction || 'Down';
+const normalizeMarkerStatus = (status: VisualMarker['status']): VisualMarkerStatus => status || 'Unknown';
+
+const markerStatusClasses = (status: VisualMarkerStatus) => {
+  if (status === 'Pass') return 'border-green-300 bg-green-100 text-green-800';
+  if (status === 'Review') return 'border-amber-300 bg-amber-100 text-amber-800';
+  if (status === 'Fail') return 'border-red-300 bg-red-100 text-red-800';
+  if (status === 'Draft') return 'border-gray-300 bg-gray-100 text-gray-700';
+  return 'border-blue-200 bg-blue-50 text-blue-700';
+};
+
+const markerStatusDotClasses = (status: VisualMarkerStatus) => {
+  if (status === 'Pass') return 'bg-green-500';
+  if (status === 'Review') return 'bg-amber-500';
+  if (status === 'Fail') return 'bg-red-500';
+  if (status === 'Draft') return 'bg-gray-400';
+  return 'bg-blue-500';
+};
+
+const markerStatusLabel = (status: VisualMarkerStatus) => status;
+
+const getBoardStatusCounts = (boardId: string, markers: VisualMarker[]) => {
+  const counts: Record<VisualMarkerStatus, number> = {
+    Pass: 0,
+    Review: 0,
+    Fail: 0,
+    Draft: 0,
+    Unknown: 0,
+  };
+
+  markers
+    .filter((marker) => marker.boardId === boardId)
+    .forEach((marker) => {
+      counts[normalizeMarkerStatus(marker.status)] += 1;
+    });
+
+  return counts;
+};
+
+const getBoardPrimaryStatus = (boardId: string, markers: VisualMarker[]): VisualMarkerStatus => {
+  const counts = getBoardStatusCounts(boardId, markers);
+  if (counts.Fail > 0) return 'Fail';
+  if (counts.Review > 0) return 'Review';
+  if (counts.Draft > 0) return 'Draft';
+  if (counts.Pass > 0) return 'Pass';
+  return 'Unknown';
+};
 
 const getBeamDetails = (document: ProjectDocument) => {
   const inputs = document.inputs as {
@@ -367,6 +415,7 @@ export const Documents: React.FC = () => {
   const [markerNotes, setMarkerNotes] = useState('');
   const [markerStyle, setMarkerStyle] = useState<VisualMarkerStyle>('Pin');
   const [markerDirection, setMarkerDirection] = useState<VisualMarkerDirection>('Down');
+  const [markerStatus, setMarkerStatus] = useState<VisualMarkerStatus>('Unknown');
   const [selectedMarkerId, setSelectedMarkerId] = useState<string | null>(null);
   const [editingMarkerId, setEditingMarkerId] = useState<string | null>(null);
   const [movingMarkerId, setMovingMarkerId] = useState<string | null>(null);
@@ -556,6 +605,7 @@ export const Documents: React.FC = () => {
     setMarkerNotes('');
     setMarkerStyle('Pin');
     setMarkerDirection('Down');
+    setMarkerStatus('Unknown');
   };
 
   const updateVisualMarker = (markerId: string, patch: Partial<VisualMarker>) => {
@@ -595,6 +645,7 @@ export const Documents: React.FC = () => {
     setMarkerNotes('');
     setMarkerStyle('Pin');
     setMarkerDirection('Down');
+    setMarkerStatus('Unknown');
     setSelectedMarkerId(null);
     setEditingMarkerId(null);
     setIsAddingMarker(false);
@@ -624,6 +675,8 @@ export const Documents: React.FC = () => {
       yPercent: pendingMarkerPoint.yPercent,
       style: markerStyle,
       direction: markerDirection,
+      status: markerStatus,
+      status: markerStatus,
       createdAt: now,
       updatedAt: now,
     };
@@ -642,6 +695,7 @@ export const Documents: React.FC = () => {
     setMarkerNotes(marker.notes);
     setMarkerStyle(normalizeMarkerStyle(marker.style));
     setMarkerDirection(normalizeMarkerDirection(marker.direction));
+    setMarkerStatus(normalizeMarkerStatus(marker.status));
     setPendingMarkerPoint(null);
     setIsAddingMarker(false);
     setMovingMarkerId(null);
@@ -878,6 +932,21 @@ export const Documents: React.FC = () => {
       </div>
 
       <label className="mt-3 block text-xs font-semibold text-gray-600">
+        Status
+        <select
+          value={markerStatus}
+          onChange={(event) => setMarkerStatus(event.target.value as VisualMarkerStatus)}
+          className="mt-1 w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm"
+        >
+          <option>Unknown</option>
+          <option>Draft</option>
+          <option>Pass</option>
+          <option>Review</option>
+          <option>Fail</option>
+        </select>
+      </label>
+
+      <label className="mt-3 block text-xs font-semibold text-gray-600">
         Notes
         <textarea
           value={markerNotes}
@@ -941,7 +1010,7 @@ export const Documents: React.FC = () => {
             ? 'border-amber-500 bg-amber-400 text-white'
             : isSelected
               ? 'border-blue-700 bg-blue-600 text-white'
-              : 'border-blue-200 bg-white text-blue-700 hover:bg-blue-50'
+              : `${markerStatusClasses(normalizeMarkerStatus(marker.status))} hover:ring-2 hover:ring-blue-200`
         }`}
         style={{
           left: `${marker.xPercent}%`,
@@ -950,6 +1019,7 @@ export const Documents: React.FC = () => {
         title={markerDocument ? `${marker.label}: ${markerDocument.name}${markerDocuments.length > 1 ? ` + ${markerDocuments.length - 1} more` : ''}` : marker.label}
       >
         <span className="inline-flex items-center gap-1">
+          <span className={`h-2 w-2 rounded-full ${isSelected || isMoving ? 'bg-white' : markerStatusDotClasses(normalizeMarkerStatus(marker.status))}`} />
           {style === 'Arrow' ? (
             <span className="text-sm leading-none">{markerArrowSymbol(direction)}</span>
           ) : (
@@ -1078,6 +1148,20 @@ export const Documents: React.FC = () => {
                 </div>
               </dl>
 
+              <div className="mt-3 rounded border border-gray-200 bg-white p-3">
+                <div className="text-xs font-bold uppercase tracking-wide text-gray-500">Status Summary</div>
+                <div className="mt-2 flex flex-wrap gap-2 text-[11px]">
+                  {(['Pass', 'Review', 'Fail', 'Draft', 'Unknown'] as VisualMarkerStatus[]).map((status) => {
+                    const count = getBoardStatusCounts(selectedBoard.id, visualMarkers)[status];
+                    return (
+                      <span key={status} className={`rounded-full border px-2 py-1 font-bold ${markerStatusClasses(status)}`}>
+                        {status}: {count}
+                      </span>
+                    );
+                  })}
+                </div>
+              </div>
+
               {pendingMarkerPoint && renderMarkerForm('new')}
 
               {editingMarkerId && renderMarkerForm('edit')}
@@ -1089,7 +1173,7 @@ export const Documents: React.FC = () => {
                     {selectedMarker.label}
                   </h4>
 
-                  <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                  <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
                     <div className="rounded bg-gray-50 p-2">
                       <div className="font-semibold text-gray-500">Style</div>
                       <div className="mt-1 font-bold text-gray-900">
@@ -1100,6 +1184,12 @@ export const Documents: React.FC = () => {
                       <div className="font-semibold text-gray-500">Direction</div>
                       <div className="mt-1 font-bold text-gray-900">
                         {normalizeMarkerDirection(selectedMarker.direction)}
+                      </div>
+                    </div>
+                    <div className={`rounded border p-2 ${markerStatusClasses(normalizeMarkerStatus(selectedMarker.status))}`}>
+                      <div className="font-semibold opacity-80">Status</div>
+                      <div className="mt-1 font-bold">
+                        {markerStatusLabel(normalizeMarkerStatus(selectedMarker.status))}
                       </div>
                     </div>
                   </div>
@@ -1190,9 +1280,14 @@ export const Documents: React.FC = () => {
                               : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
                           }`}
                         >
-                          <div className="flex items-center gap-2 font-bold">
-                            {normalizeMarkerStyle(marker.style) === 'Arrow' ? markerArrowSymbol(normalizeMarkerDirection(marker.direction)) : <MapPin size={13} />}
-                            {marker.label}
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2 font-bold">
+                              {normalizeMarkerStyle(marker.style) === 'Arrow' ? markerArrowSymbol(normalizeMarkerDirection(marker.direction)) : <MapPin size={13} />}
+                              {marker.label}
+                            </div>
+                            <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${markerStatusClasses(normalizeMarkerStatus(marker.status))}`}>
+                              {markerStatusLabel(normalizeMarkerStatus(marker.status))}
+                            </span>
                           </div>
                           <div className="mt-1 truncate text-gray-500">
                             {markerDocument?.name ?? 'Document not found'}{markerDocuments.length > 1 ? ` + ${markerDocuments.length - 1} more` : ''}
@@ -1311,11 +1406,26 @@ export const Documents: React.FC = () => {
                           <h4 className="font-bold text-gray-900">{board.name}</h4>
                           <p className="mt-1 text-xs text-gray-500">{board.kind} • {board.imageName}</p>
                         </div>
-                        <span className="rounded-full bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-600">
-                          {getBoardDocumentCount(board.id, visualMarkers)} docs
+                        <span className={`rounded-full border px-2 py-1 text-xs font-semibold ${markerStatusClasses(getBoardPrimaryStatus(board.id, visualMarkers))}`}>
+                          {getBoardPrimaryStatus(board.id, visualMarkers)}
                         </span>
                       </div>
-                      <p className="mt-3 text-xs text-gray-500">Last edited {formatDocumentDate(board.updatedAt)}</p>
+                      <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-gray-500">
+                        <span>{getBoardDocumentCount(board.id, visualMarkers)} linked doc{getBoardDocumentCount(board.id, visualMarkers) === 1 ? '' : 's'}</span>
+                        <span>•</span>
+                        <span>Last edited {formatDocumentDate(board.updatedAt)}</span>
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-1 text-[10px]">
+                        {(['Pass', 'Review', 'Fail', 'Draft', 'Unknown'] as VisualMarkerStatus[]).map((status) => {
+                          const count = getBoardStatusCounts(board.id, visualMarkers)[status];
+                          if (count === 0) return null;
+                          return (
+                            <span key={status} className={`rounded-full border px-2 py-0.5 font-bold ${markerStatusClasses(status)}`}>
+                              {status} {count}
+                            </span>
+                          );
+                        })}
+                      </div>
                     </div>
                   </button>
 
@@ -1444,8 +1554,13 @@ export const Documents: React.FC = () => {
             <div className="mt-1 text-gray-500">
               {hoverVisualMarkerPrimaryDocument?.name ?? 'Document not found'}{hoverVisualMarkerDocuments.length > 1 ? ` + ${hoverVisualMarkerDocuments.length - 1} more` : ''}
             </div>
-            <div className="mt-1 text-[11px] text-gray-400">
-              {normalizeMarkerStyle(hoverVisualMarker.style)} • {normalizeMarkerDirection(hoverVisualMarker.direction)}
+            <div className="mt-2 flex items-center gap-2 text-[11px]">
+              <span className={`rounded-full border px-2 py-0.5 font-bold ${markerStatusClasses(normalizeMarkerStatus(hoverVisualMarker.status))}`}>
+                {markerStatusLabel(normalizeMarkerStatus(hoverVisualMarker.status))}
+              </span>
+              <span className="text-gray-400">
+                {normalizeMarkerStyle(hoverVisualMarker.style)} • {normalizeMarkerDirection(hoverVisualMarker.direction)}
+              </span>
             </div>
           </div>
 
