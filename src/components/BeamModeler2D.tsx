@@ -1677,8 +1677,8 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
             <label className="font-medium text-gray-700">Section<input value={reportSectionName} onChange={(event) => setReportSectionName(event.target.value)} className="mt-1 w-full rounded border border-gray-300 p-2 text-sm" /></label>
             <label className="font-medium text-gray-700">Sheet no./rev.<input value={reportSheetNumber} onChange={(event) => setReportSheetNumber(event.target.value)} className="mt-1 w-full rounded border border-gray-300 p-2 text-sm" /></label>
             <label className="font-medium text-gray-700">Calc. by<input value={reportCalcBy} onChange={(event) => setReportCalcBy(event.target.value)} className="mt-1 w-full rounded border border-gray-300 p-2 text-sm" placeholder="Initials" /></label>
-            <label className="font-medium text-gray-700">Chk'd by<input value={reportCheckedBy} onChange={(event) => setReportCheckedBy(event.target.value)} className="mt-1 w-full rounded border border-gray-300 p-2 text-sm" placeholder="Initials" /></label>
-            <label className="font-medium text-gray-700">App'd by<input value={reportApprovedBy} onChange={(event) => setReportApprovedBy(event.target.value)} className="mt-1 w-full rounded border border-gray-300 p-2 text-sm" placeholder="Initials" /></label>
+            <label className="font-medium text-gray-700">Checked by<input value={reportCheckedBy} onChange={(event) => setReportCheckedBy(event.target.value)} className="mt-1 w-full rounded border border-gray-300 p-2 text-sm" placeholder="Initials" /></label>
+            <label className="font-medium text-gray-700">Approved by<input value={reportApprovedBy} onChange={(event) => setReportApprovedBy(event.target.value)} className="mt-1 w-full rounded border border-gray-300 p-2 text-sm" placeholder="Initials" /></label>
             <label className="font-medium text-gray-700">Date<input type="date" value={reportDate} onChange={(event) => setReportDate(event.target.value)} className="mt-1 w-full rounded border border-gray-300 p-2 text-sm" /></label>
           </div>
           <div className="mt-4 grid grid-cols-1 gap-2 md:grid-cols-2">
@@ -1898,13 +1898,13 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
             </div>
           </div>
           <div className="report-cell"><span>Project</span><strong>{reportProject || ' '}</strong></div>
+          <div className="report-cell"><span>Checked by</span><strong>{reportCheckedBy || ' '}</strong></div>
           <div className="report-cell"><span>Job Ref.</span><strong>{reportJobRef || ' '}</strong></div>
+          <div className="report-cell"><span>Approved by</span><strong>{reportApprovedBy || ' '}</strong></div>
           <div className="report-cell"><span>Section</span><strong>{reportSectionName || ' '}</strong></div>
           <div className="report-cell"><span>Sheet no./rev.</span><strong>{reportSheetNumber || ' '}</strong></div>
           <div className="report-cell"><span>Calc. by</span><strong>{reportCalcBy || ' '}</strong></div>
           <div className="report-cell"><span>Date</span><strong>{reportDate || ' '}</strong></div>
-          <div className="report-cell"><span>Chk'd by</span><strong>{reportCheckedBy || ' '}</strong></div>
-          <div className="report-cell"><span>App'd by</span><strong>{reportApprovedBy || ' '}</strong></div>
         </div>
 
         <section className="report-section report-title-section">
@@ -2235,7 +2235,7 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
       .beam-screen-report .print-sheet { margin: 0 auto; max-width: 8.5in; }
       .print-sheet { background: white; color: #111827; font-family: Arial, Helvetica, sans-serif; font-size: 11px; line-height: 1.25; padding: 0.25in; }
       .report-header-grid { display: grid; grid-template-columns: 2.1fr 1.7fr 1.2fr; border: 1px solid #111827; }
-      .report-brand { grid-row: span 3; display: flex; align-items: center; gap: 10px; padding: 10px; border-right: 1px solid #111827; }
+      .report-brand { grid-row: span 4; display: flex; align-items: center; gap: 10px; padding: 10px; border-right: 1px solid #111827; }
       .report-logo { width: 34px; height: 28px; border: 2px solid #0369a1; color: #0369a1; display: flex; align-items: center; justify-content: center; font-weight: 800; }
   .report-brand-image { width: 64px; height: auto; object-fit: contain; }
       .report-brand-name { font-size: 18px; font-weight: 800; }
