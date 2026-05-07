@@ -1,28 +1,22 @@
-# Invite Code Signup
+# Fix Login Kickout with Invite-Code Signup
 
 Replace/add these files:
 - src/context/AuthContext.tsx
-- src/context/authContextInstance.ts
 - src/pages/Login.tsx
 - .env.example
 
 Commit message:
-Add invite code signup
+Fix invite code login persistence
 
 What changed:
-- Create Account now asks for a Signup code.
-- Any email can create an account if VITE_ALLOWED_EMAIL is blank or deleted.
-- Signup still requires the correct invite code from Vercel:
-  VITE_SIGNUP_INVITE_CODE
-- Existing users can still sign in normally without entering the signup code.
+- Invite code is now used only for creating new accounts.
+- Existing Firebase users can sign in normally.
+- Removed the old VITE_ALLOWED_EMAIL enforcement from login/auth state.
+- This prevents the app from signing a user in for a second and then kicking them back to /login.
+- Login page no longer pre-fills the old allowed email variable.
 
 Vercel setup:
-1. Delete or blank out VITE_ALLOWED_EMAIL if you want any email to be allowed.
-2. Add this variable:
-   VITE_SIGNUP_INVITE_CODE
-3. Set its value to the code you want to give testers, for example:
-   STRUCT2026
-4. Redeploy after saving the variable.
-
-Note:
-This is a frontend invite-code gate. It is good for limiting casual tester signups. For stronger production-grade invite security, move invite validation into a backend/Firebase Cloud Function later.
+- Keep all VITE_FIREBASE_* variables.
+- Keep VITE_SIGNUP_INVITE_CODE.
+- Delete VITE_ALLOWED_EMAIL or leave it; this code no longer uses it.
+- Redeploy after pushing.

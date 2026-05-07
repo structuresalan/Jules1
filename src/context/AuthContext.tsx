@@ -9,32 +9,15 @@ import {
 } from '../firebase';
 import { AuthContext } from './authContextInstance';
 
-const getAllowedEmail = () =>
-  String(import.meta.env.VITE_ALLOWED_EMAIL || '')
-    .trim()
-    .toLowerCase();
-
 const getSignupInviteCode = () =>
   String(import.meta.env.VITE_SIGNUP_INVITE_CODE || '')
     .trim();
-
-const isAllowedEmail = (email: string) => {
-  const allowedEmail = getAllowedEmail();
-  if (!allowedEmail) return true;
-
-  return email.trim().toLowerCase() === allowedEmail;
-};
 
 const isValidInviteCode = (inviteCode = '') => {
   const requiredInviteCode = getSignupInviteCode();
   if (!requiredInviteCode) return true;
 
   return inviteCode.trim() === requiredInviteCode;
-};
-
-const isAllowedUser = (candidate: User | null) => {
-  if (!candidate) return true;
-  return isAllowedEmail(candidate.email || '');
 };
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -50,22 +33,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       throw new Error('Firebase is not configured yet. Add the Firebase environment variables in Vercel before creating an account.');
     }
 
-    if (!isAllowedEmail(normalizedEmail)) {
-      throw new Error('This email is not authorized to create a SimplifyStruct account.');
-    }
-
     if (!isValidInviteCode(inviteCode)) {
       throw new Error('Invalid signup code.');
     }
 
     const credential = await createUserWithEmailAndPassword(activeAuth, normalizedEmail, password);
-
-    if (!isAllowedUser(credential.user)) {
-      await signOut(activeAuth);
-      setUser(null);
-      throw new Error('This email is not authorized for SimplifyStruct.');
-    }
-
     setUser(credential.user);
   };
 
@@ -77,13 +49,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     const credential = await signInWithEmailAndPassword(activeAuth, email.trim(), password);
-
-    if (!isAllowedUser(credential.user)) {
-      await signOut(activeAuth);
-      setUser(null);
-      throw new Error('This email is not authorized for SimplifyStruct.');
-    }
-
     setUser(credential.user);
   };
 
@@ -115,14 +80,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return;
     }
 
-    const unsubscribe = onAuthStateChanged(activeAuth, async (firebaseUser) => {
-      if (firebaseUser && !isAllowedUser(firebaseUser)) {
-        await signOut(activeAuth);
-        setUser(null);
-        setLoading(false);
-        return;
-      }
-
+    const unsubscribe = onAuthStateChanged(activeAuth, (firebaseUser) => {
       setUser(firebaseUser);
       setLoading(false);
     });

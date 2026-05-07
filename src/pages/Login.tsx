@@ -9,7 +9,7 @@ export const Login: React.FC = () => {
   const { user, login, createAccount, authConfigured } = useAuth();
   const navigate = useNavigate();
   const [authMode, setAuthMode] = useState<AuthMode>('signin');
-  const [email, setEmail] = useState(import.meta.env.VITE_ALLOWED_EMAIL || '');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [inviteCode, setInviteCode] = useState('');
@@ -70,8 +70,8 @@ export const Login: React.FC = () => {
         </h1>
         <p className="mt-3 text-center text-gray-500">
           {authMode === 'create'
-            ? 'Create the approved account for this SimplifyStruct site.'
-            : 'Access is limited to approved SimplifyStruct accounts.'}
+            ? 'Create a tester account using the signup code.'
+            : 'Sign in with your SimplifyStruct account.'}
         </p>
 
         <div className="mt-6 grid grid-cols-2 rounded-lg border border-gray-200 bg-gray-50 p-1">
