@@ -51,6 +51,7 @@ interface VisualMarker {
   projectId: string;
   boardId: string;
   documentId: string;
+  documentIds?: string[];
   label: string;
   notes: string;
   xPercent: number;
@@ -123,13 +124,26 @@ const getDefaultBoardName = (fileName: string) => {
   return withoutExtension.trim() || 'Untitled Visual Board';
 };
 
-const getBoardDocumentCount = (boardId: string, markers: VisualMarker[]) => {
-  return new Set(markers.filter((marker) => marker.boardId === boardId && marker.documentId).map((marker) => marker.documentId)).size;
+const getMarkerDocumentIds = (marker: VisualMarker | null) => {
+  if (!marker) return [];
+
+  const ids = Array.isArray(marker.documentIds) && marker.documentIds.length > 0 ? marker.documentIds : [marker.documentId];
+  return Array.from(new Set(ids.filter(Boolean)));
 };
 
-const getMarkerDocument = (marker: VisualMarker | null, documents: ProjectDocument[]) => {
-  if (!marker) return null;
-  return documents.find((document) => document.id === marker.documentId) ?? null;
+const getBoardDocumentCount = (boardId: string, markers: VisualMarker[]) => {
+  const documentIds = markers
+    .filter((marker) => marker.boardId === boardId)
+    .flatMap((marker) => getMarkerDocumentIds(marker));
+
+  return new Set(documentIds).size;
+};
+
+const getMarkerDocuments = (marker: VisualMarker | null, documents: ProjectDocument[]) => {
+  const ids = getMarkerDocumentIds(marker);
+  return ids
+    .map((documentId) => documents.find((document) => document.id === documentId) ?? null)
+    .filter((document): document is ProjectDocument => Boolean(document));
 };
 
 const markerArrowSymbol = (direction: VisualMarkerDirection | undefined) => {
@@ -349,7 +363,7 @@ export const Documents: React.FC = () => {
   const [isAddingMarker, setIsAddingMarker] = useState(false);
   const [pendingMarkerPoint, setPendingMarkerPoint] = useState<{ xPercent: number; yPercent: number } | null>(null);
   const [markerLabel, setMarkerLabel] = useState('');
-  const [markerDocumentId, setMarkerDocumentId] = useState('');
+  const [markerDocumentIds, setMarkerDocumentIds] = useState<string[]>([]);
   const [markerNotes, setMarkerNotes] = useState('');
   const [markerStyle, setMarkerStyle] = useState<VisualMarkerStyle>('Pin');
   const [markerDirection, setMarkerDirection] = useState<VisualMarkerDirection>('Down');
@@ -373,14 +387,15 @@ export const Documents: React.FC = () => {
     () => selectedBoardMarkers.find((marker) => marker.id === selectedMarkerId) ?? null,
     [selectedBoardMarkers, selectedMarkerId],
   );
-  const selectedMarkerDocument = useMemo(
-    () => getMarkerDocument(selectedMarker, documents),
+  const selectedMarkerDocuments = useMemo(
+    () => getMarkerDocuments(selectedMarker, documents),
     [documents, selectedMarker],
   );
-  const hoverVisualMarkerDocument = useMemo(
-    () => getMarkerDocument(hoverVisualMarker, documents),
+  const hoverVisualMarkerDocuments = useMemo(
+    () => getMarkerDocuments(hoverVisualMarker, documents),
     [documents, hoverVisualMarker],
   );
+  const hoverVisualMarkerPrimaryDocument = hoverVisualMarkerDocuments[0] ?? null;
 
   const refreshDocuments = () => {
     if (!activeProject) {
@@ -537,7 +552,7 @@ export const Documents: React.FC = () => {
 
   const resetMarkerForm = () => {
     setMarkerLabel('');
-    setMarkerDocumentId('');
+    setMarkerDocumentIds([]);
     setMarkerNotes('');
     setMarkerStyle('Pin');
     setMarkerDirection('Down');
@@ -576,7 +591,7 @@ export const Documents: React.FC = () => {
 
     setPendingMarkerPoint({ xPercent, yPercent });
     setMarkerLabel(`M${selectedBoardMarkers.length + 1}`);
-    setMarkerDocumentId(documents[0]?.id ?? '');
+    setMarkerDocumentIds(documents[0]?.id ? [documents[0].id] : []);
     setMarkerNotes('');
     setMarkerStyle('Pin');
     setMarkerDirection('Down');
@@ -594,14 +609,15 @@ export const Documents: React.FC = () => {
   };
 
   const savePendingMarker = () => {
-    if (!activeProject || !selectedBoard || !pendingMarkerPoint || !markerDocumentId) return;
+    if (!activeProject || !selectedBoard || !pendingMarkerPoint || markerDocumentIds.length === 0) return;
 
     const now = new Date().toISOString();
     const marker: VisualMarker = {
       id: makeVisualMarkerId(),
       projectId: activeProject.id,
       boardId: selectedBoard.id,
-      documentId: markerDocumentId,
+      documentId: markerDocumentIds[0] ?? '',
+      documentIds: markerDocumentIds,
       label: markerLabel.trim() || `M${selectedBoardMarkers.length + 1}`,
       notes: markerNotes.trim(),
       xPercent: pendingMarkerPoint.xPercent,
@@ -622,7 +638,7 @@ export const Documents: React.FC = () => {
   const startEditMarker = (marker: VisualMarker) => {
     setEditingMarkerId(marker.id);
     setMarkerLabel(marker.label);
-    setMarkerDocumentId(marker.documentId);
+    setMarkerDocumentIds(getMarkerDocumentIds(marker));
     setMarkerNotes(marker.notes);
     setMarkerStyle(normalizeMarkerStyle(marker.style));
     setMarkerDirection(normalizeMarkerDirection(marker.direction));
@@ -637,10 +653,11 @@ export const Documents: React.FC = () => {
   };
 
   const saveMarkerEdit = () => {
-    if (!editingMarkerId || !markerDocumentId) return;
+    if (!editingMarkerId || markerDocumentIds.length === 0) return;
 
     updateVisualMarker(editingMarkerId, {
-      documentId: markerDocumentId,
+      documentId: markerDocumentIds[0] ?? '',
+      documentIds: markerDocumentIds,
       label: markerLabel.trim() || 'Marker',
       notes: markerNotes.trim(),
       style: markerStyle,
@@ -780,6 +797,14 @@ export const Documents: React.FC = () => {
     </div>
   );
 
+  const toggleMarkerDocumentId = (documentId: string) => {
+    setMarkerDocumentIds((prev) =>
+      prev.includes(documentId)
+        ? prev.filter((id) => id !== documentId)
+        : [...prev, documentId],
+    );
+  };
+
   const renderMarkerForm = (mode: 'new' | 'edit') => (
     <div className="mt-4 rounded-lg border border-blue-200 bg-white p-3">
       <h4 className="flex items-center gap-2 text-sm font-bold text-gray-900">
@@ -797,21 +822,32 @@ export const Documents: React.FC = () => {
         />
       </label>
 
-      <label className="mt-3 block text-xs font-semibold text-gray-600">
-        Linked document
-        <select
-          value={markerDocumentId}
-          onChange={(event) => setMarkerDocumentId(event.target.value)}
-          className="mt-1 w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm"
-        >
-          <option value="">Select document...</option>
-          {documents.map((document) => (
-            <option key={document.id} value={document.id}>
-              {document.name}
-            </option>
-          ))}
-        </select>
-      </label>
+      <div className="mt-3 block text-xs font-semibold text-gray-600">
+        Linked documents
+        <div className="mt-1 max-h-44 space-y-1 overflow-y-auto rounded border border-gray-300 bg-white p-2">
+          {documents.length === 0 ? (
+            <div className="text-gray-500">No saved documents yet.</div>
+          ) : (
+            documents.map((document) => (
+              <label key={document.id} className="flex items-start gap-2 rounded px-2 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50">
+                <input
+                  type="checkbox"
+                  checked={markerDocumentIds.includes(document.id)}
+                  onChange={() => toggleMarkerDocumentId(document.id)}
+                  className="mt-0.5"
+                />
+                <span>
+                  <span className="block font-semibold text-gray-900">{document.name}</span>
+                  <span className="block text-[11px] text-gray-500">{document.type} • {document.module}</span>
+                </span>
+              </label>
+            ))
+          )}
+        </div>
+        <div className="mt-1 text-[11px] text-gray-500">
+          {markerDocumentIds.length} document{markerDocumentIds.length === 1 ? '' : 's'} selected
+        </div>
+      </div>
 
       <div className="mt-3 grid grid-cols-2 gap-2">
         <label className="block text-xs font-semibold text-gray-600">
@@ -854,7 +890,7 @@ export const Documents: React.FC = () => {
       <div className="mt-3 flex gap-2">
         <button
           onClick={mode === 'new' ? savePendingMarker : saveMarkerEdit}
-          disabled={!markerDocumentId}
+          disabled={markerDocumentIds.length === 0}
           className="inline-flex items-center gap-1 rounded bg-blue-600 px-3 py-2 text-xs font-bold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
         >
           <Save size={13} />
@@ -877,7 +913,8 @@ export const Documents: React.FC = () => {
   );
 
   const renderVisualMarkerButton = (marker: VisualMarker) => {
-    const markerDocument = getMarkerDocument(marker, documents);
+    const markerDocuments = getMarkerDocuments(marker, documents);
+    const markerDocument = markerDocuments[0] ?? null;
     const style = normalizeMarkerStyle(marker.style);
     const direction = normalizeMarkerDirection(marker.direction);
     const isSelected = selectedMarkerId === marker.id;
@@ -910,7 +947,7 @@ export const Documents: React.FC = () => {
           left: `${marker.xPercent}%`,
           top: `${marker.yPercent}%`,
         }}
-        title={markerDocument ? `${marker.label}: ${markerDocument.name}` : marker.label}
+        title={markerDocument ? `${marker.label}: ${markerDocument.name}${markerDocuments.length > 1 ? ` + ${markerDocuments.length - 1} more` : ''}` : marker.label}
       >
         <span className="inline-flex items-center gap-1">
           {style === 'Arrow' ? (
@@ -919,6 +956,7 @@ export const Documents: React.FC = () => {
             <MapPin size={13} />
           )}
           {marker.label}
+          {markerDocuments.length > 1 ? <span className="rounded-full bg-blue-100 px-1 text-[10px] text-blue-700">{markerDocuments.length}</span> : null}
         </span>
       </button>
     );
@@ -1069,9 +1107,34 @@ export const Documents: React.FC = () => {
                   <div className="mt-3 rounded bg-gray-50 p-2 text-xs text-gray-600">
                     <div className="flex items-center gap-1 font-semibold text-gray-900">
                       <LinkIcon size={13} />
-                      Linked document
+                      Linked documents
                     </div>
-                    <div className="mt-1">{selectedMarkerDocument?.name ?? 'Document not found'}</div>
+                    {selectedMarkerDocuments.length === 0 ? (
+                      <div className="mt-1 text-amber-700">Documents not found</div>
+                    ) : (
+                      <div className="mt-2 space-y-2">
+                        {selectedMarkerDocuments.map((document) => (
+                          <div key={document.id} className="rounded border border-gray-200 bg-white p-2">
+                            <div className="font-semibold text-gray-900">{document.name}</div>
+                            <div className="mt-1 text-[11px] text-gray-500">{document.type} • {document.module}</div>
+                            <div className="mt-2 flex gap-2">
+                              <button
+                                onClick={() => handleOpen(document)}
+                                className="rounded border border-blue-200 bg-blue-50 px-2 py-1 text-[11px] font-semibold text-blue-700 hover:bg-blue-100"
+                              >
+                                Open/Edit
+                              </button>
+                              <button
+                                onClick={() => handlePrint(document)}
+                                className="rounded border border-gray-200 bg-white px-2 py-1 text-[11px] font-semibold text-gray-700 hover:bg-gray-50"
+                              >
+                                Print
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   {selectedMarker.notes && (
@@ -1082,22 +1145,6 @@ export const Documents: React.FC = () => {
                   )}
 
                   <div className="mt-3 flex flex-wrap gap-2">
-                    {selectedMarkerDocument && (
-                      <>
-                        <button
-                          onClick={() => handleOpen(selectedMarkerDocument)}
-                          className="rounded border border-blue-200 bg-blue-50 px-2 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100"
-                        >
-                          Open/Edit
-                        </button>
-                        <button
-                          onClick={() => handlePrint(selectedMarkerDocument)}
-                          className="rounded border border-gray-200 bg-white px-2 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
-                        >
-                          Print
-                        </button>
-                      </>
-                    )}
                     <button
                       onClick={() => startEditMarker(selectedMarker)}
                       className="rounded border border-gray-200 bg-white px-2 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
@@ -1127,7 +1174,8 @@ export const Documents: React.FC = () => {
                 ) : (
                   <div className="mt-2 space-y-2">
                     {selectedBoardMarkers.map((marker) => {
-                      const markerDocument = getMarkerDocument(marker, documents);
+                      const markerDocuments = getMarkerDocuments(marker, documents);
+                      const markerDocument = markerDocuments[0] ?? null;
                       return (
                         <button
                           key={marker.id}
@@ -1146,7 +1194,9 @@ export const Documents: React.FC = () => {
                             {normalizeMarkerStyle(marker.style) === 'Arrow' ? markerArrowSymbol(normalizeMarkerDirection(marker.direction)) : <MapPin size={13} />}
                             {marker.label}
                           </div>
-                          <div className="mt-1 truncate text-gray-500">{markerDocument?.name ?? 'Document not found'}</div>
+                          <div className="mt-1 truncate text-gray-500">
+                            {markerDocument?.name ?? 'Document not found'}{markerDocuments.length > 1 ? ` + ${markerDocuments.length - 1} more` : ''}
+                          </div>
                         </button>
                       );
                     })}
@@ -1391,17 +1441,19 @@ export const Documents: React.FC = () => {
               )}
               {hoverVisualMarker.label}
             </div>
-            <div className="mt-1 text-gray-500">{hoverVisualMarkerDocument?.name ?? 'Document not found'}</div>
+            <div className="mt-1 text-gray-500">
+              {hoverVisualMarkerPrimaryDocument?.name ?? 'Document not found'}{hoverVisualMarkerDocuments.length > 1 ? ` + ${hoverVisualMarkerDocuments.length - 1} more` : ''}
+            </div>
             <div className="mt-1 text-[11px] text-gray-400">
               {normalizeMarkerStyle(hoverVisualMarker.style)} • {normalizeMarkerDirection(hoverVisualMarker.direction)}
             </div>
           </div>
 
-          {hoverVisualMarkerDocument ? (
+          {hoverVisualMarkerPrimaryDocument ? (
             <>
-              <HoverModelPreview document={hoverVisualMarkerDocument} />
+              <HoverModelPreview document={hoverVisualMarkerPrimaryDocument} />
               <div className="mt-3 space-y-1">
-                {buildPreviewSummary(hoverVisualMarkerDocument).map(([label, value]) => (
+                {buildPreviewSummary(hoverVisualMarkerPrimaryDocument).map(([label, value]) => (
                   <div key={label} className="grid grid-cols-2 gap-2">
                     <span className="text-gray-500">{label}</span>
                     <span className="font-medium text-gray-900">{value}</span>
