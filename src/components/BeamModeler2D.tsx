@@ -2231,7 +2231,7 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
 
   const printStyles = (
     <style>{`
-      .beam-print-report { display: none; }
+      .beam-print-report { display: none !important; }
       .beam-screen-report .print-sheet { margin: 0 auto; max-width: 8.5in; }
       .print-sheet { background: white; color: #111827; font-family: Arial, Helvetica, sans-serif; font-size: 11px; line-height: 1.25; padding: 0.25in; }
       .report-header-grid { display: grid; grid-template-columns: 2.1fr 1.7fr 1.2fr; border: 1px solid #111827; }
@@ -2292,7 +2292,7 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
   return (
     <div className="space-y-6">
       {printStyles}
-      <div className="beam-print-report">{renderPrintableReport()}</div>
+      <div className="beam-print-report" style={{ display: 'none' }}>{renderPrintableReport()}</div>
       <div className="rounded-lg border border-gray-200 bg-white shadow-sm overflow-hidden">
         <div className="flex flex-col gap-3 border-b border-gray-200 bg-gray-50 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
