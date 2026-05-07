@@ -1,22 +1,15 @@
 import React from 'react';
-import { NavLink, Outlet, Link, useLocation } from 'react-router-dom';
+import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { Home, Frame, Layers, Wind, Database, Settings, LogOut, Menu, FolderOpen } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { signOut, auth } from '../firebase';
 import { DisclaimerModal } from '../components/DisclaimerModal';
-import { useProjects } from '../context/ProjectContext';
 
 export const MainLayout: React.FC = () => {
   const { user, mockLogout } = useAuth();
-  const { activeProject, sessionMode } = useProjects();
   const location = useLocation();
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(true);
-
-  const isProjectHome = location.pathname === '/';
-  const isQuickPath = location.pathname.startsWith('/quick');
-  const isWorkspacePath = location.pathname.startsWith('/workspace');
-  const isQuickMode = isQuickPath || (!isWorkspacePath && sessionMode === 'quick');
-  const basePath = isQuickMode ? '/quick' : '/workspace';
+  const basePath = location.pathname.startsWith('/quick') ? '/quick' : '/workspace';
 
   const handleLogout = async () => {
     if (auth) {
@@ -29,10 +22,6 @@ export const MainLayout: React.FC = () => {
       mockLogout();
     }
   };
-
-  if (isProjectHome) {
-    return <Outlet />;
-  }
 
   const navItems = [
     { to: '/', icon: <FolderOpen size={18} />, label: 'Projects', end: true },
@@ -66,18 +55,13 @@ export const MainLayout: React.FC = () => {
             StrucCalc
           </h1>
 
-          <Link to="/" className="mt-4 block rounded-lg border border-gray-200 bg-white p-3 text-sm hover:border-blue-200 hover:bg-blue-50">
-            <div className="text-[10px] font-bold uppercase tracking-wide text-gray-500">
-              {isQuickMode ? 'Mode' : 'Active Project'}
+          <div className="mt-4 rounded-lg border border-gray-200 bg-white p-3 text-sm">
+            <div className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Current Mode</div>
+            <div className="mt-1 font-semibold text-gray-900">
+              {basePath === '/quick' ? 'Quick Calculations' : 'Project Workspace'}
             </div>
-            <div className="mt-1 truncate font-semibold text-gray-900">
-              {isQuickMode ? 'Quick Calculations' : activeProject?.name ?? 'No project selected'}
-            </div>
-            {!isQuickMode && activeProject?.projectNumber && (
-              <div className="mt-1 truncate text-xs text-gray-500">{activeProject.projectNumber}</div>
-            )}
-            <div className="mt-2 text-xs font-medium text-blue-600">Change / Open Projects</div>
-          </Link>
+            <div className="mt-2 text-xs text-blue-600">Use Projects to open or create saved work.</div>
+          </div>
         </div>
 
         <nav className="flex-1 px-4 space-y-1">

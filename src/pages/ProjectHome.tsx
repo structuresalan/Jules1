@@ -1,7 +1,42 @@
 import React, { useMemo, useState } from 'react';
 import { Calculator, Clock3, FileText, FolderOpen, Plus, Search, Trash2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { useProjects, type ProjectCalculationType } from '../context/ProjectContext';
+
+type ProjectStatus = 'Active' | 'On Hold' | 'Archived';
+type ProjectCalculationType = 'Mixed' | 'Steel' | 'Concrete' | 'Loads';
+
+interface ProjectRecord {
+  id: string;
+  name: string;
+  projectNumber: string;
+  client: string;
+  location: string;
+  description: string;
+  status: ProjectStatus;
+  calculationType: ProjectCalculationType;
+  createdAt: string;
+  updatedAt: string;
+}
+
+const STORAGE_KEY = 'struccalc.projects.v2';
+const ACTIVE_PROJECT_KEY = 'struccalc.activeProject.v2';
+
+const makeProjectId = () => `project_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+
+const readProjects = (): ProjectRecord[] => {
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+};
+
+const saveProjects = (projects: ProjectRecord[]) => {
+  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
+};
 
 const formatDateTime = (isoDate: string) => {
   if (!isoDate) return '-';
@@ -21,10 +56,10 @@ const formatDateTime = (isoDate: string) => {
 
 export const ProjectHome: React.FC = () => {
   const navigate = useNavigate();
-  const { projects, createProject, openProject, deleteProject, startQuickCalculation } = useProjects();
-
-  const [selectedMode, setSelectedMode] = useState<'new' | 'existing' | 'quick'>('new');
+  const [projects, setProjects] = useState<ProjectRecord[]>(readProjects);
+  const [selectedMode, setSelectedMode] = useState<'new' | 'existing'>('new');
   const [searchText, setSearchText] = useState('');
+
   const [projectName, setProjectName] = useState('');
   const [projectNumber, setProjectNumber] = useState('');
   const [client, setClient] = useState('');
@@ -37,7 +72,7 @@ export const ProjectHome: React.FC = () => {
     if (!query) return projects;
 
     return projects.filter((project) => {
-      const haystack = [
+      const searchableText = [
         project.name,
         project.projectNumber,
         project.client,
@@ -46,57 +81,80 @@ export const ProjectHome: React.FC = () => {
         project.calculationType,
       ].join(' ').toLowerCase();
 
-      return haystack.includes(query);
+      return searchableText.includes(query);
     });
   }, [projects, searchText]);
 
-  const handleCreateProject = (event: React.FormEvent) => {
+  const storeProjects = (nextProjects: ProjectRecord[]) => {
+    setProjects(nextProjects);
+    saveProjects(nextProjects);
+  };
+
+  const openProject = (project: ProjectRecord) => {
+    const updatedProject = { ...project, updatedAt: new Date().toISOString() };
+    const nextProjects = projects.map((item) => (item.id === project.id ? updatedProject : item));
+    storeProjects(nextProjects);
+    window.localStorage.setItem(ACTIVE_PROJECT_KEY, updatedProject.id);
+    navigate('/workspace');
+  };
+
+  const deleteProject = (projectId: string) => {
+    const nextProjects = projects.filter((project) => project.id !== projectId);
+    storeProjects(nextProjects);
+  };
+
+  const createProject = (event: React.FormEvent) => {
     event.preventDefault();
     if (!projectName.trim()) return;
 
-    createProject({
-      name: projectName,
-      projectNumber,
-      client,
-      location,
-      description,
+    const now = new Date().toISOString();
+    const project: ProjectRecord = {
+      id: makeProjectId(),
+      name: projectName.trim(),
+      projectNumber: projectNumber.trim() || `P-${new Date().getFullYear()}-${String(projects.length + 1).padStart(3, '0')}`,
+      client: client.trim(),
+      location: location.trim(),
+      description: description.trim(),
+      status: 'Active',
       calculationType,
-    });
+      createdAt: now,
+      updatedAt: now,
+    };
 
+    storeProjects([project, ...projects]);
+    window.localStorage.setItem(ACTIVE_PROJECT_KEY, project.id);
     navigate('/workspace');
   };
 
-  const handleOpenProject = (projectId: string) => {
-    openProject(projectId);
-    navigate('/workspace');
-  };
-
-  const handleQuickCalculations = () => {
-    startQuickCalculation();
+  const startQuickCalculations = () => {
+    window.localStorage.removeItem(ACTIVE_PROJECT_KEY);
     navigate('/quick');
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 text-gray-900">
-      <div className="mx-auto flex min-h-screen w-full max-w-7xl flex-col px-6 py-8">
+    <div className="min-h-screen bg-gray-50 px-6 py-8 text-gray-900">
+      <div className="mx-auto max-w-7xl">
         <header className="mb-8 flex flex-col gap-4 border-b border-gray-200 pb-6 md:flex-row md:items-end md:justify-between">
           <div>
             <div className="mb-3 flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-600 text-lg font-bold text-white">SC</div>
               <div>
                 <h1 className="text-3xl font-bold tracking-tight">StrucCalc Projects</h1>
-                <p className="text-sm text-gray-500">Choose how you want to start your calculation session.</p>
+                <p className="text-sm text-gray-500">Create a project, open saved work, or run a quick calculation.</p>
               </div>
             </div>
           </div>
 
-          <div className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-900">
-            <div className="font-semibold">Project data is saved locally in this browser.</div>
-            <div className="text-xs text-blue-700">Saved projects will appear here next time you open the site on this device.</div>
-          </div>
+          <button
+            onClick={startQuickCalculations}
+            className="inline-flex w-fit items-center gap-2 rounded-md bg-amber-500 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-600"
+          >
+            <Calculator size={18} />
+            Quick Calculations
+          </button>
         </header>
 
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           <button
             onClick={() => setSelectedMode('new')}
             className={`rounded-xl border p-5 text-left shadow-sm transition ${selectedMode === 'new' ? 'border-blue-500 bg-white ring-2 ring-blue-100' : 'border-gray-200 bg-white hover:border-gray-300'}`}
@@ -105,7 +163,7 @@ export const ProjectHome: React.FC = () => {
               <Plus size={22} />
             </div>
             <h2 className="text-lg font-semibold">New Project</h2>
-            <p className="mt-2 text-sm text-gray-500">Create a saved project folder for calculations, reports, and future reference.</p>
+            <p className="mt-2 text-sm text-gray-500">Create a saved project that will appear in Existing Projects next time you open the site.</p>
           </button>
 
           <button
@@ -118,22 +176,11 @@ export const ProjectHome: React.FC = () => {
             <h2 className="text-lg font-semibold">Existing Project</h2>
             <p className="mt-2 text-sm text-gray-500">Open a saved project from a details-style project list.</p>
           </button>
-
-          <button
-            onClick={handleQuickCalculations}
-            className={`rounded-xl border p-5 text-left shadow-sm transition ${selectedMode === 'quick' ? 'border-blue-500 bg-white ring-2 ring-blue-100' : 'border-gray-200 bg-white hover:border-gray-300'}`}
-          >
-            <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-lg bg-amber-50 text-amber-600">
-              <Calculator size={22} />
-            </div>
-            <h2 className="text-lg font-semibold">Quick Calculations</h2>
-            <p className="mt-2 text-sm text-gray-500">Jump into the calculators without creating or saving a project record.</p>
-          </button>
         </div>
 
-        <main className="mt-6 flex-1">
+        <main className="mt-6">
           {selectedMode === 'new' && (
-            <form onSubmit={handleCreateProject} className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+            <form onSubmit={createProject} className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
               <div className="mb-6 flex items-start gap-3">
                 <FileText className="mt-1 text-blue-600" size={22} />
                 <div>
@@ -209,14 +256,7 @@ export const ProjectHome: React.FC = () => {
                 </label>
               </div>
 
-              <div className="mt-6 flex flex-wrap items-center justify-end gap-3 border-t border-gray-100 pt-5">
-                <button
-                  type="button"
-                  onClick={() => setSelectedMode('existing')}
-                  className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-                >
-                  View Existing Projects
-                </button>
+              <div className="mt-6 flex justify-end border-t border-gray-100 pt-5">
                 <button
                   type="submit"
                   className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
@@ -274,7 +314,7 @@ export const ProjectHome: React.FC = () => {
                         <tr key={project.id} className="hover:bg-blue-50/50">
                           <td className="border-b border-gray-100 px-4 py-3">
                             <div className="font-semibold text-gray-900">{project.name}</div>
-                            {project.description && <div className="mt-1 line-clamp-1 max-w-xs text-xs text-gray-500">{project.description}</div>}
+                            {project.description && <div className="mt-1 max-w-xs truncate text-xs text-gray-500">{project.description}</div>}
                           </td>
                           <td className="border-b border-gray-100 px-4 py-3 font-mono text-xs text-gray-700">{project.projectNumber}</td>
                           <td className="border-b border-gray-100 px-4 py-3 text-gray-700">{project.client || '-'}</td>
@@ -293,7 +333,7 @@ export const ProjectHome: React.FC = () => {
                           <td className="border-b border-gray-100 px-4 py-3">
                             <div className="flex justify-end gap-2">
                               <button
-                                onClick={() => handleOpenProject(project.id)}
+                                onClick={() => openProject(project)}
                                 className="rounded border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100"
                               >
                                 Open
