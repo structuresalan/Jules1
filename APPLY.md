@@ -1,14 +1,16 @@
-# Print Header Checked / Approved Labels
+# Separate Projects Navigation
 
 Replace this file:
-- src/components/BeamModeler2D.tsx
+- src/layouts/MainLayout.tsx
 
 Commit message:
-Move checked by to print header top right
+Separate projects from design navigation
 
 What changed:
-- Print header now places Checked by in the top-right header box.
-- The logo/brand cell now spans the full header height so fields no longer wrap into the bottom-left.
-- Renames Chk'd by to Checked by.
-- Renames App'd by to Approved by.
-- Updates the Output Options form labels too.
+- Removes Projects from the regular tab list.
+- Adds a separate Projects Home button near the top of the sidebar.
+- Makes the current project/workspace name much larger and easier to read.
+- Adds a larger Active Project header above the workspace content.
+- Groups normal app sections under Design Workspace.
+- Moves Settings into a separate System group.
+- Keeps sign out in the bottom user area.
