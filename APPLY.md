@@ -1,4 +1,4 @@
-# AISC Shape Database Loader
+# Required and Optional Steel Fields
 
 Replace/add these files:
 - src/components/BeamModeler2D.tsx
@@ -6,18 +6,26 @@ Replace/add these files:
 - src/utils/reportHeaderDefaults.ts
 
 Commit message:
-Load expanded AISC steel shape database
+Add required optional steel field validation
 
 What changed:
-- Steel Beam Design now loads an expanded AISC Shapes CSV database at runtime.
-- Adds a shape-family filter:
-  W, M, S, HP, C, MC, WT, MT, ST, L, 2L, HSS, PIPE, and All.
-- Adds section search.
-- Shows the active database source and number of sections loaded.
-- Keeps the old local W-shape seed as a fallback if the CSV cannot load.
-- Saves/restores the selected shape family with project documents.
+- Adds a red * to required Steel Beam fields.
+- Adds (optional) labels to workflow/report fields like member type, material type, design rule, search, sway, seismic, and some stability/reporting fields.
+- Adds a validation banner listing missing/invalid required fields.
+- Diagrams/results do not run until required fields are valid.
+- Save Output, Preview Output, and Print Output are disabled until required fields are valid.
+- Optional fields do not block calculations.
 
-Notes:
-- The runtime CSV source is the MIT-licensed ambaker1/aisc-csv v15.0 processed CSV.
-- The official AISC v16.0 spreadsheet is still the authoritative current database, but the app cannot parse XLSX in-browser without adding a spreadsheet parser.
-- HSS/angles/channels can now be selected, but the current beam design checks are still preliminary and primarily flexure/shear/deflection based. Dedicated HSS/angle/local buckling checks should be added separately.
+Required fields currently include:
+- Method
+- Selected section
+- Fy
+- Unbraced Lb
+- Internal sections
+- At least two nodes
+- Positive beam length
+- At least two supports
+- Live and total deflection limits
+- Ky-y / Kz-z
+- Lb y-y / Lb z-z
+- Valid load factors

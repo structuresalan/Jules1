@@ -180,6 +180,17 @@ const designPanels: BeamPanel[] = ['Design options', 'Nodes', 'Loading', 'Combin
 
 const makeId = () => Math.random().toString(36).slice(2, 9);
 
+const fieldLabel = (label: string, required = false) => (
+  <span>
+    {label}{' '}
+    {required ? (
+      <span className="font-bold text-red-600" title="Required">*</span>
+    ) : (
+      <span className="font-normal text-gray-400">(optional)</span>
+    )}
+  </span>
+);
+
 const degreesFromSupport = (support: SupportType): Pick<BeamNode, 'dofX' | 'dofZ' | 'dofRotation'> => {
   if (support === 'Fixed') return { dofX: 'Fixed', dofZ: 'Fixed', dofRotation: 'Fixed' };
   if (support === 'Pinned') return { dofX: 'Fixed', dofZ: 'Fixed', dofRotation: 'Free' };
@@ -575,7 +586,43 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
     setLoadFactors((prev) => ({ ...prev, [loadCase]: value }));
   };
 
+  const requiredFieldIssues = useMemo(() => {
+    const issues: string[] = [];
+
+    if (!method) issues.push('Select a design method.');
+    if (!section || !shapeDatabase[section]) issues.push('Select a valid steel section.');
+    if (!Number.isFinite(fy) || fy <= 0) issues.push('Enter Fy greater than 0 ksi.');
+    if (!Number.isFinite(unbracedLength) || unbracedLength <= 0) issues.push('Enter unbraced length greater than 0 ft.');
+    if (!Number.isFinite(internalSections) || internalSections < 3) issues.push('Enter at least 3 internal analysis sections.');
+    if (sortedNodes.length < 2) issues.push('Add at least two nodes.');
+    if (sortedNodes.length >= 2) {
+      const beamStart = sortedNodes[0].x;
+      const beamEnd = sortedNodes[sortedNodes.length - 1].x;
+      if (!Number.isFinite(beamStart) || !Number.isFinite(beamEnd) || beamEnd <= beamStart) {
+        issues.push('Node x-coordinates must create a positive beam length.');
+      }
+    }
+    const supportCount = sortedNodes.filter((node) => node.support !== 'None').length;
+    if (supportCount < 2) issues.push('Add at least two supports.');
+    if (!Number.isFinite(deflectionLimit) || deflectionLimit <= 0) issues.push('Enter a live-load deflection limit greater than 0.');
+    if (!Number.isFinite(totalDeflectionLimit) || totalDeflectionLimit <= 0) issues.push('Enter a total-load deflection limit greater than 0.');
+    if (!Number.isFinite(ky) || ky <= 0) issues.push('Enter Ky-y greater than 0.');
+    if (!Number.isFinite(kz) || kz <= 0) issues.push('Enter Kz-z greater than 0.');
+    if (!Number.isFinite(lbyy) || lbyy <= 0) issues.push('Enter Lb y-y greater than 0 ft.');
+    if (!Number.isFinite(lbzz) || lbzz <= 0) issues.push('Enter Lb z-z greater than 0 ft.');
+
+    (Object.keys(loadFactors) as LoadCase[]).forEach((loadCase) => {
+      const factor = loadFactors[loadCase];
+      if (!Number.isFinite(factor)) issues.push(`Enter a valid ${loadCase} load factor.`);
+    });
+
+    return issues;
+  }, [deflectionLimit, fy, internalSections, ky, kz, lbyy, lbzz, loadFactors, method, section, shapeDatabase, sortedNodes, totalDeflectionLimit, unbracedLength]);
+
+  const canRunDesign = requiredFieldIssues.length === 0;
+
   const analysis = useMemo(() => {
+    if (!canRunDesign) return null;
     if (sortedNodes.length < 2) return null;
 
     const beamStart = sortedNodes[0].x;
@@ -682,7 +729,7 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
       maxMoment,
       totalVerticalLoad,
     };
-  }, [sortedNodes, loads, nodes, loadFactors, includeSelfWeight, selfWeightKipPerFt]);
+  }, [canRunDesign, sortedNodes, loads, nodes, loadFactors, includeSelfWeight, selfWeightKipPerFt]);
 
   const compressionSlendernessY = analysis ? (Math.max(ky, 0.01) * Math.max(lbyy, 0.01) * 12) / Math.max(Math.sqrt(estimatedIx / Math.max(selectedShape.A, 0.001)), 0.001) : 0;
   const compressionSlendernessZ = analysis ? (Math.max(kz, 0.01) * Math.max(lbzz, 0.01) * 12) / Math.max(Math.sqrt(estimatedIx / Math.max(selectedShape.A, 0.001)), 0.001) : 0;
@@ -1188,23 +1235,28 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
             <div className="mt-1 text-xs text-blue-700">Use the steel page selector in the top-right header to change the governing code edition.</div>
           </div>
 
+          <div className="rounded border border-gray-200 bg-white p-3 text-xs text-gray-600">
+            <span className="font-bold text-red-600">*</span> Required fields must be completed before diagrams, results, save, preview, or print will run.
+            <span className="ml-2 text-gray-400">(optional)</span> fields are saved for reporting/workflow but do not block calculations.
+          </div>
+
           <label className="flex items-center gap-2 rounded border border-gray-200 bg-white p-3 text-sm font-medium text-gray-700">
             <input type="checkbox" checked={includeSelfWeight} onChange={(event) => setIncludeSelfWeight(event.target.checked)} />
-            Include member self weight as a dead load
+            Include member self weight <span className="font-normal text-gray-400">(optional)</span> as a dead load
           </label>
 
           <div className="rounded-lg border border-gray-200 bg-white p-4">
             <h3 className="mb-3 text-sm font-semibold text-gray-900">Member setup</h3>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <label className="text-sm font-medium text-gray-700">
-                Method
+                {fieldLabel('Method', true)}
                 <select value={method} onChange={(event) => setMethod(event.target.value as DesignMethod)} className="mt-1 w-full rounded border border-gray-300 bg-white p-2 text-sm">
                   <option>LRFD</option>
                   <option>ASD</option>
                 </select>
               </label>
               <label className="text-sm font-medium text-gray-700">
-                Member type
+                {fieldLabel('Member type')}
                 <select value={memberType} onChange={(event) => setMemberType(event.target.value as MemberType)} className="mt-1 w-full rounded border border-gray-300 bg-white p-2 text-sm">
                   <option>Beam</option>
                   <option>Girder</option>
@@ -1214,7 +1266,7 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
                 </select>
               </label>
               <label className="text-sm font-medium text-gray-700">
-                Material type
+                {fieldLabel('Material type')}
                 <select value={materialType} onChange={(event) => setMaterialType(event.target.value as MaterialType)} className="mt-1 w-full rounded border border-gray-300 bg-white p-2 text-sm">
                   <option>Hot Rolled Steel</option>
                   <option>Cold Formed Steel</option>
@@ -1223,7 +1275,7 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
                 </select>
               </label>
               <label className="text-sm font-medium text-gray-700">
-                Design rule
+                {fieldLabel('Design rule')}
                 <select value={designRule} onChange={(event) => setDesignRule(event.target.value as DesignRule)} className="mt-1 w-full rounded border border-gray-300 bg-white p-2 text-sm">
                   <option>Typical</option>
                   <option>Conservative</option>
@@ -1231,17 +1283,17 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
                 </select>
               </label>
               <label className="text-sm font-medium text-gray-700">
-                Shape family
+                {fieldLabel('Shape family')}
                 <select value={shapeTypeFilter} onChange={(event) => setShapeTypeFilter(event.target.value)} className="mt-1 w-full rounded border border-gray-300 bg-white p-2 text-sm">
                   {shapeTypeOptions.map((type) => <option key={type}>{type}</option>)}
                 </select>
               </label>
               <label className="text-sm font-medium text-gray-700">
-                Search section
+                {fieldLabel('Search section')}
                 <input value={shapeSearch} onChange={(event) => setShapeSearch(event.target.value)} className="mt-1 w-full rounded border border-gray-300 bg-white p-2 text-sm" placeholder="W12, HSS, L4..." />
               </label>
               <label className="text-sm font-medium text-gray-700">
-                Selected section
+                {fieldLabel('Selected section', true)}
                 <select value={section} onChange={(event) => setSection(event.target.value)} className="mt-1 w-full rounded border border-gray-300 bg-white p-2 text-sm">
                   {filteredShapeNames.map((name) => <option key={name}>{name}</option>)}
                 </select>
@@ -1250,22 +1302,22 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
                 <div><span className="font-semibold">Shape database:</span> {shapeDatabaseSource}</div>
                 <div>{shapeTypeFilter === 'All' ? shapeNames.length : filteredShapeNames.length} section{(shapeTypeFilter === 'All' ? shapeNames.length : filteredShapeNames.length) === 1 ? '' : 's'} shown{shapeDatabaseError ? `; fallback reason: ${shapeDatabaseError}` : ''}.</div>
               </div>
-              <label className="text-sm font-medium text-gray-700">Internal sections<input type="number" min={3} value={internalSections} onChange={(event) => setInternalSections(Number(event.target.value))} className="mt-1 w-full rounded border border-gray-300 p-2 text-sm" /></label>
-              <label className="text-sm font-medium text-gray-700">Fy (ksi)<input type="number" value={fy} onChange={(event) => setFy(Number(event.target.value))} className="mt-1 w-full rounded border border-gray-300 p-2 text-sm" /></label>
-              <label className="text-sm font-medium text-gray-700">Unbraced Lb (ft)<input type="number" value={unbracedLength} onChange={(event) => setUnbracedLength(Number(event.target.value))} className="mt-1 w-full rounded border border-gray-300 p-2 text-sm" /></label>
+              <label className="text-sm font-medium text-gray-700">{fieldLabel('Internal sections', true)}<input type="number" min={3} value={internalSections} onChange={(event) => setInternalSections(Number(event.target.value))} className="mt-1 w-full rounded border border-gray-300 p-2 text-sm" /></label>
+              <label className="text-sm font-medium text-gray-700">{fieldLabel('Fy (ksi)', true)}<input type="number" value={fy} onChange={(event) => setFy(Number(event.target.value))} className="mt-1 w-full rounded border border-gray-300 p-2 text-sm" /></label>
+              <label className="text-sm font-medium text-gray-700">{fieldLabel('Unbraced Lb (ft)', true)}<input type="number" value={unbracedLength} onChange={(event) => setUnbracedLength(Number(event.target.value))} className="mt-1 w-full rounded border border-gray-300 p-2 text-sm" /></label>
             </div>
           </div>
 
           <div className="rounded-lg border border-gray-200 bg-white p-4">
             <h3 className="mb-3 text-sm font-semibold text-gray-900">Stability lengths and factors</h3>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
-              <label className="text-sm font-medium text-gray-700">Lb y-y (ft)<input type="number" value={lbyy} onChange={(event) => setLbyy(Number(event.target.value))} className="mt-1 w-full rounded border border-gray-300 p-2 text-sm" /></label>
-              <label className="text-sm font-medium text-gray-700">Lb z-z (ft)<input type="number" value={lbzz} onChange={(event) => setLbzz(Number(event.target.value))} className="mt-1 w-full rounded border border-gray-300 p-2 text-sm" /></label>
-              <label className="text-sm font-medium text-gray-700">Ky-y<input type="number" step="0.05" value={ky} onChange={(event) => setKy(Number(event.target.value))} className="mt-1 w-full rounded border border-gray-300 p-2 text-sm" /></label>
-              <label className="text-sm font-medium text-gray-700">Kz-z<input type="number" step="0.05" value={kz} onChange={(event) => setKz(Number(event.target.value))} className="mt-1 w-full rounded border border-gray-300 p-2 text-sm" /></label>
-              <label className="text-sm font-medium text-gray-700">Lcomp top (ft)<input type="number" value={lCompTop} onChange={(event) => setLCompTop(Number(event.target.value))} className="mt-1 w-full rounded border border-gray-300 p-2 text-sm" /></label>
-              <label className="text-sm font-medium text-gray-700">Lcomp bottom (ft)<input type="number" value={lCompBottom} onChange={(event) => setLCompBottom(Number(event.target.value))} className="mt-1 w-full rounded border border-gray-300 p-2 text-sm" /></label>
-              <label className="text-sm font-medium text-gray-700">Ltorque (ft)<input type="number" value={lTorque} onChange={(event) => setLTorque(Number(event.target.value))} className="mt-1 w-full rounded border border-gray-300 p-2 text-sm" /></label>
+              <label className="text-sm font-medium text-gray-700">{fieldLabel('Lb y-y (ft)', true)}<input type="number" value={lbyy} onChange={(event) => setLbyy(Number(event.target.value))} className="mt-1 w-full rounded border border-gray-300 p-2 text-sm" /></label>
+              <label className="text-sm font-medium text-gray-700">{fieldLabel('Lb z-z (ft)', true)}<input type="number" value={lbzz} onChange={(event) => setLbzz(Number(event.target.value))} className="mt-1 w-full rounded border border-gray-300 p-2 text-sm" /></label>
+              <label className="text-sm font-medium text-gray-700">{fieldLabel('Ky-y', true)}<input type="number" step="0.05" value={ky} onChange={(event) => setKy(Number(event.target.value))} className="mt-1 w-full rounded border border-gray-300 p-2 text-sm" /></label>
+              <label className="text-sm font-medium text-gray-700">{fieldLabel('Kz-z', true)}<input type="number" step="0.05" value={kz} onChange={(event) => setKz(Number(event.target.value))} className="mt-1 w-full rounded border border-gray-300 p-2 text-sm" /></label>
+              <label className="text-sm font-medium text-gray-700">{fieldLabel('Lcomp top (ft)')}<input type="number" value={lCompTop} onChange={(event) => setLCompTop(Number(event.target.value))} className="mt-1 w-full rounded border border-gray-300 p-2 text-sm" /></label>
+              <label className="text-sm font-medium text-gray-700">{fieldLabel('Lcomp bottom (ft)')}<input type="number" value={lCompBottom} onChange={(event) => setLCompBottom(Number(event.target.value))} className="mt-1 w-full rounded border border-gray-300 p-2 text-sm" /></label>
+              <label className="text-sm font-medium text-gray-700">{fieldLabel('Ltorque (ft)')}<input type="number" value={lTorque} onChange={(event) => setLTorque(Number(event.target.value))} className="mt-1 w-full rounded border border-gray-300 p-2 text-sm" /></label>
             </div>
           </div>
 
@@ -1273,21 +1325,21 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
             <h3 className="mb-3 text-sm font-semibold text-gray-900">Sway and seismic options</h3>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <label className="text-sm font-medium text-gray-700">
-                y sway
+                {fieldLabel('y sway')}
                 <select value={ySway} onChange={(event) => setYSway(event.target.value as SwayOption)} className="mt-1 w-full rounded border border-gray-300 bg-white p-2 text-sm">
                   <option>No</option>
                   <option>Yes</option>
                 </select>
               </label>
               <label className="text-sm font-medium text-gray-700">
-                z sway
+                {fieldLabel('z sway')}
                 <select value={zSway} onChange={(event) => setZSway(event.target.value as SwayOption)} className="mt-1 w-full rounded border border-gray-300 bg-white p-2 text-sm">
                   <option>No</option>
                   <option>Yes</option>
                 </select>
               </label>
               <label className="text-sm font-medium text-gray-700">
-                Seismic design rule
+                {fieldLabel('Seismic design rule')}
                 <select value={seismicDesignRule} onChange={(event) => setSeismicDesignRule(event.target.value as SeismicDesignRule)} className="mt-1 w-full rounded border border-gray-300 bg-white p-2 text-sm">
                   <option>None</option>
                   <option>AISC Seismic</option>
@@ -1947,6 +1999,12 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
   };
 
   const openSaveOutputModal = () => {
+    if (!canRunDesign) {
+      setSaveMessage('Complete the required steel beam fields before saving output.');
+      setShowSaveOutputModal(true);
+      return;
+    }
+
     const activeProject = getActiveProject();
 
     refreshProjectDocuments();
@@ -2143,22 +2201,39 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
             )}
           </div>
           <div className="flex flex-wrap gap-2">
-            <button onClick={openSaveOutputModal} className="inline-flex w-fit items-center gap-2 rounded border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-medium text-blue-700 hover:bg-blue-100">
+            <button onClick={openSaveOutputModal} disabled={!canRunDesign} className="inline-flex w-fit items-center gap-2 rounded border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-medium text-blue-700 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50">
               <Save size={16} /> Save Output
             </button>
-            <button onClick={() => setShowOutputPreview((prev) => !prev)} className="inline-flex w-fit items-center gap-2 rounded border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100">
+            <button onClick={() => setShowOutputPreview((prev) => !prev)} disabled={!canRunDesign} className="inline-flex w-fit items-center gap-2 rounded border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50">
               <Download size={16} /> {showOutputPreview ? 'Hide output' : 'Preview output'}
             </button>
-            <button onClick={() => window.print()} className="inline-flex w-fit items-center gap-2 rounded bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700">
+            <button onClick={() => window.print()} disabled={!canRunDesign} className="inline-flex w-fit items-center gap-2 rounded bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50">
               <Printer size={16} /> Print output
             </button>
           </div>
         </div>
 
+        {!canRunDesign && (
+          <div className="border-b border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            <div className="font-semibold">Complete required fields before running steel beam results.</div>
+            <ul className="mt-2 list-disc space-y-1 pl-5 text-xs">
+              {requiredFieldIssues.map((issue) => (
+                <li key={issue}>{issue}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 gap-0 xl:grid-cols-[minmax(0,1fr)_220px]">
           <div className="space-y-4 p-4">
-            <div className="overflow-x-auto">{renderDiagram()}</div>
-            {(displayOptions.moment || displayOptions.shear || displayOptions.deflection) && (
+            {canRunDesign ? (
+              <div className="overflow-x-auto">{renderDiagram()}</div>
+            ) : (
+              <div className="rounded-lg border border-dashed border-amber-300 bg-white p-8 text-center text-sm text-amber-800">
+                Results and diagrams are paused until required fields are complete.
+              </div>
+            )}
+            {canRunDesign && (displayOptions.moment || displayOptions.shear || displayOptions.deflection) && (
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 {displayOptions.moment && renderResultDiagram('moment')}
                 {displayOptions.shear && renderResultDiagram('shear')}
