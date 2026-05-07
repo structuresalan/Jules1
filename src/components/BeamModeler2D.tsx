@@ -2321,11 +2321,15 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
         <div className="grid grid-cols-1 gap-0 xl:grid-cols-[minmax(0,1fr)_220px]">
           <div className="space-y-4 p-4">
             <div className="overflow-x-auto">{renderDiagram()}</div>
-            {canRunDesign && (displayOptions.moment || displayOptions.shear || displayOptions.deflection) && (
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                {displayOptions.moment && renderResultDiagram('moment')}
-                {displayOptions.shear && renderResultDiagram('shear')}
-                {displayOptions.deflection && renderResultDiagram('deflection')}
+            {(displayOptions.moment || displayOptions.shear || displayOptions.deflection) && (
+              <div className="min-h-[220px]">
+                {canRunDesign && (
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    {displayOptions.moment && renderResultDiagram('moment')}
+                    {displayOptions.shear && renderResultDiagram('shear')}
+                    {displayOptions.deflection && renderResultDiagram('deflection')}
+                  </div>
+                )}
               </div>
             )}
           </div>
