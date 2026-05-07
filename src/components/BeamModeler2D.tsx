@@ -692,7 +692,7 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
             return (
               <g key={`${mode}-x-${tick}`}>
                 <line x1={x} y1={baselineY - 4} x2={x} y2={plotBottom + 5} stroke="#e5e7eb" />
-                <text x={x} y={height - 15} fontSize="10" textAnchor="middle" fill="#475569">
+                <text x={x} y={height - 22} fontSize="10" textAnchor="middle" fill="#475569">
                   {formatAxisValue(tick)} ft
                 </text>
               </g>
@@ -701,7 +701,7 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
 
           {points && <polyline points={points} fill="none" stroke={config.color} strokeWidth="3" />}
           <text x={leftPad} y="20" fontSize="11" fill="#64748b">{config.yLabel}</text>
-          <text x={width - rightPad} y={height - 15} fontSize="11" textAnchor="end" fill="#64748b">Position (ft)</text>
+          <text x={(leftPad + width - rightPad) / 2} y={height - 7} fontSize="11" textAnchor="middle" fill="#64748b">Position (ft)</text>
         </svg>
       </div>
     );

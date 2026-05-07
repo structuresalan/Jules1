@@ -78,11 +78,8 @@ export const MainLayout: React.FC = () => {
         } md:translate-x-0 transition duration-200 ease-in-out z-40 w-64 bg-gray-50 border-r border-gray-200 flex flex-col`}
       >
         <div className="p-6">
-          <div className="flex items-center gap-3">
-            <img src={simplifyStructLogo} alt="SimplifyStruct logo" className="h-8 w-auto rounded-sm bg-white object-contain" />
-            <h1 className="text-xl font-semibold tracking-tight text-gray-900">
-              SimplifyStruct
-            </h1>
+          <div className="flex items-center">
+            <img src={simplifyStructLogo} alt="SimplifyStruct logo" className="h-9 max-w-[180px] rounded-sm bg-white object-contain" />
           </div>
 
           <div className="mt-4 rounded-lg border border-gray-200 bg-white p-3 text-sm">
