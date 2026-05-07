@@ -9,24 +9,31 @@ import {
 } from "firebase/auth";
 
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyArG6F-b9FmKxnyg4bEvMHxGsylXW4tFY8",
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "simplifystruct.firebaseapp.com",
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "simplifystruct",
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "simplifystruct.firebasestorage.app",
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "923186693713",
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:923186693713:web:1b71c090a5d70484abda70",
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
 };
+
+const isFirebaseConfigComplete =
+  Boolean(firebaseConfig.apiKey) &&
+  Boolean(firebaseConfig.authDomain) &&
+  Boolean(firebaseConfig.projectId) &&
+  Boolean(firebaseConfig.appId) &&
+  firebaseConfig.apiKey !== "your_api_key";
 
 let auth: Auth | null = null;
 
 try {
-  if (firebaseConfig.apiKey && firebaseConfig.apiKey !== "your_api_key") {
+  if (isFirebaseConfigComplete) {
     const app = initializeApp(firebaseConfig);
     auth = getAuth(app);
     console.log("Firebase initialized");
   } else {
     console.warn(
-      "Firebase config is missing or invalid. Authentication is disabled until Firebase credentials are provided.",
+      "Firebase config is missing or incomplete. Check the Vercel VITE_FIREBASE_* environment variables and redeploy.",
     );
   }
 } catch (error) {

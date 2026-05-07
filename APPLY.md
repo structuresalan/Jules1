@@ -1,19 +1,19 @@
-# Firebase Config Fallback
+# Remove Hardcoded Firebase API Key
 
 Replace this file:
 - src/firebase.ts
 
 Commit message:
-Add Firebase config fallback
+Remove hardcoded Firebase API key
 
 What changed:
-- Uses Vercel environment variables first.
-- If Vercel variables are missing or not being read correctly, it falls back to the Firebase config from your SimplifyStruct Firebase web app.
-- This should fix auth/api-key-not-valid unless the key has been deleted or restricted in Google Cloud.
+- Removes the hardcoded Firebase web API key from source code.
+- Uses only Vercel VITE_FIREBASE_* environment variables.
+- Keeps Firebase auth behavior.
+- Adds a clearer console warning if environment variables are missing.
 
-After replacing the file:
-1. Commit it.
-2. Push to main.
-3. Wait for Vercel to redeploy.
-4. Hard refresh the website.
-5. Try signing in again.
+After replacing this file:
+1. Commit and push.
+2. Let Vercel redeploy.
+3. In Google Cloud/Firebase, restrict or rotate the API key.
+4. Close the GitHub secret scanning alert only after the hardcoded key is removed and the key is restricted or rotated.
