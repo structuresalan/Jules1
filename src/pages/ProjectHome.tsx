@@ -1,9 +1,9 @@
 import React, { useMemo, useState } from 'react';
-import { Calculator, Clock3, FileText, FolderOpen, Plus, Search, Trash2 } from 'lucide-react';
+import { Calculator, Clock3, FileText, FolderOpen, Pencil, Plus, Save, Search, Trash2, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import simplifyStructLogo from '../assets/simplifystruct-logo.png';
 
-type ProjectStatus = 'Active' | 'On Hold' | 'Archived';
+type ProjectStatus = 'Active' | 'On Hold' | 'Closed' | 'Archived';
 type ProjectCalculationType = 'Mixed' | 'Steel' | 'Concrete' | 'Loads';
 
 interface ProjectRecord {
@@ -17,6 +17,7 @@ interface ProjectRecord {
   calculationType: ProjectCalculationType;
   createdAt: string;
   updatedAt: string;
+  predictedEndDate?: string;
 }
 
 const STORAGE_KEY = 'struccalc.projects.v3';
@@ -68,6 +69,11 @@ export const ProjectHome: React.FC = () => {
   const [location, setLocation] = useState('');
   const [description, setDescription] = useState('');
   const [calculationType, setCalculationType] = useState<ProjectCalculationType>('Mixed');
+  const [predictedEndDate, setPredictedEndDate] = useState('');
+  const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
+  const [editProjectNumber, setEditProjectNumber] = useState('');
+  const [editStatus, setEditStatus] = useState<ProjectStatus>('Active');
+  const [editPredictedEndDate, setEditPredictedEndDate] = useState('');
 
   const filteredProjects = useMemo(() => {
     const query = searchText.trim().toLowerCase();
@@ -126,12 +132,44 @@ export const ProjectHome: React.FC = () => {
       calculationType,
       createdAt: now,
       updatedAt: now,
+      predictedEndDate: predictedEndDate || '',
     };
 
     storeProjects([project, ...projects]);
     window.localStorage.setItem(ACTIVE_PROJECT_KEY, project.id);
     window.localStorage.setItem(SESSION_MODE_KEY, 'project');
     navigate('/dashboard');
+  };
+
+  const startEditProject = (project: ProjectRecord) => {
+    setEditingProjectId(project.id);
+    setEditProjectNumber(project.projectNumber);
+    setEditStatus(project.status);
+    setEditPredictedEndDate(project.predictedEndDate || '');
+  };
+
+  const cancelEditProject = () => {
+    setEditingProjectId(null);
+    setEditProjectNumber('');
+    setEditStatus('Active');
+    setEditPredictedEndDate('');
+  };
+
+  const saveProjectEdit = (projectId: string) => {
+    const nextProjects = projects.map((project) => {
+      if (project.id !== projectId) return project;
+
+      return {
+        ...project,
+        projectNumber: editProjectNumber.trim() || project.projectNumber,
+        status: editStatus,
+        predictedEndDate: editStatus === 'Active' ? editPredictedEndDate : '',
+        updatedAt: new Date().toISOString(),
+      };
+    });
+
+    storeProjects(nextProjects);
+    cancelEditProject();
   };
 
   const startQuickCalculations = () => {
@@ -221,6 +259,16 @@ export const ProjectHome: React.FC = () => {
                 </label>
 
                 <label className="text-sm font-medium text-gray-700">
+                  Predicted end date
+                  <input
+                    type="date"
+                    value={predictedEndDate}
+                    onChange={(event) => setPredictedEndDate(event.target.value)}
+                    className="mt-1 w-full rounded-md border border-gray-300 p-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                  />
+                </label>
+
+                <label className="text-sm font-medium text-gray-700">
                   Client
                   <input
                     value={client}
@@ -306,6 +354,7 @@ export const ProjectHome: React.FC = () => {
                       <th className="border-b border-gray-200 px-4 py-3">Location</th>
                       <th className="border-b border-gray-200 px-4 py-3">Type</th>
                       <th className="border-b border-gray-200 px-4 py-3">Status</th>
+                      <th className="border-b border-gray-200 px-4 py-3">Predicted End</th>
                       <th className="border-b border-gray-200 px-4 py-3">Created</th>
                       <th className="border-b border-gray-200 px-4 py-3">Last Modified</th>
                       <th className="border-b border-gray-200 px-4 py-3 text-right">Actions</th>
@@ -314,7 +363,7 @@ export const ProjectHome: React.FC = () => {
                   <tbody>
                     {filteredProjects.length === 0 ? (
                       <tr>
-                        <td colSpan={9} className="px-4 py-10 text-center text-gray-500">
+                        <td colSpan={10} className="px-4 py-10 text-center text-gray-500">
                           {projects.length === 0 ? 'No saved projects yet. Create a new project to see it here.' : 'No projects match your search.'}
                         </td>
                       </tr>
@@ -325,12 +374,58 @@ export const ProjectHome: React.FC = () => {
                             <div className="font-semibold text-gray-900">{project.name}</div>
                             {project.description && <div className="mt-1 max-w-xs truncate text-xs text-gray-500">{project.description}</div>}
                           </td>
-                          <td className="border-b border-gray-100 px-4 py-3 font-mono text-xs text-gray-700">{project.projectNumber}</td>
+                          <td className="border-b border-gray-100 px-4 py-3 font-mono text-xs text-gray-700">
+                            {editingProjectId === project.id ? (
+                              <input
+                                value={editProjectNumber}
+                                onChange={(event) => setEditProjectNumber(event.target.value)}
+                                className="w-28 rounded border border-gray-300 px-2 py-1 text-xs"
+                              />
+                            ) : (
+                              project.projectNumber
+                            )}
+                          </td>
                           <td className="border-b border-gray-100 px-4 py-3 text-gray-700">{project.client || '-'}</td>
                           <td className="border-b border-gray-100 px-4 py-3 text-gray-700">{project.location || '-'}</td>
                           <td className="border-b border-gray-100 px-4 py-3 text-gray-700">{project.calculationType}</td>
                           <td className="border-b border-gray-100 px-4 py-3">
-                            <span className="rounded-full bg-green-50 px-2 py-1 text-xs font-semibold text-green-700">{project.status}</span>
+                            {editingProjectId === project.id ? (
+                              <select
+                                value={editStatus}
+                                onChange={(event) => setEditStatus(event.target.value as ProjectStatus)}
+                                className="rounded border border-gray-300 bg-white px-2 py-1 text-xs"
+                              >
+                                <option>Active</option>
+                                <option>On Hold</option>
+                                <option>Closed</option>
+                                <option>Archived</option>
+                              </select>
+                            ) : (
+                              <span className={`rounded-full px-2 py-1 text-xs font-semibold ${
+                                project.status === 'Active'
+                                  ? 'bg-green-50 text-green-700'
+                                  : project.status === 'Closed'
+                                    ? 'bg-gray-100 text-gray-700'
+                                    : project.status === 'On Hold'
+                                      ? 'bg-amber-50 text-amber-700'
+                                      : 'bg-slate-100 text-slate-600'
+                              }`}>
+                                {project.status}
+                              </span>
+                            )}
+                          </td>
+                          <td className="border-b border-gray-100 px-4 py-3 text-xs text-gray-600">
+                            {editingProjectId === project.id ? (
+                              <input
+                                type="date"
+                                value={editPredictedEndDate}
+                                onChange={(event) => setEditPredictedEndDate(event.target.value)}
+                                disabled={editStatus !== 'Active'}
+                                className="rounded border border-gray-300 px-2 py-1 text-xs disabled:bg-gray-100 disabled:text-gray-400"
+                              />
+                            ) : (
+                              project.status === 'Active' && project.predictedEndDate ? project.predictedEndDate : '-'
+                            )}
                           </td>
                           <td className="border-b border-gray-100 px-4 py-3 text-xs text-gray-600">{formatDateTime(project.createdAt)}</td>
                           <td className="border-b border-gray-100 px-4 py-3 text-xs text-gray-600">
@@ -341,19 +436,47 @@ export const ProjectHome: React.FC = () => {
                           </td>
                           <td className="border-b border-gray-100 px-4 py-3">
                             <div className="flex justify-end gap-2">
-                              <button
-                                onClick={() => openProject(project)}
-                                className="rounded border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100"
-                              >
-                                Open
-                              </button>
-                              <button
-                                onClick={() => deleteProject(project.id)}
-                                className="rounded border border-gray-200 bg-white p-1.5 text-gray-500 hover:border-red-200 hover:bg-red-50 hover:text-red-600"
-                                title="Delete project"
-                              >
-                                <Trash2 size={15} />
-                              </button>
+                              {editingProjectId === project.id ? (
+                                <>
+                                  <button
+                                    onClick={() => saveProjectEdit(project.id)}
+                                    className="rounded border border-green-200 bg-green-50 p-1.5 text-green-700 hover:bg-green-100"
+                                    title="Save project changes"
+                                  >
+                                    <Save size={15} />
+                                  </button>
+                                  <button
+                                    onClick={cancelEditProject}
+                                    className="rounded border border-gray-200 bg-white p-1.5 text-gray-500 hover:bg-gray-50"
+                                    title="Cancel editing"
+                                  >
+                                    <X size={15} />
+                                  </button>
+                                </>
+                              ) : (
+                                <>
+                                  <button
+                                    onClick={() => openProject(project)}
+                                    className="rounded border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100"
+                                  >
+                                    Open
+                                  </button>
+                                  <button
+                                    onClick={() => startEditProject(project)}
+                                    className="rounded border border-gray-200 bg-white p-1.5 text-gray-600 hover:bg-gray-50"
+                                    title="Edit project"
+                                  >
+                                    <Pencil size={15} />
+                                  </button>
+                                  <button
+                                    onClick={() => deleteProject(project.id)}
+                                    className="rounded border border-gray-200 bg-white p-1.5 text-gray-500 hover:border-red-200 hover:bg-red-50 hover:text-red-600"
+                                    title="Delete project"
+                                  >
+                                    <Trash2 size={15} />
+                                  </button>
+                                </>
+                              )}
                             </div>
                           </td>
                         </tr>

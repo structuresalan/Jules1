@@ -4,6 +4,7 @@ import wShapesData from '../data/aisc/shapes_w.json';
 import aiscData from '../data/aisc/code_factors.json';
 import simplifyStructLogo from '../assets/simplifystruct-logo.png';
 import { consumeOpenProjectDocumentRequest, getActiveProject, getProjectDocuments, getSessionMode, overwriteProjectDocument, saveNewProjectDocument, type ProjectDocument } from '../utils/projectDocuments';
+import { readReportHeaderDefaults, saveReportHeaderDefaults, type ReportHeaderInfo } from '../utils/reportHeaderDefaults';
 
 type SupportType = 'None' | 'Pinned' | 'Roller' | 'Fixed';
 type LoadType = 'Point' | 'Line' | 'Area';
@@ -13,6 +14,7 @@ type LoadCase = 'D' | 'L' | 'S' | 'W';
 type DesignMethod = 'LRFD' | 'ASD';
 type DisplayKey = 'loading' | 'moment' | 'shear' | 'deflection';
 type BeamPanel = 'Design options' | 'Nodes' | 'Loading' | 'Combinations' | 'Deflection criteria' | 'Output options';
+type ReportHeaderSaveScope = 'document' | 'default';
 
 interface BeamNode {
   id: string;
@@ -139,6 +141,10 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
   const [reportSectionName, setReportSectionName] = useState('Steel Beam');
   const [reportSheetNumber, setReportSheetNumber] = useState('1');
   const [reportCalcBy, setReportCalcBy] = useState('');
+  const [reportCheckedBy, setReportCheckedBy] = useState('');
+  const [reportApprovedBy, setReportApprovedBy] = useState('');
+  const [reportDate, setReportDate] = useState(new Date().toISOString().slice(0, 10));
+  const [reportHeaderSaveScope, setReportHeaderSaveScope] = useState<ReportHeaderSaveScope>('document');
   const [showSaveOutputModal, setShowSaveOutputModal] = useState(false);
   const [saveMode, setSaveMode] = useState<'new' | 'overwrite'>('new');
   const [documentName, setDocumentName] = useState('Steel Beam Design');
@@ -188,6 +194,38 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
   const elasticModulus = 29000;
   const selfWeightKipPerFt = (selectedShape.A * 490) / 144 / 1000;
 
+  const getReportHeaderInfo = (): ReportHeaderInfo => ({
+    project: reportProject,
+    jobRef: reportJobRef,
+    sectionName: reportSectionName,
+    sheetNumber: reportSheetNumber,
+    calcBy: reportCalcBy,
+    checkedBy: reportCheckedBy,
+    approvedBy: reportApprovedBy,
+    date: reportDate,
+  });
+
+  const applyReportHeaderInfo = (header: Partial<ReportHeaderInfo>) => {
+    if (typeof header.project === 'string') setReportProject(header.project);
+    if (typeof header.jobRef === 'string') setReportJobRef(header.jobRef);
+    if (typeof header.sectionName === 'string') setReportSectionName(header.sectionName);
+    if (typeof header.sheetNumber === 'string') setReportSheetNumber(header.sheetNumber);
+    if (typeof header.calcBy === 'string') setReportCalcBy(header.calcBy);
+    if (typeof header.checkedBy === 'string') setReportCheckedBy(header.checkedBy);
+    if (typeof header.approvedBy === 'string') setReportApprovedBy(header.approvedBy);
+    if (typeof header.date === 'string') setReportDate(header.date);
+  };
+
+  useEffect(() => {
+    const defaults = readReportHeaderDefaults();
+    applyReportHeaderInfo({
+      sectionName: 'Steel Beam',
+      sheetNumber: '1',
+      date: new Date().toISOString().slice(0, 10),
+      ...defaults,
+    });
+  }, []);
+
   useEffect(() => {
     const documentToOpen = consumeOpenProjectDocumentRequest();
     if (!documentToOpen || documentToOpen.type !== 'Steel Beam Design') return;
@@ -203,6 +241,7 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
       loadFactors?: Record<LoadCase, number>;
       nodes?: BeamNode[];
       loads?: BeamLoad[];
+      reportHeader?: Partial<ReportHeaderInfo>;
     };
 
     if (savedInputs.method) setMethod(savedInputs.method);
@@ -215,7 +254,9 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
     if (savedInputs.loadFactors) setLoadFactors(savedInputs.loadFactors);
     if (Array.isArray(savedInputs.nodes) && savedInputs.nodes.length >= 2) setNodes(savedInputs.nodes);
     if (Array.isArray(savedInputs.loads)) setLoads(savedInputs.loads);
+    if (savedInputs.reportHeader) applyReportHeaderInfo(savedInputs.reportHeader);
 
+    setReportHeaderSaveScope('document');
     setEditingDocumentId(documentToOpen.id);
     setLoadedDocumentName(documentToOpen.name);
     setDocumentName(documentToOpen.name);
@@ -419,7 +460,6 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
   const isPassing = controllingUtilization <= 1;
   const liveDeflectionLimit = analysis ? (analysis.fullLength * 12) / Math.max(deflectionLimit, 1) : 0;
   const totalServiceDeflectionLimit = analysis ? (analysis.fullLength * 12) / Math.max(totalDeflectionLimit, 1) : 0;
-  const reportDate = new Date().toLocaleDateString();
   const maximumDeflection = useMemo(() => {
     if (!analysis || analysis.xs.length < 2) return { value: 0, position: 0 };
 
@@ -1008,12 +1048,40 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
 
     return (
       <div className="space-y-4 text-sm">
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-          <label className="font-medium text-gray-700">Project<input value={reportProject} onChange={(event) => setReportProject(event.target.value)} className="mt-1 w-full rounded border border-gray-300 p-2 text-sm" placeholder="Project name" /></label>
-          <label className="font-medium text-gray-700">Job Ref.<input value={reportJobRef} onChange={(event) => setReportJobRef(event.target.value)} className="mt-1 w-full rounded border border-gray-300 p-2 text-sm" placeholder="Job reference" /></label>
-          <label className="font-medium text-gray-700">Section<input value={reportSectionName} onChange={(event) => setReportSectionName(event.target.value)} className="mt-1 w-full rounded border border-gray-300 p-2 text-sm" /></label>
-          <label className="font-medium text-gray-700">Sheet no./rev.<input value={reportSheetNumber} onChange={(event) => setReportSheetNumber(event.target.value)} className="mt-1 w-full rounded border border-gray-300 p-2 text-sm" /></label>
-          <label className="font-medium text-gray-700">Calc. by<input value={reportCalcBy} onChange={(event) => setReportCalcBy(event.target.value)} className="mt-1 w-full rounded border border-gray-300 p-2 text-sm" placeholder="Initials" /></label>
+        <div className="rounded-lg border border-gray-200 bg-white p-4">
+          <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <h3 className="text-sm font-semibold text-gray-900">Report header</h3>
+              <p className="mt-1 text-xs text-gray-500">These fields print at the top of the calculation output and are saved with project documents.</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => applyReportHeaderInfo(readReportHeaderDefaults())}
+              className="w-fit rounded border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+            >
+              Apply saved default
+            </button>
+          </div>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <label className="font-medium text-gray-700">Project<input value={reportProject} onChange={(event) => setReportProject(event.target.value)} className="mt-1 w-full rounded border border-gray-300 p-2 text-sm" placeholder="Project name" /></label>
+            <label className="font-medium text-gray-700">Job Ref.<input value={reportJobRef} onChange={(event) => setReportJobRef(event.target.value)} className="mt-1 w-full rounded border border-gray-300 p-2 text-sm" placeholder="Job reference" /></label>
+            <label className="font-medium text-gray-700">Section<input value={reportSectionName} onChange={(event) => setReportSectionName(event.target.value)} className="mt-1 w-full rounded border border-gray-300 p-2 text-sm" /></label>
+            <label className="font-medium text-gray-700">Sheet no./rev.<input value={reportSheetNumber} onChange={(event) => setReportSheetNumber(event.target.value)} className="mt-1 w-full rounded border border-gray-300 p-2 text-sm" /></label>
+            <label className="font-medium text-gray-700">Calc. by<input value={reportCalcBy} onChange={(event) => setReportCalcBy(event.target.value)} className="mt-1 w-full rounded border border-gray-300 p-2 text-sm" placeholder="Initials" /></label>
+            <label className="font-medium text-gray-700">Chk'd by<input value={reportCheckedBy} onChange={(event) => setReportCheckedBy(event.target.value)} className="mt-1 w-full rounded border border-gray-300 p-2 text-sm" placeholder="Initials" /></label>
+            <label className="font-medium text-gray-700">App'd by<input value={reportApprovedBy} onChange={(event) => setReportApprovedBy(event.target.value)} className="mt-1 w-full rounded border border-gray-300 p-2 text-sm" placeholder="Initials" /></label>
+            <label className="font-medium text-gray-700">Date<input type="date" value={reportDate} onChange={(event) => setReportDate(event.target.value)} className="mt-1 w-full rounded border border-gray-300 p-2 text-sm" /></label>
+          </div>
+          <div className="mt-4 grid grid-cols-1 gap-2 md:grid-cols-2">
+            <label className="flex items-start gap-2 rounded border border-gray-200 bg-gray-50 p-3">
+              <input type="radio" name="reportHeaderSaveScope" checked={reportHeaderSaveScope === 'document'} onChange={() => setReportHeaderSaveScope('document')} />
+              <span><span className="block font-semibold text-gray-800">Only this document</span><span className="text-xs text-gray-500">Save this header with the current saved output only.</span></span>
+            </label>
+            <label className="flex items-start gap-2 rounded border border-gray-200 bg-gray-50 p-3">
+              <input type="radio" name="reportHeaderSaveScope" checked={reportHeaderSaveScope === 'default'} onChange={() => setReportHeaderSaveScope('default')} />
+              <span><span className="block font-semibold text-gray-800">Keep for new documents</span><span className="text-xs text-gray-500">Save these fields as the default header for future outputs.</span></span>
+            </label>
+          </div>
         </div>
         <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
           <label className="flex items-center gap-2 rounded border border-gray-200 bg-white p-3"><input type="checkbox" checked={includeModel} onChange={(event) => setIncludeModel(event.target.checked)} />Include beam model graphic</label>
@@ -1152,9 +1220,9 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
         <div className="report-cell"><span>Section</span><strong>{reportSectionName || ' '}</strong></div>
         <div className="report-cell"><span>Sheet no./rev.</span><strong>{reportSheetNumber || ' '}</strong></div>
         <div className="report-cell"><span>Calc. by</span><strong>{reportCalcBy || ' '}</strong></div>
-        <div className="report-cell"><span>Date</span><strong>{reportDate}</strong></div>
-        <div className="report-cell"><span>Chk'd by</span><strong> </strong></div>
-        <div className="report-cell"><span>App'd by</span><strong> </strong></div>
+        <div className="report-cell"><span>Date</span><strong>{reportDate || ' '}</strong></div>
+        <div className="report-cell"><span>Chk'd by</span><strong>{reportCheckedBy || ' '}</strong></div>
+        <div className="report-cell"><span>App'd by</span><strong>{reportApprovedBy || ' '}</strong></div>
       </div>
 
       <section className="report-section report-title-section">
@@ -1323,6 +1391,7 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
         loadFactors,
         nodes,
         loads,
+        reportHeader: getReportHeaderInfo(),
       },
       summary: {
         designStandard: activeAiscYear,
@@ -1347,6 +1416,10 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
 
     const payload = buildDocumentPayload();
 
+    if (reportHeaderSaveScope === 'default') {
+      saveReportHeaderDefaults(getReportHeaderInfo());
+    }
+
     if (saveMode === 'overwrite') {
       if (!selectedDocumentId) {
         setSaveSucceeded(false);
@@ -1360,7 +1433,7 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
         setLoadedDocumentName(overwrittenDocument.name);
       }
       setSaveSucceeded(true);
-      setSaveMessage('Existing editable project document overwritten.');
+      setSaveMessage(`Existing editable project document overwritten${reportHeaderSaveScope === 'default' ? ' and header saved as default' : ''}.`);
     } else {
       const savedDocument = saveNewProjectDocument({
         ...payload,
@@ -1372,7 +1445,7 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
       setDocumentName(savedDocument.name);
       setSaveMode('overwrite');
       setSaveSucceeded(true);
-      setSaveMessage(`Saved as a new editable project document${savedDocument.name !== payload.name ? ` named "${savedDocument.name}"` : ''}.`);
+      setSaveMessage(`Saved as a new editable project document${savedDocument.name !== payload.name ? ` named "${savedDocument.name}"` : ''}${reportHeaderSaveScope === 'default' ? ' and header saved as default' : ''}.`);
     }
 
     refreshProjectDocuments();
