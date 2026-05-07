@@ -2,20 +2,30 @@ import React, { useMemo, useState } from 'react';
 import { AlertCircle, CheckCircle2, Download, Plus, Trash2 } from 'lucide-react';
 import wShapesData from '../data/aisc/shapes_w.json';
 import aiscData from '../data/aisc/code_factors.json';
-import { IBC_TO_AISC_MAP } from '../data/ibc_mapping';
 
 type SupportType = 'None' | 'Pinned' | 'Roller' | 'Fixed';
 type LoadType = 'Point' | 'Line' | 'Area';
 type LoadDirection = 'Down' | 'Up';
+type DegreeOfFreedom = 'Free' | 'Fixed' | 'Spring';
 type LoadCase = 'D' | 'L' | 'S' | 'W';
 type DesignMethod = 'LRFD' | 'ASD';
 type DisplayKey = 'loading' | 'moment' | 'shear' | 'deflection';
-type BeamPanel = 'Design options' | 'Geometry' | 'Loading' | 'Combinations' | 'Deflection criteria' | 'Output options';
+type BeamPanel = 'Design options' | 'Nodes' | 'Loading' | 'Combinations' | 'Deflection criteria' | 'Output options';
 
 interface BeamNode {
   id: string;
   x: number;
+  z: number;
   support: SupportType;
+  dofX: DegreeOfFreedom;
+  dofZ: DegreeOfFreedom;
+  dofRotation: DegreeOfFreedom;
+  label: string;
+  coordinateSystemName: string;
+  coordinateSystemAngle: number;
+  springX: number;
+  springZ: number;
+  springRotation: number;
 }
 
 interface BeamLoad {
@@ -44,9 +54,37 @@ interface DistributedLoadAnalysis {
 
 const shapes = wShapesData as Record<string, { A: number; Zx: number }>;
 const shapeNames = Object.keys(shapes);
-const designPanels: BeamPanel[] = ['Design options', 'Geometry', 'Loading', 'Combinations', 'Deflection criteria', 'Output options'];
+const designPanels: BeamPanel[] = ['Design options', 'Nodes', 'Loading', 'Combinations', 'Deflection criteria', 'Output options'];
 
 const makeId = () => Math.random().toString(36).slice(2, 9);
+
+const degreesFromSupport = (support: SupportType): Pick<BeamNode, 'dofX' | 'dofZ' | 'dofRotation'> => {
+  if (support === 'Fixed') return { dofX: 'Fixed', dofZ: 'Fixed', dofRotation: 'Fixed' };
+  if (support === 'Pinned') return { dofX: 'Fixed', dofZ: 'Fixed', dofRotation: 'Free' };
+  if (support === 'Roller') return { dofX: 'Free', dofZ: 'Fixed', dofRotation: 'Free' };
+  return { dofX: 'Free', dofZ: 'Free', dofRotation: 'Free' };
+};
+
+const supportFromDegrees = (node: Pick<BeamNode, 'dofX' | 'dofZ' | 'dofRotation'>): SupportType => {
+  if (node.dofX === 'Fixed' && node.dofZ === 'Fixed' && node.dofRotation === 'Fixed') return 'Fixed';
+  if (node.dofX === 'Fixed' && node.dofZ === 'Fixed') return 'Pinned';
+  if (node.dofZ === 'Fixed') return 'Roller';
+  return 'None';
+};
+
+const createNode = (x: number, support: SupportType = 'None'): BeamNode => ({
+  id: makeId(),
+  x,
+  z: 0,
+  support,
+  ...degreesFromSupport(support),
+  label: '',
+  coordinateSystemName: '',
+  coordinateSystemAngle: 0,
+  springX: 0,
+  springZ: 0,
+  springRotation: 0,
+});
 
 const supportLabel = (support: SupportType) => {
   if (support === 'Pinned') return 'Pin';
@@ -68,10 +106,12 @@ const loadToLineMagnitude = (load: BeamLoad) => {
 
 const formatRatio = (value: number) => (Number.isFinite(value) ? value.toFixed(3) : '0.000');
 
-export const BeamModeler2D: React.FC = () => {
-  const [ibcYear, setIbcYear] = useState('IBC 2018');
-  const [aiscYear, setAiscYear] = useState(IBC_TO_AISC_MAP['IBC 2018']);
-  const [isOverridden, setIsOverridden] = useState(false);
+interface BeamModeler2DProps {
+  aiscYear?: string;
+}
+
+export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 360-16' }) => {
+  const activeAiscYear = Object.prototype.hasOwnProperty.call(aiscData, aiscYear) ? aiscYear : 'AISC 360-16';
   const [method, setMethod] = useState<DesignMethod>('LRFD');
   const [section, setSection] = useState(shapeNames[1] ?? shapeNames[0] ?? 'W12X26');
   const [fy, setFy] = useState(50);
@@ -98,23 +138,44 @@ export const BeamModeler2D: React.FC = () => {
   });
 
   const [nodes, setNodes] = useState<BeamNode[]>([
-    { id: makeId(), x: 0, support: 'Pinned' },
-    { id: makeId(), x: 30, support: 'Roller' },
+    createNode(0, 'Pinned'),
+    createNode(30, 'Roller'),
   ]);
 
   const [loads, setLoads] = useState<BeamLoad[]>([]);
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
 
   const sortedNodes = useMemo(() => [...nodes].sort((a, b) => a.x - b.x), [nodes]);
   const selectedShape = shapes[section] ?? shapes[shapeNames[0]] ?? { A: 10, Zx: 50 };
-  const aiscFactors = (aiscData as Record<string, typeof aiscData['AISC 360-16']>)[aiscYear] ?? aiscData['AISC 360-16'];
+  const aiscFactors = (aiscData as Record<string, typeof aiscData['AISC 360-16']>)[activeAiscYear] ?? aiscData['AISC 360-16'];
 
   const addNode = () => {
     const lastX = sortedNodes.length ? sortedNodes[sortedNodes.length - 1].x : 0;
-    setNodes((prev) => [...prev, { id: makeId(), x: lastX + 10, support: 'None' }]);
+    const nextNode = createNode(lastX + 10, 'None');
+    setNodes((prev) => [...prev, nextNode]);
+    setSelectedNodeId(nextNode.id);
   };
 
   const updateNode = (id: string, patch: Partial<BeamNode>) => {
-    setNodes((prev) => prev.map((node) => (node.id === id ? { ...node, ...patch } : node)));
+    setNodes((prev) =>
+      prev.map((node) => {
+        if (node.id !== id) return node;
+        const next = { ...node, ...patch };
+        if (patch.support) {
+          return { ...next, ...degreesFromSupport(patch.support) };
+        }
+        if (patch.dofX || patch.dofZ || patch.dofRotation) {
+          return { ...next, support: supportFromDegrees(next) };
+        }
+        return next;
+      }),
+    );
+  };
+
+  const updateNodeDegreeOfFreedom = (id: string, field: 'dofX' | 'dofZ' | 'dofRotation', value: DegreeOfFreedom) => {
+    if (field === 'dofX') updateNode(id, { dofX: value });
+    if (field === 'dofZ') updateNode(id, { dofZ: value });
+    if (field === 'dofRotation') updateNode(id, { dofRotation: value });
   };
 
   const removeNode = (id: string) => {
@@ -128,6 +189,11 @@ export const BeamModeler2D: React.FC = () => {
         toNodeId: load.toNodeId === id ? replacementNodeId : load.toNodeId,
       })),
     );
+    setSelectedNodeId((prev) => (prev === id ? replacementNodeId : prev));
+  };
+
+  const removeSelectedNode = () => {
+    if (selectedNodeId) removeNode(selectedNodeId);
   };
 
   const addLoad = () => {
@@ -425,40 +491,11 @@ export const BeamModeler2D: React.FC = () => {
     if (activePanel === 'Design options') {
       return (
         <div className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <label className="text-sm font-medium text-gray-700">
-              IBC edition
-              <select
-                value={ibcYear}
-                onChange={(event) => {
-                  const year = event.target.value;
-                  setIbcYear(year);
-                  setAiscYear(IBC_TO_AISC_MAP[year] ?? 'AISC 360-16');
-                  setIsOverridden(false);
-                }}
-                className="mt-1 w-full rounded border border-gray-300 bg-white p-2 text-sm"
-              >
-                {Object.keys(IBC_TO_AISC_MAP).map((year) => <option key={year}>{year}</option>)}
-              </select>
-            </label>
-            <label className="text-sm font-medium text-gray-700">
-              Steel standard
-              <select
-                value={aiscYear}
-                onChange={(event) => {
-                  setAiscYear(event.target.value);
-                  setIsOverridden(event.target.value !== IBC_TO_AISC_MAP[ibcYear]);
-                }}
-                className="mt-1 w-full rounded border border-gray-300 bg-white p-2 text-sm"
-              >
-                <option>AISC 360-22</option>
-                <option>AISC 360-16</option>
-                <option>AISC 360-10</option>
-                <option>AISC 360-05</option>
-              </select>
-            </label>
+          <div className="rounded border border-blue-100 bg-blue-50 px-3 py-2 text-sm text-blue-900">
+            <div className="text-xs font-bold uppercase tracking-wide text-blue-700">Active steel standard</div>
+            <div className="mt-1 font-semibold">{activeAiscYear}</div>
+            <div className="mt-1 text-xs text-blue-700">Use the steel page selector in the top-right header to change the governing code edition.</div>
           </div>
-          {isOverridden && <div className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">Code mapping override is active.</div>}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <label className="text-sm font-medium text-gray-700">
               Method
@@ -486,30 +523,108 @@ export const BeamModeler2D: React.FC = () => {
       );
     }
 
-    if (activePanel === 'Geometry') {
+    if (activePanel === 'Nodes') {
+      const dofOptions: DegreeOfFreedom[] = ['Free', 'Fixed', 'Spring'];
+
       return (
         <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="text-sm text-gray-600">Define beam points by x-coordinate and support type.</div>
-            <button onClick={addNode} className="inline-flex items-center gap-1 rounded bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700"><Plus size={14} /> Point</button>
+          <div className="flex flex-wrap items-center gap-2 border-b border-gray-200 pb-3">
+            <button onClick={addNode} className="inline-flex items-center gap-2 rounded border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50">
+              <Plus size={16} /> Add
+            </button>
+            <button
+              onClick={removeSelectedNode}
+              disabled={!selectedNodeId || nodes.length <= 2}
+              className="inline-flex items-center gap-2 rounded border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <Trash2 size={15} /> Delete
+            </button>
+            <div className="ml-auto text-xs text-gray-500">Define beam nodes, restraint degrees of freedom, local coordinate settings, and optional spring stiffness.</div>
           </div>
-          <div className="space-y-2">
-            {sortedNodes.map((node, index) => (
-              <div key={node.id} className="grid grid-cols-12 items-center gap-2 rounded border border-gray-200 bg-white p-2 text-sm">
-                <div className="col-span-2 font-semibold text-gray-500">P{index + 1}</div>
-                <label className="col-span-4">
-                  <span className="sr-only">x coordinate</span>
-                  <input type="number" value={node.x} onChange={(event) => updateNode(node.id, { x: Number(event.target.value) })} className="w-full rounded border border-gray-300 p-2" />
-                </label>
-                <select value={node.support} onChange={(event) => updateNode(node.id, { support: event.target.value as SupportType })} className="col-span-4 rounded border border-gray-300 bg-white p-2">
-                  <option>None</option>
-                  <option>Pinned</option>
-                  <option>Roller</option>
-                  <option>Fixed</option>
-                </select>
-                <button onClick={() => removeNode(node.id)} disabled={nodes.length <= 2} className="col-span-2 flex justify-center rounded p-2 text-red-600 hover:bg-red-50 disabled:opacity-30"><Trash2 size={16} /></button>
-              </div>
-            ))}
+
+          <div className="overflow-x-auto rounded border border-gray-300 bg-white">
+            <table className="min-w-[1180px] w-full border-collapse text-sm">
+              <thead className="bg-gray-50 text-xs font-semibold text-gray-700">
+                <tr>
+                  <th className="border border-gray-300 px-2 py-1" rowSpan={2}>Index</th>
+                  <th className="border border-gray-300 px-2 py-1 text-center" colSpan={2}>Coordinates</th>
+                  <th className="border border-gray-300 px-2 py-1 text-center" colSpan={3}>Degrees of Freedom</th>
+                  <th className="border border-gray-300 px-2 py-1" rowSpan={2}>Label</th>
+                  <th className="border border-gray-300 px-2 py-1 text-center" colSpan={2}>Coordinate System</th>
+                  <th className="border border-gray-300 px-2 py-1 text-center" colSpan={3}>Spring Stiffness</th>
+                  <th className="border border-gray-300 px-2 py-1" rowSpan={2}>Restraint Preset</th>
+                </tr>
+                <tr>
+                  <th className="border border-gray-300 px-2 py-1">X (ft)</th>
+                  <th className="border border-gray-300 px-2 py-1">Z (ft)</th>
+                  <th className="border border-gray-300 px-2 py-1">X</th>
+                  <th className="border border-gray-300 px-2 py-1">Z</th>
+                  <th className="border border-gray-300 px-2 py-1">Rotational</th>
+                  <th className="border border-gray-300 px-2 py-1">Name</th>
+                  <th className="border border-gray-300 px-2 py-1">Angle (°)</th>
+                  <th className="border border-gray-300 px-2 py-1">X (kips/ft)</th>
+                  <th className="border border-gray-300 px-2 py-1">Z (kips/ft)</th>
+                  <th className="border border-gray-300 px-2 py-1">Rot. (kip-ft/°)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sortedNodes.map((node, index) => {
+                  const isSelected = selectedNodeId === node.id;
+                  return (
+                    <tr key={node.id} onClick={() => setSelectedNodeId(node.id)} className={`${isSelected ? 'bg-blue-50' : 'bg-white'} cursor-pointer hover:bg-blue-50/60`}>
+                      <td className="border border-gray-300 px-2 py-1 text-center font-medium text-gray-700">{index + 1}</td>
+                      <td className="border border-gray-300 p-0">
+                        <input type="number" value={node.x} onChange={(event) => updateNode(node.id, { x: Number(event.target.value) })} className="h-8 w-full border-0 px-2 text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-400" />
+                      </td>
+                      <td className="border border-gray-300 p-0">
+                        <input type="number" value={node.z} onChange={(event) => updateNode(node.id, { z: Number(event.target.value) })} className="h-8 w-full border-0 px-2 text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-400" />
+                      </td>
+                      {(['dofX', 'dofZ', 'dofRotation'] as Array<'dofX' | 'dofZ' | 'dofRotation'>).map((field) => (
+                        <td key={field} className="border border-gray-300 p-0">
+                          <select value={node[field]} onChange={(event) => updateNodeDegreeOfFreedom(node.id, field, event.target.value as DegreeOfFreedom)} className="h-8 w-full border-0 bg-transparent px-2 text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-400">
+                            {dofOptions.map((option) => <option key={option}>{option}</option>)}
+                          </select>
+                        </td>
+                      ))}
+                      <td className="border border-gray-300 p-0">
+                        <input value={node.label} onChange={(event) => updateNode(node.id, { label: event.target.value })} placeholder={`N${index + 1}`} className="h-8 w-full border-0 px-2 text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-400" />
+                      </td>
+                      <td className="border border-gray-300 p-0">
+                        <input value={node.coordinateSystemName} onChange={(event) => updateNode(node.id, { coordinateSystemName: event.target.value })} className="h-8 w-full border-0 px-2 text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-400" />
+                      </td>
+                      <td className="border border-gray-300 p-0">
+                        <input type="number" value={node.coordinateSystemAngle} onChange={(event) => updateNode(node.id, { coordinateSystemAngle: Number(event.target.value) })} className="h-8 w-full border-0 px-2 text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-400" />
+                      </td>
+                      <td className="border border-gray-300 p-0">
+                        <input type="number" value={node.springX} onChange={(event) => updateNode(node.id, { springX: Number(event.target.value) })} disabled={node.dofX !== 'Spring'} className="h-8 w-full border-0 px-2 text-sm disabled:bg-gray-100 disabled:text-gray-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-400" />
+                      </td>
+                      <td className="border border-gray-300 p-0">
+                        <input type="number" value={node.springZ} onChange={(event) => updateNode(node.id, { springZ: Number(event.target.value) })} disabled={node.dofZ !== 'Spring'} className="h-8 w-full border-0 px-2 text-sm disabled:bg-gray-100 disabled:text-gray-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-400" />
+                      </td>
+                      <td className="border border-gray-300 p-0">
+                        <input type="number" value={node.springRotation} onChange={(event) => updateNode(node.id, { springRotation: Number(event.target.value) })} disabled={node.dofRotation !== 'Spring'} className="h-8 w-full border-0 px-2 text-sm disabled:bg-gray-100 disabled:text-gray-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-400" />
+                      </td>
+                      <td className="border border-gray-300 p-0">
+                        <select value={node.support} onChange={(event) => updateNode(node.id, { support: event.target.value as SupportType })} className="h-8 w-full border-0 bg-transparent px-2 text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-400">
+                          <option>None</option>
+                          <option>Pinned</option>
+                          <option>Roller</option>
+                          <option>Fixed</option>
+                        </select>
+                      </td>
+                    </tr>
+                  );
+                })}
+                <tr>
+                  <td className="border border-gray-300 px-2 py-1 text-center text-gray-400">*</td>
+                  <td className="border border-gray-300 px-2 py-1 text-gray-400" colSpan={12}>Click Add to create another node.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div className="rounded border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-600">
+            Use the restraint preset to quickly fill the degrees of freedom, or edit each degree of freedom directly for custom support behavior.
           </div>
         </div>
       );
@@ -545,10 +660,10 @@ export const BeamModeler2D: React.FC = () => {
                       <option value="W">Wind</option>
                     </select>
                     <select value={load.fromNodeId} onChange={(event) => updateLoad(load.id, { fromNodeId: event.target.value })} className="rounded border border-gray-300 bg-white p-2">
-                      {sortedNodes.map((node) => <option key={node.id} value={node.id}>from x={node.x}</option>)}
+                      {sortedNodes.map((node) => <option key={node.id} value={node.id}>from {node.label || `N${sortedNodes.indexOf(node) + 1}`} x={node.x}</option>)}
                     </select>
                     <select value={load.toNodeId} onChange={(event) => updateLoad(load.id, { toNodeId: event.target.value })} disabled={load.type === 'Point'} className="rounded border border-gray-300 bg-white p-2 disabled:bg-gray-100 disabled:text-gray-400">
-                      {sortedNodes.map((node) => <option key={node.id} value={node.id}>to x={node.x}</option>)}
+                      {sortedNodes.map((node) => <option key={node.id} value={node.id}>to {node.label || `N${sortedNodes.indexOf(node) + 1}`} x={node.x}</option>)}
                     </select>
                     <label className="relative">
                       <span className="pointer-events-none absolute right-2 top-2 text-xs text-gray-400">{loadUnit(load)}</span>

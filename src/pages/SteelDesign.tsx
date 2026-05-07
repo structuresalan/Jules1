@@ -79,7 +79,7 @@ export const SteelDesign: React.FC = () => {
       </div>
 
       <div ref={targetRef}>
-        {activeTab === 'Beam' && <BeamModeler2D />}
+        {activeTab === 'Beam' && <BeamModeler2D aiscYear={aiscYear} />}
 
         {activeTab === 'Column' && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
