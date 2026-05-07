@@ -4,6 +4,7 @@ import { Home, Frame, Layers, Wind, Database, Settings, LogOut, Menu, FolderOpen
 import { useAuth } from '../hooks/useAuth';
 import { signOut, auth } from '../firebase';
 import { DisclaimerModal } from '../components/DisclaimerModal';
+import simplifyStructLogo from '../assets/simplifystruct-logo.png';
 
 const getProjectLabel = () => {
   try {
@@ -77,10 +78,12 @@ export const MainLayout: React.FC = () => {
         } md:translate-x-0 transition duration-200 ease-in-out z-40 w-64 bg-gray-50 border-r border-gray-200 flex flex-col`}
       >
         <div className="p-6">
-          <h1 className="text-xl font-semibold tracking-tight text-gray-900 flex items-center gap-2">
-            <div className="w-6 h-6 bg-blue-600 rounded-md"></div>
-            StrucCalc
-          </h1>
+          <div className="flex items-center gap-3">
+            <img src={simplifyStructLogo} alt="SimplifyStruct logo" className="h-8 w-auto rounded-sm bg-white object-contain" />
+            <h1 className="text-xl font-semibold tracking-tight text-gray-900">
+              SimplifyStruct
+            </h1>
+          </div>
 
           <div className="mt-4 rounded-lg border border-gray-200 bg-white p-3 text-sm">
             <div className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Current Project / Mode</div>

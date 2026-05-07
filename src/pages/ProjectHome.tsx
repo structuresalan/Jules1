@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Calculator, Clock3, FileText, FolderOpen, Plus, Search, Trash2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import simplifyStructLogo from '../assets/simplifystruct-logo.png';
 
 type ProjectStatus = 'Active' | 'On Hold' | 'Archived';
 type ProjectCalculationType = 'Mixed' | 'Steel' | 'Concrete' | 'Loads';
@@ -144,10 +145,10 @@ export const ProjectHome: React.FC = () => {
       <div className="mx-auto max-w-7xl">
         <header className="mb-8 flex flex-col gap-4 border-b border-gray-200 pb-6 md:flex-row md:items-end md:justify-between">
           <div>
-            <div className="mb-3 flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-600 text-lg font-bold text-white">SC</div>
+            <div className="mb-3 flex items-center gap-4">
+              <img src={simplifyStructLogo} alt="SimplifyStruct logo" className="h-12 w-auto rounded-md bg-white object-contain" />
               <div>
-                <h1 className="text-3xl font-bold tracking-tight">StrucCalc Projects</h1>
+                <h1 className="text-3xl font-bold tracking-tight">SimplifyStruct Projects</h1>
                 <p className="text-sm text-gray-500">Create a project, open saved work, or run a quick calculation.</p>
               </div>
             </div>

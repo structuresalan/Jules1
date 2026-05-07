@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { AlertCircle, CheckCircle2, Download, Plus, Printer, Save, Trash2, X } from 'lucide-react';
 import wShapesData from '../data/aisc/shapes_w.json';
 import aiscData from '../data/aisc/code_factors.json';
+import simplifyStructLogo from '../assets/simplifystruct-logo.png';
 import { consumeOpenProjectDocumentRequest, getActiveProject, getProjectDocuments, getSessionMode, overwriteProjectDocument, saveNewProjectDocument, type ProjectDocument } from '../utils/projectDocuments';
 
 type SupportType = 'None' | 'Pinned' | 'Roller' | 'Fixed';
@@ -1080,9 +1081,9 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
     <div className="print-sheet">
       <div className="report-header-grid">
         <div className="report-brand">
-          <div className="report-logo">SC</div>
+          <img src={simplifyStructLogo} alt="SimplifyStruct logo" className="report-brand-image" />
           <div>
-            <div className="report-brand-name">StrucCalc</div>
+            <div className="report-brand-name">SimplifyStruct</div>
             <div className="report-muted">Steel calculation output</div>
           </div>
         </div>
@@ -1325,6 +1326,7 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
       .report-header-grid { display: grid; grid-template-columns: 2.1fr 1.7fr 1.2fr; border: 1px solid #111827; }
       .report-brand { grid-row: span 3; display: flex; align-items: center; gap: 10px; padding: 10px; border-right: 1px solid #111827; }
       .report-logo { width: 34px; height: 28px; border: 2px solid #0369a1; color: #0369a1; display: flex; align-items: center; justify-content: center; font-weight: 800; }
+  .report-brand-image { width: 64px; height: auto; object-fit: contain; }
       .report-brand-name { font-size: 18px; font-weight: 800; }
       .report-muted { color: #4b5563; font-size: 10px; }
       .report-cell { min-height: 34px; padding: 4px 6px; border-right: 1px solid #111827; border-bottom: 1px solid #111827; display: flex; flex-direction: column; gap: 4px; }
