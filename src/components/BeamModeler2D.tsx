@@ -450,42 +450,17 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
 
   const renderDiagram = () => {
     const width = 940;
-    const height = 320;
-    const beamY = 132;
-    const resultBaseY = 244;
+    const height = 260;
+    const beamY = 150;
     const start = analysis?.beamStart ?? sortedNodes[0]?.x ?? 0;
     const end = analysis?.beamEnd ?? sortedNodes[sortedNodes.length - 1]?.x ?? 30;
     const length = Math.max(end - start, 1);
-    const momentPeak = Math.max(...(analysis?.moment.map((value) => Math.abs(value)) ?? [0]), 1);
-    const shearPeak = Math.max(...(analysis?.shear.map((value) => Math.abs(value)) ?? [0]), 1);
-
-    const momentPoints = analysis
-      ? analysis.xs.map((x, index) => `${xToSvg(x, width, start, length)},${resultBaseY - (analysis.moment[index] / momentPeak) * 58}`).join(' ')
-      : '';
-
-    const shearPoints = analysis
-      ? analysis.xs.map((x, index) => `${xToSvg(x, width, start, length)},${resultBaseY - (analysis.shear[index] / shearPeak) * 58}`).join(' ')
-      : '';
-
-    const deflectionPoints = analysis
-      ? analysis.xs.map((x, index) => `${xToSvg(x, width, start, length)},${resultBaseY + 24 + analysis.deflectionShape[index] * 42}`).join(' ')
-      : '';
 
     return (
-      <svg viewBox={`0 0 ${width} ${height}`} className="h-[380px] w-full min-w-[760px]">
-        <defs>
-          <marker id="beamLoadArrow" markerWidth="8" markerHeight="8" refX="4" refY="7" orient="auto">
-            <polygon points="0 0, 8 0, 4 8" fill="#2563eb" />
-          </marker>
-          <linearGradient id="beamGradient" x1="0" x2="1" y1="0" y2="0">
-            <stop offset="0%" stopColor="#e0f2fe" />
-            <stop offset="100%" stopColor="#dbeafe" />
-          </linearGradient>
-        </defs>
-
+      <svg viewBox={`0 0 ${width} ${height}`} className="h-[300px] w-full min-w-[760px]">
         <rect x="24" y="24" width={width - 48} height={height - 48} rx="14" fill="#f8fafc" stroke="#e2e8f0" />
         <line x1="60" y1={beamY} x2={width - 60} y2={beamY} stroke="#0f172a" strokeWidth="5" strokeLinecap="round" />
-        <line x1="60" y1={beamY + 1} x2={width - 60} y2={beamY + 1} stroke="url(#beamGradient)" strokeWidth="2" strokeLinecap="round" />
+        <line x1="60" y1={beamY + 1} x2={width - 60} y2={beamY + 1} stroke="#bfdbfe" strokeWidth="2" strokeLinecap="round" />
 
         {sortedNodes.map((node) => {
           const x = xToSvg(node.x, width, start, length);
@@ -506,19 +481,28 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
         {displayOptions.loading && analysis?.distributedLoads.map((load, index) => {
           const x1 = xToSvg(load.x1, width, start, length);
           const x2 = xToSvg(load.x2, width, start, length);
-          const topY = load.w >= 0 ? 54 : 164;
-          const arrowEndY = load.w >= 0 ? beamY - 8 : beamY + 8;
+          const isDown = load.w >= 0;
+          const lineY = isDown ? 76 : 222;
+          const arrowTipY = isDown ? beamY - 10 : beamY + 10;
+          const labelY = isDown ? 56 : 242;
+          const arrowCount = Math.max(3, Math.min(7, Math.round((x2 - x1) / 85)));
+          const arrowXs = Array.from({ length: arrowCount }, (_, arrowIndex) => x1 + ((x2 - x1) * arrowIndex) / Math.max(arrowCount - 1, 1));
+
           return (
             <g key={`dist-${index}`}>
-              <rect x={x1} y={Math.min(topY, arrowEndY)} width={Math.max(x2 - x1, 1)} height={Math.abs(arrowEndY - topY)} fill="#2563eb" fillOpacity="0.08" stroke="#2563eb" strokeDasharray="3,3" />
-              {(() => {
-                const arrowCount = Math.max(2, Math.min(9, Math.round((x2 - x1) / 58)));
-                return Array.from({ length: arrowCount }, (_unused, arrowIndex) => {
-                  const arrowX = x1 + ((x2 - x1) * arrowIndex) / Math.max(arrowCount - 1, 1);
-                  return <line key={arrowIndex} x1={arrowX} y1={topY} x2={arrowX} y2={arrowEndY} stroke="#2563eb" strokeWidth="2" markerEnd="url(#beamLoadArrow)" />;
-                });
-              })()}
-              <text x={(x1 + x2) / 2} y={load.w >= 0 ? 44 : 186} fontSize="12" textAnchor="middle" fill="#1d4ed8" fontWeight="700">
+              <line x1={x1} y1={lineY} x2={x2} y2={lineY} stroke="#2563eb" strokeWidth="1.5" />
+              {arrowXs.map((arrowX, arrowIndex) => (
+                <g key={arrowIndex}>
+                  <line x1={arrowX} y1={lineY} x2={arrowX} y2={arrowTipY} stroke="#2563eb" strokeWidth="1.75" />
+                  <polygon
+                    points={isDown
+                      ? `${arrowX - 4},${arrowTipY - 8} ${arrowX + 4},${arrowTipY - 8} ${arrowX},${arrowTipY}`
+                      : `${arrowX - 4},${arrowTipY + 8} ${arrowX + 4},${arrowTipY + 8} ${arrowX},${arrowTipY}`}
+                    fill="#2563eb"
+                  />
+                </g>
+              ))}
+              <text x={(x1 + x2) / 2} y={labelY} fontSize="12" textAnchor="middle" fill="#1d4ed8" fontWeight="700">
                 {Math.abs(load.w).toFixed(2)} k/ft {load.label}
               </text>
             </g>
@@ -527,40 +511,94 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
 
         {displayOptions.loading && analysis?.pointLoads.map((load, index) => {
           const x = xToSvg(load.x, width, start, length);
-          const y1 = load.p >= 0 ? 56 : 164;
-          const y2 = load.p >= 0 ? beamY - 8 : beamY + 8;
+          const isDown = load.p >= 0;
+          const y1 = isDown ? 64 : 214;
+          const y2 = isDown ? beamY - 10 : beamY + 10;
+          const labelY = isDown ? 48 : 236;
           return (
             <g key={`point-${index}`}>
-              <line x1={x} y1={y1} x2={x} y2={y2} stroke="#dc2626" strokeWidth="3" markerEnd="url(#beamLoadArrow)" />
-              <text x={x} y={load.p >= 0 ? 44 : 188} fontSize="12" textAnchor="middle" fill="#b91c1c" fontWeight="700">
+              <line x1={x} y1={y1} x2={x} y2={y2} stroke="#dc2626" strokeWidth="2.5" />
+              <polygon
+                points={isDown
+                  ? `${x - 5},${y2 - 10} ${x + 5},${y2 - 10} ${x},${y2}`
+                  : `${x - 5},${y2 + 10} ${x + 5},${y2 + 10} ${x},${y2}`}
+                fill="#dc2626"
+              />
+              <text x={x} y={labelY} fontSize="12" textAnchor="middle" fill="#b91c1c" fontWeight="700">
                 {Math.abs(load.p).toFixed(2)} k {load.label}
               </text>
             </g>
           );
         })}
 
-        {(displayOptions.moment || displayOptions.shear || displayOptions.deflection) && (
-          <line x1="60" y1={resultBaseY} x2={width - 60} y2={resultBaseY} stroke="#cbd5e1" strokeDasharray="5,5" />
-        )}
-        {displayOptions.moment && momentPoints && (
-          <>
-            <polyline points={momentPoints} fill="none" stroke="#16a34a" strokeWidth="3" />
-            <text x="72" y={resultBaseY - 70} fontSize="12" fill="#166534" fontWeight="700">Moment envelope</text>
-          </>
-        )}
-        {displayOptions.shear && shearPoints && (
-          <>
-            <polyline points={shearPoints} fill="none" stroke="#f97316" strokeWidth="3" />
-            <text x="72" y={resultBaseY - 52} fontSize="12" fill="#c2410c" fontWeight="700">Shear envelope</text>
-          </>
-        )}
-        {displayOptions.deflection && deflectionPoints && (
-          <>
-            <polyline points={deflectionPoints} fill="none" stroke="#7c3aed" strokeWidth="3" />
-            <text x="72" y={resultBaseY + 76} fontSize="12" fill="#6d28d9" fontWeight="700">Deflection shape</text>
-          </>
+        {!displayOptions.loading && (
+          <text x={width / 2} y="52" fontSize="12" textAnchor="middle" fill="#64748b">
+            Enable “Loading” in the display options to show applied loads on the beam.
+          </text>
         )}
       </svg>
+    );
+  };
+
+  const renderResultDiagram = (mode: 'moment' | 'shear' | 'deflection') => {
+    const width = 620;
+    const height = 210;
+    const start = analysis?.beamStart ?? sortedNodes[0]?.x ?? 0;
+    const end = analysis?.beamEnd ?? sortedNodes[sortedNodes.length - 1]?.x ?? 30;
+    const length = Math.max(end - start, 1);
+    const mapX = (x: number) => 56 + ((x - start) / length) * (width - 112);
+    const baselineY = 148;
+
+    const config = mode === 'moment'
+      ? {
+          title: 'Moment diagram',
+          color: '#16a34a',
+          peak: Math.max(...(analysis?.moment.map((value) => Math.abs(value)) ?? [0]), 1),
+          values: analysis?.moment ?? [],
+          valueText: `${analysis?.maxMoment.toFixed(2) ?? '0.00'} kip-ft max`,
+        }
+      : mode === 'shear'
+        ? {
+            title: 'Shear diagram',
+            color: '#f97316',
+            peak: Math.max(...(analysis?.shear.map((value) => Math.abs(value)) ?? [0]), 1),
+            values: analysis?.shear ?? [],
+            valueText: `${analysis?.maxShear.toFixed(2) ?? '0.00'} k max`,
+          }
+        : {
+            title: 'Deflection diagram',
+            color: '#7c3aed',
+            peak: 1,
+            values: analysis?.deflectionShape ?? [],
+            valueText: `${maximumDeflection.value.toFixed(3)} in max`,
+          };
+
+    const points = analysis
+      ? analysis.xs
+          .map((x, index) => {
+            const y = mode === 'deflection'
+              ? baselineY + config.values[index] * 34
+              : baselineY - (config.values[index] / config.peak) * 52;
+            return `${mapX(x)},${y}`;
+          })
+          .join(' ')
+      : '';
+
+    return (
+      <div className="rounded-lg border border-gray-200 bg-white p-3 shadow-sm">
+        <div className="mb-2 flex items-center justify-between gap-3">
+          <div className="text-sm font-semibold text-gray-900">{config.title}</div>
+          <div className="text-xs font-semibold" style={{ color: config.color }}>{config.valueText}</div>
+        </div>
+        <svg viewBox={`0 0 ${width} ${height}`} className="h-[200px] w-full min-w-[320px]">
+          <rect x="1" y="1" width={width - 2} height={height - 2} rx="10" fill="#f8fafc" stroke="#e2e8f0" />
+          <line x1="36" y1={baselineY} x2={width - 24} y2={baselineY} stroke="#cbd5e1" strokeDasharray="5,5" />
+          <line x1="56" y1="30" x2="56" y2={height - 34} stroke="#e5e7eb" />
+          {points && <polyline points={points} fill="none" stroke={config.color} strokeWidth="3" />}
+          <text x="58" y="22" fontSize="11" fill="#64748b">0</text>
+          <text x={width - 28} y={height - 16} fontSize="11" textAnchor="end" fill="#64748b">L = {analysis?.fullLength.toFixed(2) ?? '0.00'} ft</text>
+        </svg>
+      </div>
     );
   };
 
@@ -844,11 +882,6 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
 
     return (
       <svg viewBox={`0 0 ${width} ${height}`} className="report-diagram">
-        <defs>
-          <marker id={`reportArrow-${mode}`} markerWidth="7" markerHeight="7" refX="3.5" refY="6" orient="auto">
-            <polygon points="0 0, 7 0, 3.5 7" fill="#111827" />
-          </marker>
-        </defs>
         <line x1="45" y1={beamY} x2={width - 45} y2={beamY} stroke="#111827" strokeWidth="2" />
         {sortedNodes.map((node, index) => {
           const x = mapX(node.x);
@@ -871,24 +904,44 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
         {mode === 'loading' && analysis?.distributedLoads.map((load, index) => {
           const x1 = mapX(load.x1);
           const x2 = mapX(load.x2);
+          const isDown = load.w >= 0;
+          const lineY = isDown ? 32 : 118;
+          const arrowTipY = isDown ? beamY - 4 : beamY + 4;
+          const count = Math.max(3, Math.min(6, Math.round((x2 - x1) / 85)));
+          const arrowXs = Array.from({ length: count }, (_, arrowIndex) => x1 + ((x2 - x1) * arrowIndex) / Math.max(count - 1, 1));
           return (
             <g key={`report-dist-${index}`}>
-              <rect x={x1} y="32" width={Math.max(x2 - x1, 1)} height={beamY - 32} fill="#fed7aa" stroke="#fb923c" opacity="0.75" />
-              {Array.from({ length: Math.max(2, Math.min(8, Math.round((x2 - x1) / 70))) }, (_unused, arrowIndex) => {
-                const count = Math.max(2, Math.min(8, Math.round((x2 - x1) / 70)));
-                const arrowX = x1 + ((x2 - x1) * arrowIndex) / Math.max(count - 1, 1);
-                return <line key={arrowIndex} x1={arrowX} y1="32" x2={arrowX} y2={beamY - 4} stroke="#111827" markerEnd={`url(#reportArrow-${mode})`} />;
-              })}
-              <text x={(x1 + x2) / 2} y="25" fontSize="9" textAnchor="middle">{Math.abs(load.w).toFixed(2)} k/ft</text>
+              <line x1={x1} y1={lineY} x2={x2} y2={lineY} stroke="#111827" />
+              {arrowXs.map((arrowX, arrowIndex) => (
+                <g key={arrowIndex}>
+                  <line x1={arrowX} y1={lineY} x2={arrowX} y2={arrowTipY} stroke="#111827" />
+                  <polygon
+                    points={isDown
+                      ? `${arrowX - 3.5},${arrowTipY - 7} ${arrowX + 3.5},${arrowTipY - 7} ${arrowX},${arrowTipY}`
+                      : `${arrowX - 3.5},${arrowTipY + 7} ${arrowX + 3.5},${arrowTipY + 7} ${arrowX},${arrowTipY}`}
+                    fill="#111827"
+                  />
+                </g>
+              ))}
+              <text x={(x1 + x2) / 2} y={isDown ? 24 : 132} fontSize="9" textAnchor="middle">{Math.abs(load.w).toFixed(2)} k/ft</text>
             </g>
           );
         })}
         {mode === 'loading' && analysis?.pointLoads.map((load, index) => {
           const x = mapX(load.x);
+          const isDown = load.p >= 0;
+          const y1 = isDown ? 24 : 118;
+          const y2 = isDown ? beamY - 4 : beamY + 4;
           return (
             <g key={`report-point-${index}`}>
-              <line x1={x} y1="24" x2={x} y2={beamY - 4} stroke="#111827" strokeWidth="1.5" markerEnd={`url(#reportArrow-${mode})`} />
-              <text x={x} y="16" fontSize="9" textAnchor="middle">{Math.abs(load.p).toFixed(2)} k</text>
+              <line x1={x} y1={y1} x2={x} y2={y2} stroke="#111827" strokeWidth="1.5" />
+              <polygon
+                points={isDown
+                  ? `${x - 3.5},${y2 - 7} ${x + 3.5},${y2 - 7} ${x},${y2}`
+                  : `${x - 3.5},${y2 + 7} ${x + 3.5},${y2 + 7} ${x},${y2}`}
+                fill="#111827"
+              />
+              <text x={x} y={isDown ? 16 : 132} fontSize="9" textAnchor="middle">{Math.abs(load.p).toFixed(2)} k</text>
             </g>
           );
         })}
@@ -967,8 +1020,11 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
             <div><strong>{analysis?.maxShear.toFixed(2) ?? '0.00'}</strong><span>Shear envelope (kips)</span></div>
             <div><strong>{maximumDeflection.value.toFixed(3)}</strong><span>Estimated deflection envelope (in)</span></div>
           </div>
-          <div className="report-diagram-wrap">{renderReportBeamDiagram('moment')}</div>
-          <div className="report-diagram-wrap">{renderReportBeamDiagram('shear')}</div>
+          <div className="report-diagram-grid">
+            <div className="report-diagram-card"><h4>Moment envelope</h4>{renderReportBeamDiagram('moment')}</div>
+            <div className="report-diagram-card"><h4>Shear envelope</h4>{renderReportBeamDiagram('shear')}</div>
+            <div className="report-diagram-card"><h4>Deflection envelope</h4>{renderReportBeamDiagram('deflection')}</div>
+          </div>
           <h3>Member results</h3>
           <table className="report-table">
             <thead><tr><th>Member</th><th>Position (ft)</th><th>Local deflection (in)</th><th>Reaction A (k)</th><th>Reaction B (k)</th></tr></thead>
@@ -1054,6 +1110,9 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
       .report-factor-table { max-width: 560px; }
       .report-compact-table { max-width: 360px; }
       .report-diagram-wrap { margin: 8px 0 14px; text-align: center; }
+      .report-diagram-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 8px 0 14px; }
+      .report-diagram-card { border: 1px solid #111827; padding: 8px; }
+      .report-diagram-card h4 { margin: 0 0 6px; font-size: 11px; }
       .report-diagram { width: 100%; max-height: 170px; border: 0; }
       .report-result-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 10px 0; }
       .report-result-grid div { border: 1px solid #111827; padding: 8px; display: flex; flex-direction: column; gap: 5px; }
@@ -1096,7 +1155,16 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
         </div>
 
         <div className="grid grid-cols-1 gap-0 xl:grid-cols-[minmax(0,1fr)_220px]">
-          <div className="overflow-x-auto p-4">{renderDiagram()}</div>
+          <div className="space-y-4 p-4">
+            <div className="overflow-x-auto">{renderDiagram()}</div>
+            {(displayOptions.moment || displayOptions.shear || displayOptions.deflection) && (
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                {displayOptions.moment && renderResultDiagram('moment')}
+                {displayOptions.shear && renderResultDiagram('shear')}
+                {displayOptions.deflection && renderResultDiagram('deflection')}
+              </div>
+            )}
+          </div>
           <div className="border-t border-gray-200 bg-gray-50 p-4 xl:border-l xl:border-t-0">
             <div className="mb-3 text-xs font-bold uppercase tracking-wide text-gray-500">Display options</div>
             <div className="space-y-2">
