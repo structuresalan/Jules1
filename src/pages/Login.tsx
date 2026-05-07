@@ -1,9 +1,20 @@
 import React from 'react';
+import { Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import simplifyStructLogo from '../assets/simplifystruct-logo.png';
 
 export const Login: React.FC = () => {
-  const { mockLogin } = useAuth();
+  const { user, mockLogin } = useAuth();
+  const navigate = useNavigate();
+
+  if (user) {
+    return <Navigate to="/" replace />;
+  }
+
+  const handleMockLogin = () => {
+    mockLogin();
+    navigate('/', { replace: true });
+  };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
@@ -12,7 +23,7 @@ export const Login: React.FC = () => {
           <img
             src={simplifyStructLogo}
             alt="SimplifyStruct logo"
-            className="h-16 max-w-[260px] object-contain"
+            className="h-16 max-w-[280px] object-contain"
           />
         </div>
 
@@ -28,7 +39,7 @@ export const Login: React.FC = () => {
         </div>
 
         <button
-          onClick={mockLogin}
+          onClick={handleMockLogin}
           className="mt-6 w-full rounded-md bg-blue-600 px-4 py-3 text-sm font-semibold text-white shadow-sm hover:bg-blue-700"
         >
           Sign In (Mock)
