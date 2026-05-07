@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { AlertCircle, CheckCircle2, Download, Plus, Printer, Save, Trash2, X } from 'lucide-react';
-import wShapesData from '../data/aisc/shapes_w.json';
+import seedShapesData from '../data/aisc/shapes_w.json';
 import aiscData from '../data/aisc/code_factors.json';
 import simplifyStructLogo from '../assets/simplifystruct-logo.png';
 import { consumeOpenProjectDocumentRequest, getActiveProject, getProjectDocuments, getSessionMode, overwriteProjectDocument, saveNewProjectDocument, type ProjectDocument } from '../utils/projectDocuments';
@@ -20,6 +20,30 @@ type DesignRule = 'Typical' | 'Conservative' | 'Custom';
 type SwayOption = 'No' | 'Yes';
 type SeismicDesignRule = 'None' | 'AISC Seismic' | 'Project Specific';
 type ReportHeaderSaveScope = 'document' | 'default';
+
+interface SteelShape {
+  EDI_Std_Nomenclature?: string;
+  AISC_Manual_Label?: string;
+  Type?: string;
+  W?: number;
+  A: number;
+  d?: number;
+  bf?: number;
+  tw?: number;
+  tf?: number;
+  t?: number;
+  Ix?: number;
+  Zx: number;
+  Sx?: number;
+  rx?: number;
+  Iy?: number;
+  Zy?: number;
+  Sy?: number;
+  ry?: number;
+  J?: number;
+  Cw?: number;
+}
+
 
 interface BeamNode {
   id: string;
@@ -61,8 +85,97 @@ interface DistributedLoadAnalysis {
   label: string;
 }
 
-const shapes = wShapesData as Record<string, { A: number; Zx: number }>;
-const shapeNames = Object.keys(shapes);
+const seedShapes = seedShapesData as Record<string, SteelShape>;
+const seedShapeNames = Object.keys(seedShapes);
+const AISC_SHAPES_CSV_URL = 'https://raw.githubusercontent.com/ambaker1/aisc-csv/main/v15.0/Shapes-US.csv';
+
+const preferredShapeTypeOrder = ['W', 'M', 'S', 'HP', 'C', 'MC', 'WT', 'MT', 'ST', 'L', '2L', 'HSS', 'PIPE'];
+
+const parseSteelNumber = (value: string | undefined) => {
+  if (!value) return undefined;
+  const parsed = Number(value.trim());
+  return Number.isFinite(parsed) ? parsed : undefined;
+};
+
+const parseCsvLine = (line: string) => {
+  const values: string[] = [];
+  let current = '';
+  let inQuotes = false;
+
+  for (let index = 0; index < line.length; index += 1) {
+    const char = line[index];
+
+    if (char === '"') {
+      if (inQuotes && line[index + 1] === '"') {
+        current += '"';
+        index += 1;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (char === ',' && !inQuotes) {
+      values.push(current);
+      current = '';
+    } else {
+      current += char;
+    }
+  }
+
+  values.push(current);
+  return values;
+};
+
+const parseAiscShapesCsv = (csv: string): Record<string, SteelShape> => {
+  const lines = csv
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  const [headerLine, ...dataLines] = lines;
+  if (!headerLine) return {};
+
+  const headers = parseCsvLine(headerLine);
+  const shapes: Record<string, SteelShape> = {};
+
+  dataLines.forEach((line) => {
+    const cells = parseCsvLine(line);
+    const row = headers.reduce<Record<string, string>>((accumulator, header, index) => {
+      accumulator[header] = cells[index] ?? '';
+      return accumulator;
+    }, {});
+
+    const label = row.AISC_Manual_Label || row.EDI_Std_Nomenclature;
+    if (!label) return;
+
+    const sx = parseSteelNumber(row.Sx);
+    const zx = parseSteelNumber(row.Zx) ?? sx ?? parseSteelNumber(row.Sy) ?? 1;
+
+    shapes[label] = {
+      EDI_Std_Nomenclature: row.EDI_Std_Nomenclature,
+      AISC_Manual_Label: label,
+      Type: row.Type || 'Other',
+      W: parseSteelNumber(row.W),
+      A: parseSteelNumber(row.A) ?? 1,
+      d: parseSteelNumber(row.d) ?? parseSteelNumber(row.Ht) ?? parseSteelNumber(row.OD),
+      bf: parseSteelNumber(row.bf) ?? parseSteelNumber(row.B),
+      tw: parseSteelNumber(row.tw),
+      tf: parseSteelNumber(row.tf),
+      t: parseSteelNumber(row.t) ?? parseSteelNumber(row.tnom) ?? parseSteelNumber(row.tdes),
+      Ix: parseSteelNumber(row.Ix),
+      Zx: zx,
+      Sx: sx,
+      rx: parseSteelNumber(row.rx),
+      Iy: parseSteelNumber(row.Iy),
+      Zy: parseSteelNumber(row.Zy),
+      Sy: parseSteelNumber(row.Sy),
+      ry: parseSteelNumber(row.ry),
+      J: parseSteelNumber(row.J),
+      Cw: parseSteelNumber(row.Cw),
+    };
+  });
+
+  return shapes;
+};
+
 const designPanels: BeamPanel[] = ['Design options', 'Nodes', 'Loading', 'Combinations', 'Deflection criteria', 'Output options'];
 
 const makeId = () => Math.random().toString(36).slice(2, 9);
@@ -145,7 +258,12 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
   const [ySway, setYSway] = useState<SwayOption>('No');
   const [zSway, setZSway] = useState<SwayOption>('No');
   const [seismicDesignRule, setSeismicDesignRule] = useState<SeismicDesignRule>('None');
-  const [section, setSection] = useState(shapeNames[1] ?? shapeNames[0] ?? 'W12X26');
+  const [section, setSection] = useState(seedShapeNames[1] ?? seedShapeNames[0] ?? 'W12X26');
+  const [shapeDatabase, setShapeDatabase] = useState<Record<string, SteelShape>>(seedShapes);
+  const [shapeTypeFilter, setShapeTypeFilter] = useState('W');
+  const [shapeSearch, setShapeSearch] = useState('');
+  const [shapeDatabaseSource, setShapeDatabaseSource] = useState('Seed W-shape database');
+  const [shapeDatabaseError, setShapeDatabaseError] = useState('');
   const [fy, setFy] = useState(50);
   const [unbracedLength, setUnbracedLength] = useState(20);
   const [deflectionLimit, setDeflectionLimit] = useState(360);
@@ -205,11 +323,30 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
   const [loadedDocumentName, setLoadedDocumentName] = useState('');
 
   const sortedNodes = useMemo(() => [...nodes].sort((a, b) => a.x - b.x), [nodes]);
-  const selectedShape = shapes[section] ?? shapes[shapeNames[0]] ?? { A: 10, Zx: 50 };
+  const shapeNames = useMemo(() => Object.keys(shapeDatabase).sort((a, b) => a.localeCompare(b, undefined, { numeric: true })), [shapeDatabase]);
+  const shapeTypeOptions = useMemo(() => {
+    const availableTypes = Array.from(new Set(shapeNames.map((name) => shapeDatabase[name]?.Type || 'Other')));
+
+    return ['All', ...preferredShapeTypeOrder.filter((type) => availableTypes.includes(type)), ...availableTypes.filter((type) => !preferredShapeTypeOrder.includes(type)).sort()];
+  }, [shapeDatabase, shapeNames]);
+
+  const filteredShapeNames = useMemo(() => {
+    const search = shapeSearch.trim().toLowerCase();
+
+    return shapeNames.filter((name) => {
+      const shape = shapeDatabase[name];
+      const matchesType = shapeTypeFilter === 'All' || (shape?.Type || 'Other') === shapeTypeFilter;
+      const matchesSearch = !search || name.toLowerCase().includes(search);
+
+      return matchesType && matchesSearch;
+    });
+  }, [shapeDatabase, shapeNames, shapeSearch, shapeTypeFilter]);
+
+  const selectedShape = shapeDatabase[section] ?? shapeDatabase[shapeNames[0]] ?? { A: 10, Zx: 50, Type: 'W', AISC_Manual_Label: section };
   const aiscFactors = (aiscData as Record<string, typeof aiscData['AISC 360-16']>)[activeAiscYear] ?? aiscData['AISC 360-16'];
-  const sectionDepth = Math.max(Number(section.match(/W\s*(\d+(?:\.\d+)?)/i)?.[1] ?? 12), 1);
-  const estimatedSx = Math.max(selectedShape.Zx * 0.87, 0.1);
-  const estimatedIx = Math.max(estimatedSx * (sectionDepth / 2), selectedShape.Zx, 0.1);
+  const sectionDepth = Math.max(selectedShape.d ?? Number(section.match(/\d+(?:\.\d+)?/)?.[0] ?? 12), 1);
+  const estimatedSx = Math.max(selectedShape.Sx ?? selectedShape.Zx * 0.87, 0.1);
+  const estimatedIx = Math.max(selectedShape.Ix ?? estimatedSx * (sectionDepth / 2), selectedShape.Zx, 0.1);
   const elasticModulus = 29000;
   const selfWeightKipPerFt = (selectedShape.A * 490) / 144 / 1000;
 
@@ -252,6 +389,48 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
+
+    const loadAiscShapeDatabase = async () => {
+      try {
+        const response = await fetch(AISC_SHAPES_CSV_URL);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+        const csv = await response.text();
+        const parsedShapes = parseAiscShapesCsv(csv);
+        const parsedShapeCount = Object.keys(parsedShapes).length;
+
+        if (parsedShapeCount < 100) {
+          throw new Error('AISC CSV did not contain enough shapes.');
+        }
+
+        if (!cancelled) {
+          setShapeDatabase(parsedShapes);
+          setShapeDatabaseSource(`AISC Shapes Database v15.0 CSV (${parsedShapeCount.toLocaleString()} shapes)`);
+          setShapeDatabaseError('');
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setShapeDatabaseSource('Seed W-shape database');
+          setShapeDatabaseError(error instanceof Error ? error.message : 'Unable to load AISC CSV database.');
+        }
+      }
+    };
+
+    loadAiscShapeDatabase();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!shapeDatabase[section] && filteredShapeNames.length > 0) {
+      setSection(filteredShapeNames[0]);
+    }
+  }, [filteredShapeNames, section, shapeDatabase]);
+
+  useEffect(() => {
     const documentToOpen = consumeOpenProjectDocumentRequest();
     if (!documentToOpen || documentToOpen.type !== 'Steel Beam Design') return;
 
@@ -271,6 +450,7 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
       ySway?: SwayOption;
       zSway?: SwayOption;
       seismicDesignRule?: SeismicDesignRule;
+      shapeTypeFilter?: string;
       section?: string;
       fy?: number;
       unbracedLength?: number;
@@ -298,7 +478,8 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
     if (savedInputs.ySway) setYSway(savedInputs.ySway);
     if (savedInputs.zSway) setZSway(savedInputs.zSway);
     if (savedInputs.seismicDesignRule) setSeismicDesignRule(savedInputs.seismicDesignRule);
-    if (savedInputs.section && shapes[savedInputs.section]) setSection(savedInputs.section);
+    if (savedInputs.shapeTypeFilter) setShapeTypeFilter(savedInputs.shapeTypeFilter);
+    if (savedInputs.section) setSection(savedInputs.section);
     if (typeof savedInputs.fy === 'number') setFy(savedInputs.fy);
     if (typeof savedInputs.unbracedLength === 'number') setUnbracedLength(savedInputs.unbracedLength);
     if (typeof savedInputs.deflectionLimit === 'number') setDeflectionLimit(savedInputs.deflectionLimit);
@@ -1049,12 +1230,26 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
                   <option>Custom</option>
                 </select>
               </label>
-              <label className="text-sm font-medium text-gray-700 sm:col-span-2">
-                Selected section
-                <select value={section} onChange={(event) => setSection(event.target.value)} className="mt-1 w-full rounded border border-gray-300 bg-white p-2 text-sm">
-                  {shapeNames.map((name) => <option key={name}>{name}</option>)}
+              <label className="text-sm font-medium text-gray-700">
+                Shape family
+                <select value={shapeTypeFilter} onChange={(event) => setShapeTypeFilter(event.target.value)} className="mt-1 w-full rounded border border-gray-300 bg-white p-2 text-sm">
+                  {shapeTypeOptions.map((type) => <option key={type}>{type}</option>)}
                 </select>
               </label>
+              <label className="text-sm font-medium text-gray-700">
+                Search section
+                <input value={shapeSearch} onChange={(event) => setShapeSearch(event.target.value)} className="mt-1 w-full rounded border border-gray-300 bg-white p-2 text-sm" placeholder="W12, HSS, L4..." />
+              </label>
+              <label className="text-sm font-medium text-gray-700">
+                Selected section
+                <select value={section} onChange={(event) => setSection(event.target.value)} className="mt-1 w-full rounded border border-gray-300 bg-white p-2 text-sm">
+                  {filteredShapeNames.map((name) => <option key={name}>{name}</option>)}
+                </select>
+              </label>
+              <div className="rounded border border-gray-200 bg-gray-50 p-2 text-xs text-gray-600 sm:col-span-3">
+                <div><span className="font-semibold">Shape database:</span> {shapeDatabaseSource}</div>
+                <div>{shapeTypeFilter === 'All' ? shapeNames.length : filteredShapeNames.length} section{(shapeTypeFilter === 'All' ? shapeNames.length : filteredShapeNames.length) === 1 ? '' : 's'} shown{shapeDatabaseError ? `; fallback reason: ${shapeDatabaseError}` : ''}.</div>
+              </div>
               <label className="text-sm font-medium text-gray-700">Internal sections<input type="number" min={3} value={internalSections} onChange={(event) => setInternalSections(Number(event.target.value))} className="mt-1 w-full rounded border border-gray-300 p-2 text-sm" /></label>
               <label className="text-sm font-medium text-gray-700">Fy (ksi)<input type="number" value={fy} onChange={(event) => setFy(Number(event.target.value))} className="mt-1 w-full rounded border border-gray-300 p-2 text-sm" /></label>
               <label className="text-sm font-medium text-gray-700">Unbraced Lb (ft)<input type="number" value={unbracedLength} onChange={(event) => setUnbracedLength(Number(event.target.value))} className="mt-1 w-full rounded border border-gray-300 p-2 text-sm" /></label>
@@ -1802,6 +1997,7 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
         ySway,
         zSway,
         seismicDesignRule,
+        shapeTypeFilter,
         section,
         fy,
         unbracedLength,
@@ -2026,6 +2222,7 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
                 </svg>
                 <div className="text-sm text-gray-700">
                   <div className="font-bold text-gray-900">{section}</div>
+                  <div>Type = {selectedShape.Type || 'Other'}</div>
                   <div>Area = {selectedShape.A.toFixed(2)} in²</div>
                   <div>Zx = {selectedShape.Zx.toFixed(1)} in³</div>
                   <div>Fy = {fy.toFixed(0)} ksi</div>

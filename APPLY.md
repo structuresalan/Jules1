@@ -1,21 +1,23 @@
-# Fix Firebase Login Loop
+# AISC Shape Database Loader
 
-Replace these files:
-- src/firebase.ts
-- src/context/AuthContext.tsx
+Replace/add these files:
+- src/components/BeamModeler2D.tsx
+- src/data/aisc/shapes_w.json
+- src/utils/reportHeaderDefaults.ts
 
 Commit message:
-Fix Firebase login loop for tester accounts
+Load expanded AISC steel shape database
 
 What changed:
-- Sets Firebase auth persistence to browser local persistence.
-- Prevents a stale null auth-state event from immediately kicking a newly signed-in user back to /login.
-- Keeps invite code required for account creation only.
-- Existing users can sign in normally.
-- Keeps sign out behavior working.
+- Steel Beam Design now loads an expanded AISC Shapes CSV database at runtime.
+- Adds a shape-family filter:
+  W, M, S, HP, C, MC, WT, MT, ST, L, 2L, HSS, PIPE, and All.
+- Adds section search.
+- Shows the active database source and number of sections loaded.
+- Keeps the old local W-shape seed as a fallback if the CSV cannot load.
+- Saves/restores the selected shape family with project documents.
 
-After replacing:
-1. Commit and push.
-2. Let Vercel redeploy.
-3. Hard refresh the website.
-4. Try signing in with the tester account again.
+Notes:
+- The runtime CSV source is the MIT-licensed ambaker1/aisc-csv v15.0 processed CSV.
+- The official AISC v16.0 spreadsheet is still the authoritative current database, but the app cannot parse XLSX in-browser without adding a spreadsheet parser.
+- HSS/angles/channels can now be selected, but the current beam design checks are still preliminary and primarily flexure/shear/deflection based. Dedicated HSS/angle/local buckling checks should be added separately.
