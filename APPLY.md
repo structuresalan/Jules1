@@ -1,12 +1,19 @@
-# Fix Firebase Auth Null Build Error
+# Firebase Config Fallback
 
 Replace this file:
-- src/context/AuthContext.tsx
+- src/firebase.ts
 
 Commit message:
-Fix Firebase auth null build error
+Add Firebase config fallback
 
 What changed:
-- Fixes TypeScript error: Auth | null is not assignable to Auth.
-- Uses a local activeAuth variable after checking Firebase auth is configured.
-- Keeps the single-account Firebase login behavior.
+- Uses Vercel environment variables first.
+- If Vercel variables are missing or not being read correctly, it falls back to the Firebase config from your SimplifyStruct Firebase web app.
+- This should fix auth/api-key-not-valid unless the key has been deleted or restricted in Google Cloud.
+
+After replacing the file:
+1. Commit it.
+2. Push to main.
+3. Wait for Vercel to redeploy.
+4. Hard refresh the website.
+5. Try signing in again.
