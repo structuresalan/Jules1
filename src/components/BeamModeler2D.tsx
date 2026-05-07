@@ -14,6 +14,11 @@ type LoadCase = 'D' | 'L' | 'S' | 'W';
 type DesignMethod = 'LRFD' | 'ASD';
 type DisplayKey = 'loading' | 'moment' | 'shear' | 'deflection';
 type BeamPanel = 'Design options' | 'Nodes' | 'Loading' | 'Combinations' | 'Deflection criteria' | 'Output options';
+type MemberType = 'Beam' | 'Girder' | 'Joist' | 'Lintel' | 'Other';
+type MaterialType = 'Hot Rolled Steel' | 'Cold Formed Steel' | 'Built-up Steel' | 'Other';
+type DesignRule = 'Typical' | 'Conservative' | 'Custom';
+type SwayOption = 'No' | 'Yes';
+type SeismicDesignRule = 'None' | 'AISC Seismic' | 'Project Specific';
 type ReportHeaderSaveScope = 'document' | 'default';
 
 interface BeamNode {
@@ -126,6 +131,20 @@ interface BeamModeler2DProps {
 export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 360-16' }) => {
   const activeAiscYear = Object.prototype.hasOwnProperty.call(aiscData, aiscYear) ? aiscYear : 'AISC 360-16';
   const [method, setMethod] = useState<DesignMethod>('LRFD');
+  const [memberType, setMemberType] = useState<MemberType>('Beam');
+  const [materialType, setMaterialType] = useState<MaterialType>('Hot Rolled Steel');
+  const [designRule, setDesignRule] = useState<DesignRule>('Typical');
+  const [internalSections, setInternalSections] = useState(97);
+  const [ky, setKy] = useState(1);
+  const [kz, setKz] = useState(1);
+  const [lbyy, setLbyy] = useState(20);
+  const [lbzz, setLbzz] = useState(20);
+  const [lCompTop, setLCompTop] = useState(20);
+  const [lCompBottom, setLCompBottom] = useState(20);
+  const [lTorque, setLTorque] = useState(20);
+  const [ySway, setYSway] = useState<SwayOption>('No');
+  const [zSway, setZSway] = useState<SwayOption>('No');
+  const [seismicDesignRule, setSeismicDesignRule] = useState<SeismicDesignRule>('None');
   const [section, setSection] = useState(shapeNames[1] ?? shapeNames[0] ?? 'W12X26');
   const [fy, setFy] = useState(50);
   const [unbracedLength, setUnbracedLength] = useState(20);
@@ -194,6 +213,12 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
   const elasticModulus = 29000;
   const selfWeightKipPerFt = (selectedShape.A * 490) / 144 / 1000;
 
+  const assumedNu = 0.3;
+  const estimatedG = elasticModulus / (2 * (1 + assumedNu));
+  const estimatedFu = Math.max(fy + 8, fy * 1.2);
+  const flangeSlenderness = sectionDepth > 0 ? Math.max(sectionDepth / 2 / 0.36, 1) : 1;
+  const webSlenderness = sectionDepth > 0 ? Math.max(sectionDepth / 0.355, 1) : 1;
+
   const getReportHeaderInfo = (): ReportHeaderInfo => ({
     project: reportProject,
     jobRef: reportJobRef,
@@ -232,6 +257,20 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
 
     const savedInputs = documentToOpen.inputs as {
       method?: DesignMethod;
+      memberType?: MemberType;
+      materialType?: MaterialType;
+      designRule?: DesignRule;
+      internalSections?: number;
+      ky?: number;
+      kz?: number;
+      lbyy?: number;
+      lbzz?: number;
+      lCompTop?: number;
+      lCompBottom?: number;
+      lTorque?: number;
+      ySway?: SwayOption;
+      zSway?: SwayOption;
+      seismicDesignRule?: SeismicDesignRule;
       section?: string;
       fy?: number;
       unbracedLength?: number;
@@ -245,6 +284,20 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
     };
 
     if (savedInputs.method) setMethod(savedInputs.method);
+    if (savedInputs.memberType) setMemberType(savedInputs.memberType);
+    if (savedInputs.materialType) setMaterialType(savedInputs.materialType);
+    if (savedInputs.designRule) setDesignRule(savedInputs.designRule);
+    if (typeof savedInputs.internalSections === 'number') setInternalSections(savedInputs.internalSections);
+    if (typeof savedInputs.ky === 'number') setKy(savedInputs.ky);
+    if (typeof savedInputs.kz === 'number') setKz(savedInputs.kz);
+    if (typeof savedInputs.lbyy === 'number') setLbyy(savedInputs.lbyy);
+    if (typeof savedInputs.lbzz === 'number') setLbzz(savedInputs.lbzz);
+    if (typeof savedInputs.lCompTop === 'number') setLCompTop(savedInputs.lCompTop);
+    if (typeof savedInputs.lCompBottom === 'number') setLCompBottom(savedInputs.lCompBottom);
+    if (typeof savedInputs.lTorque === 'number') setLTorque(savedInputs.lTorque);
+    if (savedInputs.ySway) setYSway(savedInputs.ySway);
+    if (savedInputs.zSway) setZSway(savedInputs.zSway);
+    if (savedInputs.seismicDesignRule) setSeismicDesignRule(savedInputs.seismicDesignRule);
     if (savedInputs.section && shapes[savedInputs.section]) setSection(savedInputs.section);
     if (typeof savedInputs.fy === 'number') setFy(savedInputs.fy);
     if (typeof savedInputs.unbracedLength === 'number') setUnbracedLength(savedInputs.unbracedLength);
@@ -449,6 +502,9 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
       totalVerticalLoad,
     };
   }, [sortedNodes, loads, nodes, loadFactors, includeSelfWeight, selfWeightKipPerFt]);
+
+  const compressionSlendernessY = analysis ? (Math.max(ky, 0.01) * Math.max(lbyy, 0.01) * 12) / Math.max(Math.sqrt(estimatedIx / Math.max(selectedShape.A, 0.001)), 0.001) : 0;
+  const compressionSlendernessZ = analysis ? (Math.max(kz, 0.01) * Math.max(lbzz, 0.01) * 12) / Math.max(Math.sqrt(estimatedIx / Math.max(selectedShape.A, 0.001)), 0.001) : 0;
 
   const nominalMoment = (fy * selectedShape.Zx) / 12;
   const designMoment = method === 'LRFD' ? aiscFactors.phi_b * nominalMoment : nominalMoment / aiscFactors.omega_b;
@@ -807,6 +863,152 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
     );
   };
 
+  const renderBrowserDesignChecks = () => {
+    const limitStateRows = [
+      {
+        label: 'Flexural Analysis (Strong Axis)',
+        required: `${(analysis?.maxMoment ?? 0).toFixed(2)} kip-ft`,
+        available: `${designMoment.toFixed(2)} kip-ft`,
+        unity: formatRatio(momentUtilization),
+        result: momentUtilization <= 1 ? 'Pass' : 'Fail',
+      },
+      {
+        label: 'Shear Analysis',
+        required: `${(analysis?.maxShear ?? 0).toFixed(2)} k`,
+        available: `${designShear.toFixed(2)} k`,
+        unity: formatRatio(shearUtilization),
+        result: shearUtilization <= 1 ? 'Pass' : 'Fail',
+      },
+      {
+        label: 'Deflection Check',
+        required: `${maximumDeflection.value.toFixed(3)} in`,
+        available: `${totalServiceDeflectionLimit.toFixed(3)} in`,
+        unity: formatRatio(deflectionUtilization),
+        result: deflectionUtilization <= 1 ? 'Pass' : 'Fail',
+      },
+      {
+        label: 'Combined Utilization',
+        required: '-',
+        available: '-',
+        unity: formatRatio(Math.max(momentUtilization, shearUtilization, deflectionUtilization)),
+        result: Math.max(momentUtilization, shearUtilization, deflectionUtilization) <= 1 ? 'Pass' : 'Fail',
+      },
+    ];
+
+    return (
+      <div className="mt-6 rounded-lg border border-gray-200 bg-white shadow-sm">
+        <div className="border-b border-gray-200 bg-gray-50 px-4 py-3">
+          <h3 className="text-base font-semibold text-gray-900">Detailed Design Checks</h3>
+          <p className="mt-1 text-xs text-gray-500">
+            Browser preview of the same design-check categories used in the detailed output report.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 p-4 xl:grid-cols-2">
+          <div>
+            <h4 className="mb-2 text-sm font-semibold text-gray-800">Limit state summary</h4>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[560px] border-collapse text-xs">
+                <thead className="bg-gray-100 text-gray-600">
+                  <tr>
+                    <th className="border border-gray-200 px-2 py-2 text-left">Limit State</th>
+                    <th className="border border-gray-200 px-2 py-2 text-right">Required</th>
+                    <th className="border border-gray-200 px-2 py-2 text-right">Available</th>
+                    <th className="border border-gray-200 px-2 py-2 text-right">Unity</th>
+                    <th className="border border-gray-200 px-2 py-2 text-center">Result</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {limitStateRows.map((row) => (
+                    <tr key={row.label}>
+                      <td className="border border-gray-200 px-2 py-2 font-medium">{row.label}</td>
+                      <td className="border border-gray-200 px-2 py-2 text-right">{row.required}</td>
+                      <td className="border border-gray-200 px-2 py-2 text-right">{row.available}</td>
+                      <td className="border border-gray-200 px-2 py-2 text-right">{row.unity}</td>
+                      <td className={`border border-gray-200 px-2 py-2 text-center font-semibold ${row.result === 'Pass' ? 'text-green-700' : 'text-red-700'}`}>{row.result}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div>
+            <h4 className="mb-2 text-sm font-semibold text-gray-800">Input / design properties</h4>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="rounded border border-gray-200 bg-gray-50 p-3 text-xs">
+                <div className="font-semibold text-gray-800">Member input</div>
+                <dl className="mt-2 grid grid-cols-2 gap-1">
+                  <dt className="text-gray-500">Type</dt><dd>{memberType}</dd>
+                  <dt className="text-gray-500">Material</dt><dd>{materialType}</dd>
+                  <dt className="text-gray-500">Rule</dt><dd>{designRule}</dd>
+                  <dt className="text-gray-500">Sections</dt><dd>{internalSections}</dd>
+                  <dt className="text-gray-500">Span</dt><dd>{analysis?.fullLength.toFixed(2) ?? '0.00'} ft</dd>
+                </dl>
+              </div>
+              <div className="rounded border border-gray-200 bg-gray-50 p-3 text-xs">
+                <div className="font-semibold text-gray-800">Material / shape</div>
+                <dl className="mt-2 grid grid-cols-2 gap-1">
+                  <dt className="text-gray-500">Fy</dt><dd>{fy.toFixed(0)} ksi</dd>
+                  <dt className="text-gray-500">Fu</dt><dd>{estimatedFu.toFixed(0)} ksi est.</dd>
+                  <dt className="text-gray-500">E</dt><dd>{elasticModulus.toLocaleString()} ksi</dd>
+                  <dt className="text-gray-500">A</dt><dd>{selectedShape.A.toFixed(2)} in²</dd>
+                  <dt className="text-gray-500">Zx</dt><dd>{selectedShape.Zx.toFixed(2)} in³</dd>
+                  <dt className="text-gray-500">λf est.</dt><dd>{flangeSlenderness.toFixed(2)}</dd>
+                  <dt className="text-gray-500">λw est.</dt><dd>{webSlenderness.toFixed(2)}</dd>
+                </dl>
+              </div>
+              <div className="rounded border border-gray-200 bg-gray-50 p-3 text-xs sm:col-span-2">
+                <div className="font-semibold text-gray-800">Stability / deflection settings</div>
+                <dl className="mt-2 grid grid-cols-2 gap-1 sm:grid-cols-4">
+                  <dt className="text-gray-500">Lb y-y</dt><dd>{lbyy.toFixed(2)} ft</dd>
+                  <dt className="text-gray-500">Lb z-z</dt><dd>{lbzz.toFixed(2)} ft</dd>
+                  <dt className="text-gray-500">Ky-y</dt><dd>{ky.toFixed(2)}</dd>
+                  <dt className="text-gray-500">Kz-z</dt><dd>{kz.toFixed(2)}</dd>
+                  <dt className="text-gray-500">L/ live</dt><dd>{deflectionLimit}</dd>
+                  <dt className="text-gray-500">L/ total</dt><dd>{totalDeflectionLimit}</dd>
+                  <dt className="text-gray-500">Seismic DR</dt><dd>{seismicDesignRule}</dd>
+                  <dt className="text-gray-500">Sway</dt><dd>y {ySway}, z {zSway}</dd>
+                  <dt className="text-gray-500">KL/r y est.</dt><dd>{compressionSlendernessY.toFixed(1)}</dd>
+                  <dt className="text-gray-500">KL/r z est.</dt><dd>{compressionSlendernessZ.toFixed(1)}</dd>
+                </dl>
+              </div>
+            </div>
+          </div>
+
+          <div className="xl:col-span-2">
+            <h4 className="mb-2 text-sm font-semibold text-gray-800">Calculation trail</h4>
+            <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
+              <div className="rounded border border-gray-200 p-3 text-xs">
+                <div className="mb-2 font-semibold text-gray-900">Flexure</div>
+                <p>Mr,x = {(analysis?.maxMoment ?? 0).toFixed(2)} kip-ft</p>
+                <p>Mn = Fy × Zx / 12 = {nominalMoment.toFixed(2)} kip-ft</p>
+                <p>Available = {designMoment.toFixed(2)} kip-ft</p>
+                <p>Unity = {formatRatio(momentUtilization)}</p>
+              </div>
+              <div className="rounded border border-gray-200 p-3 text-xs">
+                <div className="mb-2 font-semibold text-gray-900">Shear</div>
+                <p>Vr,x = {(analysis?.maxShear ?? 0).toFixed(2)} k</p>
+                <p>Vn = 0.6 × Fy × A = {nominalShear.toFixed(2)} k</p>
+                <p>Available = {designShear.toFixed(2)} k</p>
+                <p>Unity = {formatRatio(shearUtilization)}</p>
+              </div>
+              <div className="rounded border border-gray-200 p-3 text-xs">
+                <div className="mb-2 font-semibold text-gray-900">Deflection</div>
+                <p>δmax = {maximumDeflection.value.toFixed(3)} in at {maximumDeflection.position.toFixed(2)} ft</p>
+                <p>δallow = L / {totalDeflectionLimit} = {totalServiceDeflectionLimit.toFixed(3)} in</p>
+                <p>Unity = {formatRatio(deflectionUtilization)}</p>
+              </div>
+            </div>
+            <p className="mt-3 text-xs text-gray-500">
+              Some section properties are estimated from the currently available shape data. Final engineering output should be verified against the project specification and full section database.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const renderPanel = () => {
     if (activePanel === 'Design options') {
       return (
@@ -816,32 +1018,100 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
             <div className="mt-1 font-semibold">{activeAiscYear}</div>
             <div className="mt-1 text-xs text-blue-700">Use the steel page selector in the top-right header to change the governing code edition.</div>
           </div>
+
           <label className="flex items-center gap-2 rounded border border-gray-200 bg-white p-3 text-sm font-medium text-gray-700">
             <input type="checkbox" checked={includeSelfWeight} onChange={(event) => setIncludeSelfWeight(event.target.checked)} />
             Include member self weight as a dead load
           </label>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <label className="text-sm font-medium text-gray-700">
-              Method
-              <select value={method} onChange={(event) => setMethod(event.target.value as DesignMethod)} className="mt-1 w-full rounded border border-gray-300 bg-white p-2 text-sm">
-                <option>LRFD</option>
-                <option>ASD</option>
-              </select>
-            </label>
-            <label className="text-sm font-medium text-gray-700 sm:col-span-2">
-              Selected section
-              <select value={section} onChange={(event) => setSection(event.target.value)} className="mt-1 w-full rounded border border-gray-300 bg-white p-2 text-sm">
-                {shapeNames.map((name) => <option key={name}>{name}</option>)}
-              </select>
-            </label>
-            <label className="text-sm font-medium text-gray-700">
-              Fy, ksi
-              <input type="number" value={fy} onChange={(event) => setFy(Number(event.target.value))} className="mt-1 w-full rounded border border-gray-300 p-2 text-sm" />
-            </label>
-            <label className="text-sm font-medium text-gray-700">
-              Unbraced length, ft
-              <input type="number" value={unbracedLength} onChange={(event) => setUnbracedLength(Number(event.target.value))} className="mt-1 w-full rounded border border-gray-300 p-2 text-sm" />
-            </label>
+
+          <div className="rounded-lg border border-gray-200 bg-white p-4">
+            <h3 className="mb-3 text-sm font-semibold text-gray-900">Member setup</h3>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <label className="text-sm font-medium text-gray-700">
+                Method
+                <select value={method} onChange={(event) => setMethod(event.target.value as DesignMethod)} className="mt-1 w-full rounded border border-gray-300 bg-white p-2 text-sm">
+                  <option>LRFD</option>
+                  <option>ASD</option>
+                </select>
+              </label>
+              <label className="text-sm font-medium text-gray-700">
+                Member type
+                <select value={memberType} onChange={(event) => setMemberType(event.target.value as MemberType)} className="mt-1 w-full rounded border border-gray-300 bg-white p-2 text-sm">
+                  <option>Beam</option>
+                  <option>Girder</option>
+                  <option>Joist</option>
+                  <option>Lintel</option>
+                  <option>Other</option>
+                </select>
+              </label>
+              <label className="text-sm font-medium text-gray-700">
+                Material type
+                <select value={materialType} onChange={(event) => setMaterialType(event.target.value as MaterialType)} className="mt-1 w-full rounded border border-gray-300 bg-white p-2 text-sm">
+                  <option>Hot Rolled Steel</option>
+                  <option>Cold Formed Steel</option>
+                  <option>Built-up Steel</option>
+                  <option>Other</option>
+                </select>
+              </label>
+              <label className="text-sm font-medium text-gray-700">
+                Design rule
+                <select value={designRule} onChange={(event) => setDesignRule(event.target.value as DesignRule)} className="mt-1 w-full rounded border border-gray-300 bg-white p-2 text-sm">
+                  <option>Typical</option>
+                  <option>Conservative</option>
+                  <option>Custom</option>
+                </select>
+              </label>
+              <label className="text-sm font-medium text-gray-700 sm:col-span-2">
+                Selected section
+                <select value={section} onChange={(event) => setSection(event.target.value)} className="mt-1 w-full rounded border border-gray-300 bg-white p-2 text-sm">
+                  {shapeNames.map((name) => <option key={name}>{name}</option>)}
+                </select>
+              </label>
+              <label className="text-sm font-medium text-gray-700">Internal sections<input type="number" min={3} value={internalSections} onChange={(event) => setInternalSections(Number(event.target.value))} className="mt-1 w-full rounded border border-gray-300 p-2 text-sm" /></label>
+              <label className="text-sm font-medium text-gray-700">Fy (ksi)<input type="number" value={fy} onChange={(event) => setFy(Number(event.target.value))} className="mt-1 w-full rounded border border-gray-300 p-2 text-sm" /></label>
+              <label className="text-sm font-medium text-gray-700">Unbraced Lb (ft)<input type="number" value={unbracedLength} onChange={(event) => setUnbracedLength(Number(event.target.value))} className="mt-1 w-full rounded border border-gray-300 p-2 text-sm" /></label>
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-gray-200 bg-white p-4">
+            <h3 className="mb-3 text-sm font-semibold text-gray-900">Stability lengths and factors</h3>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
+              <label className="text-sm font-medium text-gray-700">Lb y-y (ft)<input type="number" value={lbyy} onChange={(event) => setLbyy(Number(event.target.value))} className="mt-1 w-full rounded border border-gray-300 p-2 text-sm" /></label>
+              <label className="text-sm font-medium text-gray-700">Lb z-z (ft)<input type="number" value={lbzz} onChange={(event) => setLbzz(Number(event.target.value))} className="mt-1 w-full rounded border border-gray-300 p-2 text-sm" /></label>
+              <label className="text-sm font-medium text-gray-700">Ky-y<input type="number" step="0.05" value={ky} onChange={(event) => setKy(Number(event.target.value))} className="mt-1 w-full rounded border border-gray-300 p-2 text-sm" /></label>
+              <label className="text-sm font-medium text-gray-700">Kz-z<input type="number" step="0.05" value={kz} onChange={(event) => setKz(Number(event.target.value))} className="mt-1 w-full rounded border border-gray-300 p-2 text-sm" /></label>
+              <label className="text-sm font-medium text-gray-700">Lcomp top (ft)<input type="number" value={lCompTop} onChange={(event) => setLCompTop(Number(event.target.value))} className="mt-1 w-full rounded border border-gray-300 p-2 text-sm" /></label>
+              <label className="text-sm font-medium text-gray-700">Lcomp bottom (ft)<input type="number" value={lCompBottom} onChange={(event) => setLCompBottom(Number(event.target.value))} className="mt-1 w-full rounded border border-gray-300 p-2 text-sm" /></label>
+              <label className="text-sm font-medium text-gray-700">Ltorque (ft)<input type="number" value={lTorque} onChange={(event) => setLTorque(Number(event.target.value))} className="mt-1 w-full rounded border border-gray-300 p-2 text-sm" /></label>
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-gray-200 bg-white p-4">
+            <h3 className="mb-3 text-sm font-semibold text-gray-900">Sway and seismic options</h3>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <label className="text-sm font-medium text-gray-700">
+                y sway
+                <select value={ySway} onChange={(event) => setYSway(event.target.value as SwayOption)} className="mt-1 w-full rounded border border-gray-300 bg-white p-2 text-sm">
+                  <option>No</option>
+                  <option>Yes</option>
+                </select>
+              </label>
+              <label className="text-sm font-medium text-gray-700">
+                z sway
+                <select value={zSway} onChange={(event) => setZSway(event.target.value as SwayOption)} className="mt-1 w-full rounded border border-gray-300 bg-white p-2 text-sm">
+                  <option>No</option>
+                  <option>Yes</option>
+                </select>
+              </label>
+              <label className="text-sm font-medium text-gray-700">
+                Seismic design rule
+                <select value={seismicDesignRule} onChange={(event) => setSeismicDesignRule(event.target.value as SeismicDesignRule)} className="mt-1 w-full rounded border border-gray-300 bg-white p-2 text-sm">
+                  <option>None</option>
+                  <option>AISC Seismic</option>
+                  <option>Project Specific</option>
+                </select>
+              </label>
+            </div>
           </div>
         </div>
       );
@@ -1221,9 +1491,6 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
     const shearAvailableLabel = method === 'LRFD' ? 'φVn' : 'Vn / Ωv';
     const momentAvailableLabel = method === 'LRFD' ? 'φMn' : 'Mn / Ωb';
     const deflectionAllowable = totalServiceDeflectionLimit;
-    const assumedNu = 0.3;
-    const estimatedG = elasticModulus / (2 * (1 + assumedNu));
-    const estimatedFu = Math.max(fy + 8, fy * 1.2);
     const loadCaseNames: Record<LoadCase, string> = { D: 'Dead', L: 'Live', S: 'Snow', W: 'Wind' };
 
     const limitStateRows = [
@@ -1323,10 +1590,10 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
               <table className="report-table report-property-table">
                 <tbody>
                   <tr><td>Shape</td><td>{section}</td><td>I Node</td><td>{analysis?.leftSupport.label || 'N1'}</td></tr>
-                  <tr><td>Member Type</td><td>Beam</td><td>J Node</td><td>{analysis?.rightSupport.label || 'N2'}</td></tr>
+                  <tr><td>Member Type</td><td>{memberType}</td><td>J Node</td><td>{analysis?.rightSupport.label || 'N2'}</td></tr>
                   <tr><td>Length</td><td>{spanLength.toFixed(3)} ft</td><td>I Support</td><td>{analysis ? supportLabel(analysis.leftSupport.support) : '-'}</td></tr>
-                  <tr><td>Material Type</td><td>Hot Rolled Steel</td><td>J Support</td><td>{analysis ? supportLabel(analysis.rightSupport.support) : '-'}</td></tr>
-                  <tr><td>Design Rule</td><td>{method}</td><td>Internal Sections</td><td>{internalSections}</td></tr>
+                  <tr><td>Material Type</td><td>{materialType}</td><td>J Support</td><td>{analysis ? supportLabel(analysis.rightSupport.support) : '-'}</td></tr>
+                  <tr><td>Design Rule</td><td>{designRule}</td><td>Internal Sections</td><td>{internalSections}</td></tr>
                 </tbody>
               </table>
             </div>
@@ -1359,6 +1626,7 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
             <tbody>
               <tr><td>d</td><td>{sectionDepth.toFixed(3)} in estimated</td><td>Ix</td><td>{estimatedIx.toFixed(2)} in⁴ estimated</td><td>A</td><td>{selectedShape.A.toFixed(3)} in²</td></tr>
               <tr><td>Sx</td><td>{estimatedSx.toFixed(3)} in³ estimated</td><td>Zx</td><td>{selectedShape.Zx.toFixed(3)} in³</td><td>Self weight</td><td>{selfWeightKipPerFt.toFixed(3)} k/ft</td></tr>
+              <tr><td>λf</td><td>{flangeSlenderness.toFixed(2)} estimated</td><td>λw</td><td>{webSlenderness.toFixed(2)} estimated</td><td>KL/r y,z</td><td>{compressionSlendernessY.toFixed(1)} / {compressionSlendernessZ.toFixed(1)} est.</td></tr>
               <tr><td>bf, tf, tw, Iy</td><td colSpan={5}>Not available in the current section database. Reported design checks use available A and Zx values with estimated Ix/Sx for preliminary output.</td></tr>
             </tbody>
           </table>
@@ -1366,9 +1634,11 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
           <h2>Design Properties</h2>
           <table className="report-table report-property-table">
             <tbody>
-              <tr><td>Lb x-x</td><td>{unbracedLength.toFixed(2)} ft</td><td>K</td><td>1.0 assumed</td><td>Max Defl Ratio</td><td>L/{totalDeflectionLimit}</td></tr>
-              <tr><td>Live Defl Ratio</td><td>L/{deflectionLimit}</td><td>Sway</td><td>No</td><td>Max Defl Location</td><td>{maximumDeflection.position.toFixed(2)} ft</td></tr>
-              <tr><td>Function</td><td>Beam</td><td>Seismic DR</td><td>N/A</td><td>Span</td><td>{spanLength.toFixed(2)} ft</td></tr>
+              <tr><td>Lb y-y</td><td>{lbyy.toFixed(2)} ft</td><td>Ky-y</td><td>{ky.toFixed(2)}</td><td>Max Defl Ratio</td><td>L/{totalDeflectionLimit}</td></tr>
+              <tr><td>Lb z-z</td><td>{lbzz.toFixed(2)} ft</td><td>Kz-z</td><td>{kz.toFixed(2)}</td><td>Lcomp top</td><td>{lCompTop.toFixed(2)} ft</td></tr>
+              <tr><td>Lcomp bot</td><td>{lCompBottom.toFixed(2)} ft</td><td>Ltorque</td><td>{lTorque.toFixed(2)} ft</td><td>Function</td><td>{memberType}</td></tr>
+              <tr><td>Live Defl Ratio</td><td>L/{deflectionLimit}</td><td>y sway</td><td>{ySway}</td><td>Max Defl Location</td><td>{maximumDeflection.position.toFixed(2)} ft</td></tr>
+              <tr><td>z sway</td><td>{zSway}</td><td>Seismic DR</td><td>{seismicDesignRule}</td><td>Span</td><td>{spanLength.toFixed(2)} ft</td></tr>
             </tbody>
           </table>
 
@@ -1530,6 +1800,20 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
       sourcePath: '/steel',
       inputs: {
         method,
+        memberType,
+        materialType,
+        designRule,
+        internalSections,
+        ky,
+        kz,
+        lbyy,
+        lbzz,
+        lCompTop,
+        lCompBottom,
+        lTorque,
+        ySway,
+        zSway,
+        seismicDesignRule,
         section,
         fy,
         unbracedLength,
@@ -1787,6 +2071,8 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
         </div>
       </div>
 
+
+      {renderBrowserDesignChecks()}
 
       {showSaveOutputModal && (
         <div className="fixed inset-0 z-[120] flex items-center justify-center bg-gray-900/50 p-4">
