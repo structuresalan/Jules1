@@ -1,13 +1,13 @@
-# Remove Yellow Steel Loading Flash
+# Remove Steel Page Layout Shift
 
 Replace this file:
 - src/components/BeamModeler2D.tsx
 
 Commit message:
-Remove yellow steel loading overlay flash
+Remove steel page layout shift on load
 
 What changed:
-- Removes the yellow "Results and diagrams are paused..." box from the beam figure area.
-- The beam diagram area now shows a neutral loading placeholder if results are not ready.
-- Delays the top required-fields validation banner longer so it does not flash during navigation.
-- Required-field validation still exists, but it should no longer flash as a yellow overlay over the beam figure when opening Steel Design.
+- The main beam diagram area now renders immediately instead of swapping from a placeholder into the beam figure.
+- Removes the top required-fields banner that could insert itself into the page after a delay.
+- Required-field validation still exists through disabled Save/Preview/Print buttons and detailed validation logic.
+- This should stop the quick page adjustment/flash when opening Steel Design from the dashboard.

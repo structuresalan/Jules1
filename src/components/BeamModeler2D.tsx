@@ -344,7 +344,6 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
     svgX: number;
     svgY: number;
   } | null>(null);
-  const [hasInitializedValidation, setHasInitializedValidation] = useState(false);
 
   const [activePanel, setActivePanel] = useState<BeamPanel>('Design options');
   const [displayOptions, setDisplayOptions] = useState<Record<DisplayKey, boolean>>({
@@ -680,7 +679,6 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
   }, [deflectionLimit, fy, internalSections, ky, kz, lbyy, lbzz, loadFactors, method, section, shapeDatabase, sortedNodes, totalDeflectionLimit, unbracedLength]);
 
   const canRunDesign = requiredFieldIssues.length === 0;
-  const shouldShowValidationBanner = hasInitializedValidation && !canRunDesign;
 
   const analysis = useMemo(() => {
     if (!canRunDesign) return null;
@@ -2340,13 +2338,7 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
 
         <div className="grid grid-cols-1 gap-0 xl:grid-cols-[minmax(0,1fr)_220px]">
           <div className="space-y-4 p-4">
-            {canRunDesign ? (
-              <div className="overflow-x-auto">{renderDiagram()}</div>
-            ) : (
-              <div className="rounded-lg border border-gray-200 bg-white p-8 text-center text-sm text-gray-500">
-                Loading steel beam workspace...
-              </div>
-            )}
+            <div className="overflow-x-auto">{renderDiagram()}</div>
             {canRunDesign && (displayOptions.moment || displayOptions.shear || displayOptions.deflection) && (
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 {displayOptions.moment && renderResultDiagram('moment')}
