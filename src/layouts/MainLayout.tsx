@@ -13,7 +13,9 @@ export const MainLayout: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(true);
 
   const isProjectHome = location.pathname === '/';
-  const isQuickMode = location.pathname.startsWith('/quick') || sessionMode === 'quick';
+  const isQuickPath = location.pathname.startsWith('/quick');
+  const isWorkspacePath = location.pathname.startsWith('/workspace');
+  const isQuickMode = isQuickPath || (!isWorkspacePath && sessionMode === 'quick');
   const basePath = isQuickMode ? '/quick' : '/workspace';
 
   const handleLogout = async () => {
@@ -28,6 +30,10 @@ export const MainLayout: React.FC = () => {
     }
   };
 
+  if (isProjectHome) {
+    return <Outlet />;
+  }
+
   const navItems = [
     { to: '/', icon: <FolderOpen size={18} />, label: 'Projects', end: true },
     { to: basePath, icon: <Home size={18} />, label: 'Dashboard', end: true },
@@ -38,15 +44,10 @@ export const MainLayout: React.FC = () => {
     { to: `${basePath}/settings`, icon: <Settings size={18} />, label: 'Settings' },
   ];
 
-  if (isProjectHome) {
-    return <Outlet />;
-  }
-
   return (
     <div className="flex h-screen bg-white text-gray-800 font-sans relative">
       <DisclaimerModal />
 
-      {/* Mobile Sidebar Toggle */}
       <button
         className="md:hidden fixed top-4 left-4 z-50 p-2 bg-white rounded-md shadow-sm border"
         onClick={() => setIsSidebarOpen(!isSidebarOpen)}
@@ -54,7 +55,6 @@ export const MainLayout: React.FC = () => {
         <Menu size={20} />
       </button>
 
-      {/* Sidebar */}
       <div
         className={`fixed md:static inset-y-0 left-0 transform ${
           isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
@@ -120,7 +120,6 @@ export const MainLayout: React.FC = () => {
         </div>
       </div>
 
-      {/* Main Content */}
       <div className="flex-1 overflow-auto">
         <main className="p-8 max-w-6xl mx-auto mt-10 md:mt-0">
           <Outlet />
