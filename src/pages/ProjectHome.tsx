@@ -143,24 +143,64 @@ export const ProjectHome: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-50 px-6 py-8 text-gray-900">
       <div className="mx-auto max-w-7xl">
-        <header className="mb-8 flex flex-col gap-4 border-b border-gray-200 pb-6 md:flex-row md:items-end md:justify-between">
-          <div>
-            <div className="mb-3 flex items-center gap-4">
-              <img src={simplifyStructLogo} alt="SimplifyStruct logo" className="h-12 w-auto rounded-md bg-white object-contain" />
-              <div>
-                <h1 className="text-3xl font-bold tracking-tight">SimplifyStruct Projects</h1>
-                <p className="text-sm text-gray-500">Create a project, open saved work, or run a quick calculation.</p>
+        <header className="mb-8 overflow-hidden rounded-2xl border border-blue-100 bg-white shadow-sm">
+          <div className="grid grid-cols-1 gap-6 p-6 md:grid-cols-[minmax(0,1fr)_280px] md:p-8">
+            <div>
+              <div className="mb-5 flex items-center gap-4">
+                <img src={simplifyStructLogo} alt="SimplifyStruct logo" className="h-14 w-auto rounded-md bg-white object-contain" />
+                <div>
+                  <div className="text-xs font-bold uppercase tracking-[0.22em] text-blue-600">SimplifyStruct</div>
+                  <h1 className="text-4xl font-bold tracking-tight text-gray-950">A better way to do structural calculations.</h1>
+                </div>
+              </div>
+
+              <p className="max-w-3xl text-base leading-7 text-gray-600">
+                Fast, modern structural design tools with cleaner outputs and less clutter. Start a saved project for organized calculations, or jump straight into quick calculations when you just need an answer.
+              </p>
+
+              <div className="mt-6 flex flex-wrap gap-3">
+                <button
+                  onClick={() => setSelectedMode('new')}
+                  className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+                >
+                  <Plus size={18} />
+                  New Project
+                </button>
+                <button
+                  onClick={() => setSelectedMode('existing')}
+                  className="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+                >
+                  <FolderOpen size={18} />
+                  Existing Project
+                </button>
+                <button
+                  onClick={startQuickCalculations}
+                  className="inline-flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-700 hover:bg-amber-100"
+                >
+                  <Calculator size={18} />
+                  Quick Calculations
+                </button>
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+              <div className="text-xs font-bold uppercase tracking-wide text-gray-500">Why it exists</div>
+              <div className="mt-3 space-y-3 text-sm text-gray-600">
+                <div className="rounded-lg bg-white p-3 shadow-sm">
+                  <div className="font-semibold text-gray-900">Less clutter</div>
+                  <div className="mt-1">Cleaner workflows for everyday structural checks.</div>
+                </div>
+                <div className="rounded-lg bg-white p-3 shadow-sm">
+                  <div className="font-semibold text-gray-900">Better output</div>
+                  <div className="mt-1">Project documents and print-ready calculation reports.</div>
+                </div>
+                <div className="rounded-lg bg-white p-3 shadow-sm">
+                  <div className="font-semibold text-gray-900">Faster starts</div>
+                  <div className="mt-1">Saved projects or quick calculations when you need speed.</div>
+                </div>
               </div>
             </div>
           </div>
-
-          <button
-            onClick={startQuickCalculations}
-            className="inline-flex w-fit items-center gap-2 rounded-md bg-amber-500 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-600"
-          >
-            <Calculator size={18} />
-            Quick Calculations
-          </button>
         </header>
 
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -172,7 +212,7 @@ export const ProjectHome: React.FC = () => {
               <Plus size={22} />
             </div>
             <h2 className="text-lg font-semibold">New Project</h2>
-            <p className="mt-2 text-sm text-gray-500">Create a saved project that will appear in Existing Projects next time you open the site.</p>
+            <p className="mt-2 text-sm text-gray-500">Create a saved project with organized calculations and project documents.</p>
           </button>
 
           <button
@@ -183,7 +223,7 @@ export const ProjectHome: React.FC = () => {
               <FolderOpen size={22} />
             </div>
             <h2 className="text-lg font-semibold">Existing Project</h2>
-            <p className="mt-2 text-sm text-gray-500">Open a saved project from a details-style project list.</p>
+            <p className="mt-2 text-sm text-gray-500">Open saved work from a details-style project list.</p>
           </button>
         </div>
 
