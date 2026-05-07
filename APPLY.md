@@ -1,13 +1,13 @@
-# Fix Steel Required Fields Banner Flash
+# Remove Yellow Steel Loading Flash
 
 Replace this file:
 - src/components/BeamModeler2D.tsx
 
 Commit message:
-Delay steel validation banner on page load
+Remove yellow steel loading overlay flash
 
 What changed:
-- The required-fields warning no longer appears during the first split second of opening Steel Design.
-- The validation banner now waits briefly until the Steel Beam workspace has initialized.
-- If fields are truly missing/invalid after initialization, the warning still appears.
-- Replaces the initial invalid placeholder with a professional "Loading steel beam workspace..." message during startup.
+- Removes the yellow "Results and diagrams are paused..." box from the beam figure area.
+- The beam diagram area now shows a neutral loading placeholder if results are not ready.
+- Delays the top required-fields validation banner longer so it does not flash during navigation.
+- Required-field validation still exists, but it should no longer flash as a yellow overlay over the beam figure when opening Steel Design.

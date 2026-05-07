@@ -454,7 +454,7 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
   useEffect(() => {
     const timeout = window.setTimeout(() => {
       setHasInitializedValidation(true);
-    }, 250);
+    }, 1200);
 
     return () => window.clearTimeout(timeout);
   }, []);
@@ -2342,10 +2342,6 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
           <div className="space-y-4 p-4">
             {canRunDesign ? (
               <div className="overflow-x-auto">{renderDiagram()}</div>
-            ) : hasInitializedValidation ? (
-              <div className="rounded-lg border border-dashed border-amber-300 bg-white p-8 text-center text-sm text-amber-800">
-                Results and diagrams are paused until required fields are complete.
-              </div>
             ) : (
               <div className="rounded-lg border border-gray-200 bg-white p-8 text-center text-sm text-gray-500">
                 Loading steel beam workspace...
