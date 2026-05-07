@@ -1205,140 +1205,288 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
     );
   };
 
-  const renderPrintableReport = () => (
-    <div className="print-sheet">
-      <div className="report-header-grid">
-        <div className="report-brand">
-          <img src={simplifyStructLogo} alt="SimplifyStruct logo" className="report-brand-image" />
-          <div>
-            <div className="report-brand-name">SimplifyStruct</div>
-            <div className="report-muted">Steel calculation output</div>
+  const renderPrintableReport = () => {
+    const spanLength = analysis?.fullLength ?? 0;
+    const internalSections = Math.max((analysis?.xs.length ?? 1) - 1, 0);
+    const shearResult = shearUtilization <= 1 ? 'Pass' : 'Fail';
+    const momentResult = momentUtilization <= 1 ? 'Pass' : 'Fail';
+    const deflectionResult = deflectionUtilization <= 1 ? 'Pass' : 'Fail';
+    const governingUnity = Math.max(momentUtilization, shearUtilization, deflectionUtilization);
+    const governingCheck =
+      governingUnity === deflectionUtilization
+        ? 'Deflection'
+        : governingUnity === momentUtilization
+          ? 'Flexure'
+          : 'Shear';
+    const shearAvailableLabel = method === 'LRFD' ? 'φVn' : 'Vn / Ωv';
+    const momentAvailableLabel = method === 'LRFD' ? 'φMn' : 'Mn / Ωb';
+    const deflectionAllowable = totalServiceDeflectionLimit;
+    const assumedNu = 0.3;
+    const estimatedG = elasticModulus / (2 * (1 + assumedNu));
+    const estimatedFu = Math.max(fy + 8, fy * 1.2);
+    const loadCaseNames: Record<LoadCase, string> = { D: 'Dead', L: 'Live', S: 'Snow', W: 'Wind' };
+
+    const limitStateRows = [
+      {
+        label: 'Flexural Analysis (Strong Axis)',
+        required: `${(analysis?.maxMoment ?? 0).toFixed(2)} kip-ft`,
+        available: `${designMoment.toFixed(2)} kip-ft`,
+        unity: formatRatio(momentUtilization),
+        result: momentResult,
+      },
+      {
+        label: 'Shear Analysis',
+        required: `${(analysis?.maxShear ?? 0).toFixed(2)} k`,
+        available: `${designShear.toFixed(2)} k`,
+        unity: formatRatio(shearUtilization),
+        result: shearResult,
+      },
+      {
+        label: 'Deflection Check',
+        required: `${maximumDeflection.value.toFixed(3)} in`,
+        available: `${deflectionAllowable.toFixed(3)} in`,
+        unity: formatRatio(deflectionUtilization),
+        result: deflectionResult,
+      },
+      {
+        label: 'Combined Utilization',
+        required: '-',
+        available: '-',
+        unity: formatRatio(governingUnity),
+        result: governingUnity <= 1 ? 'Pass' : 'Fail',
+      },
+    ];
+
+    const flexureDetailRows = [
+      ['Mr,x', `${(analysis?.maxMoment ?? 0).toFixed(2)} kip-ft`, 'Maximum absolute bending moment from the factored envelope'],
+      ['Fy', `${fy.toFixed(0)} ksi`, 'Specified minimum yield stress'],
+      ['Zx', `${selectedShape.Zx.toFixed(2)} in³`, 'Plastic section modulus about the strong axis'],
+      ['Mn = Fy × Zx / 12', `${nominalMoment.toFixed(2)} kip-ft`, 'Nominal flexural strength'],
+      [momentAvailableLabel, `${designMoment.toFixed(2)} kip-ft`, method === 'LRFD' ? `Design strength using φb = ${aiscFactors.phi_b.toFixed(2)}` : `Allowable strength using Ωb = ${aiscFactors.omega_b.toFixed(2)}`],
+      ['Mr,x / available', formatRatio(momentUtilization), 'Flexural unity check'],
+    ];
+
+    const shearDetailRows = [
+      ['Vr,x', `${(analysis?.maxShear ?? 0).toFixed(2)} k`, 'Maximum absolute shear from the factored envelope'],
+      ['A', `${selectedShape.A.toFixed(2)} in²`, 'Gross area used by the simplified shear check'],
+      ['Vn = 0.6 × Fy × A', `${nominalShear.toFixed(2)} k`, 'Nominal shear strength'],
+      [shearAvailableLabel, `${designShear.toFixed(2)} k`, method === 'LRFD' ? `Design strength using φv = ${aiscFactors.phi_b.toFixed(2)}` : `Allowable strength using Ωv = ${aiscFactors.omega_b.toFixed(2)}`],
+      ['Vr,x / available', formatRatio(shearUtilization), 'Shear unity check'],
+    ];
+
+    const deflectionDetailRows = [
+      ['δmax', `${maximumDeflection.value.toFixed(3)} in`, `Maximum estimated deflection at x = ${maximumDeflection.position.toFixed(2)} ft`],
+      ['L', `${spanLength.toFixed(2)} ft`, 'Member span length used for the selected deflection limit'],
+      [`δallow = L / ${totalDeflectionLimit}`, `${deflectionAllowable.toFixed(3)} in`, 'Selected total-load deflection limit'],
+      ['δmax / δallow', formatRatio(deflectionUtilization), 'Deflection unity check'],
+    ];
+
+    return (
+      <div className="print-sheet">
+        <div className="report-header-grid">
+          <div className="report-brand">
+            <img src={simplifyStructLogo} alt="SimplifyStruct logo" className="report-brand-image" />
+            <div>
+              <div className="report-brand-name">SimplifyStruct</div>
+              <div className="report-muted">Detailed steel calculation output</div>
+            </div>
           </div>
+          <div className="report-cell"><span>Project</span><strong>{reportProject || ' '}</strong></div>
+          <div className="report-cell"><span>Job Ref.</span><strong>{reportJobRef || ' '}</strong></div>
+          <div className="report-cell"><span>Section</span><strong>{reportSectionName || ' '}</strong></div>
+          <div className="report-cell"><span>Sheet no./rev.</span><strong>{reportSheetNumber || ' '}</strong></div>
+          <div className="report-cell"><span>Calc. by</span><strong>{reportCalcBy || ' '}</strong></div>
+          <div className="report-cell"><span>Date</span><strong>{reportDate || ' '}</strong></div>
+          <div className="report-cell"><span>Chk'd by</span><strong>{reportCheckedBy || ' '}</strong></div>
+          <div className="report-cell"><span>App'd by</span><strong>{reportApprovedBy || ' '}</strong></div>
         </div>
-        <div className="report-cell"><span>Project</span><strong>{reportProject || ' '}</strong></div>
-        <div className="report-cell"><span>Job Ref.</span><strong>{reportJobRef || ' '}</strong></div>
-        <div className="report-cell"><span>Section</span><strong>{reportSectionName || ' '}</strong></div>
-        <div className="report-cell"><span>Sheet no./rev.</span><strong>{reportSheetNumber || ' '}</strong></div>
-        <div className="report-cell"><span>Calc. by</span><strong>{reportCalcBy || ' '}</strong></div>
-        <div className="report-cell"><span>Date</span><strong>{reportDate || ' '}</strong></div>
-        <div className="report-cell"><span>Chk'd by</span><strong>{reportCheckedBy || ' '}</strong></div>
-        <div className="report-cell"><span>App'd by</span><strong>{reportApprovedBy || ' '}</strong></div>
-      </div>
 
-      <section className="report-section report-title-section">
-        <h1>STEEL BEAM ANALYSIS &amp; DESIGN (AISC 360)</h1>
-        <p>In accordance with {activeAiscYear} using the {method} method</p>
-      </section>
-
-      <section className="report-section">
-        <h2>ANALYSIS</h2>
-        <h3>Geometry</h3>
-        {includeModel && <div className="report-diagram-wrap">{renderReportBeamDiagram('geometry')}</div>}
-        <table className="report-table">
-          <thead><tr><th>Span</th><th>Length (ft)</th><th>Section</th><th>Start Support</th><th>End Support</th></tr></thead>
-          <tbody>
-            <tr><td>1</td><td>{analysis?.fullLength.toFixed(2) ?? '0.00'}</td><td>{section}</td><td>{analysis ? supportLabel(analysis.leftSupport.support) : '-'}</td><td>{analysis ? supportLabel(analysis.rightSupport.support) : '-'}</td></tr>
-            <tr><td colSpan={5}>{section}: Area {selectedShape.A.toFixed(2)} in², Plastic section modulus Zx {selectedShape.Zx.toFixed(2)} in³, estimated Ix {estimatedIx.toFixed(2)} in⁴</td></tr>
-            <tr><td colSpan={5}>Steel: Density 490 lb/ft³, Young's modulus {elasticModulus.toLocaleString()} ksi, Fy {fy.toFixed(0)} ksi</td></tr>
-          </tbody>
-        </table>
-      </section>
-
-      <section className="report-section">
-        <h3>Loading</h3>
-        <p>{includeSelfWeight ? 'Self weight included' : 'Self weight not included'}</p>
-        {includeModel && <div className="report-diagram-wrap">{renderReportBeamDiagram('loading')}</div>}
-        <h3>Load combination factors</h3>
-        <table className="report-table report-factor-table">
-          <thead><tr><th>Load combination</th><th>Self Weight</th><th>Dead</th><th>Live</th><th>Snow</th><th>Wind</th></tr></thead>
-          <tbody><tr><td>{method} design combination</td><td>{includeSelfWeight ? loadFactors.D.toFixed(2) : '0.00'}</td><td>{loadFactors.D.toFixed(2)}</td><td>{loadFactors.L.toFixed(2)}</td><td>{loadFactors.S.toFixed(2)}</td><td>{loadFactors.W.toFixed(2)}</td></tr></tbody>
-        </table>
-        <h3>Element Loads</h3>
-        <table className="report-table">
-          <thead><tr><th>Element</th><th>Load case</th><th>Load Type</th><th>Orientation</th><th>Description</th></tr></thead>
-          <tbody>
-            {reportElementLoads.length === 0 ? <tr><td colSpan={5}>No element loads entered.</td></tr> : reportElementLoads.map((load) => (
-              <tr key={load.id}><td>{load.element}</td><td>{load.loadCase}</td><td>{load.loadType}</td><td>{load.orientation}</td><td>{load.description}</td></tr>
-            ))}
-          </tbody>
-        </table>
-      </section>
-
-      {includeResults && (
-        <section className="report-section report-page-break">
-          <h2>Results</h2>
-          <h3>Forces</h3>
-          <div className="report-result-grid">
-            <div><strong>{analysis?.maxMoment.toFixed(2) ?? '0.00'}</strong><span>Moment envelope (kip-ft)</span></div>
-            <div><strong>{analysis?.maxShear.toFixed(2) ?? '0.00'}</strong><span>Shear envelope (kips)</span></div>
-            <div><strong>{maximumDeflection.value.toFixed(3)}</strong><span>Estimated deflection envelope (in)</span></div>
+        <section className="report-section report-title-section">
+          <div className="report-detail-title-grid">
+            <div>
+              <h1>DETAIL REPORT: STEEL BEAM ANALYSIS &amp; DESIGN</h1>
+              <p>Member: M1 &nbsp; | &nbsp; Design Standard: {activeAiscYear} &nbsp; | &nbsp; Method: {method}</p>
+            </div>
+            <div className="report-unity-box">
+              <span>Unity Check</span>
+              <strong>{formatRatio(governingUnity)}</strong>
+              <em>{governingCheck}</em>
+            </div>
           </div>
-          <div className="report-diagram-grid">
-            <div className="report-diagram-card"><h4>Moment envelope</h4>{renderReportBeamDiagram('moment')}</div>
-            <div className="report-diagram-card"><h4>Shear envelope</h4>{renderReportBeamDiagram('shear')}</div>
-            <div className="report-diagram-card"><h4>Deflection envelope</h4>{renderReportBeamDiagram('deflection')}</div>
+        </section>
+
+        <section className="report-section">
+          <h2>Input Data</h2>
+          <div className="report-info-grid">
+            <div>
+              <h3>Member Input</h3>
+              <table className="report-table report-property-table">
+                <tbody>
+                  <tr><td>Shape</td><td>{section}</td><td>I Node</td><td>{analysis?.leftSupport.label || 'N1'}</td></tr>
+                  <tr><td>Member Type</td><td>Beam</td><td>J Node</td><td>{analysis?.rightSupport.label || 'N2'}</td></tr>
+                  <tr><td>Length</td><td>{spanLength.toFixed(3)} ft</td><td>I Support</td><td>{analysis ? supportLabel(analysis.leftSupport.support) : '-'}</td></tr>
+                  <tr><td>Material Type</td><td>Hot Rolled Steel</td><td>J Support</td><td>{analysis ? supportLabel(analysis.rightSupport.support) : '-'}</td></tr>
+                  <tr><td>Design Rule</td><td>{method}</td><td>Internal Sections</td><td>{internalSections}</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div>
+              <h3>Analysis Summary</h3>
+              <table className="report-table report-property-table">
+                <tbody>
+                  <tr><td>Load Combination</td><td>{method} design envelope</td></tr>
+                  <tr><td>Total Factored Vertical Load</td><td>{analysis?.totalVerticalLoad.toFixed(2) ?? '0.00'} k</td></tr>
+                  <tr><td>Reaction A</td><td>{analysis?.ra.toFixed(2) ?? '0.00'} k</td></tr>
+                  <tr><td>Reaction B</td><td>{analysis?.rb.toFixed(2) ?? '0.00'} k</td></tr>
+                  <tr><td>Self Weight</td><td>{includeSelfWeight ? `${selfWeightKipPerFt.toFixed(3)} k/ft included` : 'Not included'}</td></tr>
+                </tbody>
+              </table>
+            </div>
           </div>
-          <h3>Member results</h3>
-          <table className="report-table">
-            <thead><tr><th>Member</th><th>Position (ft)</th><th>Local deflection (in)</th><th>Reaction A (k)</th><th>Reaction B (k)</th></tr></thead>
-            <tbody><tr><td>Member 1</td><td>{maximumDeflection.position.toFixed(2)} max</td><td>{maximumDeflection.value.toFixed(3)}</td><td>{analysis?.ra.toFixed(2) ?? '0.00'}</td><td>{analysis?.rb.toFixed(2) ?? '0.00'}</td></tr></tbody>
-          </table>
-          <h3>Safety factors</h3>
-          <table className="report-table report-compact-table">
+
+          <h2>Material Properties</h2>
+          <table className="report-table report-property-table">
             <tbody>
-              <tr><td>Shear</td><td>{method === 'LRFD' ? `φv = ${aiscFactors.phi_b.toFixed(2)}` : `Ωv = ${aiscFactors.omega_b.toFixed(2)}`}</td></tr>
-              <tr><td>Flexure</td><td>{method === 'LRFD' ? `φb = ${aiscFactors.phi_b.toFixed(2)}` : `Ωb = ${aiscFactors.omega_b.toFixed(2)}`}</td></tr>
-              <tr><td>Tensile yielding</td><td>{method === 'LRFD' ? `φt = ${aiscFactors.phi_t.toFixed(2)}` : `Ωt = ${aiscFactors.omega_t.toFixed(2)}`}</td></tr>
+              <tr><td>Material</td><td>Steel</td><td>Thermal Coeff.</td><td>N/A</td><td>Ry</td><td>N/A</td></tr>
+              <tr><td>E</td><td>{elasticModulus.toLocaleString()} ksi</td><td>Density</td><td>0.490 k/ft³</td><td>Fu</td><td>{estimatedFu.toFixed(0)} ksi estimated</td></tr>
+              <tr><td>G</td><td>{estimatedG.toFixed(0)} ksi</td><td>Fy</td><td>{fy.toFixed(0)} ksi</td><td>Rt</td><td>N/A</td></tr>
+              <tr><td>Nu</td><td>{assumedNu.toFixed(2)}</td><td colSpan={4}>Material values should be verified against the project specification.</td></tr>
             </tbody>
           </table>
-        </section>
-      )}
 
-      {includeCalculations && (
+          <h2>Shape Properties</h2>
+          <table className="report-table report-property-table">
+            <tbody>
+              <tr><td>d</td><td>{sectionDepth.toFixed(3)} in estimated</td><td>Ix</td><td>{estimatedIx.toFixed(2)} in⁴ estimated</td><td>A</td><td>{selectedShape.A.toFixed(3)} in²</td></tr>
+              <tr><td>Sx</td><td>{estimatedSx.toFixed(3)} in³ estimated</td><td>Zx</td><td>{selectedShape.Zx.toFixed(3)} in³</td><td>Self weight</td><td>{selfWeightKipPerFt.toFixed(3)} k/ft</td></tr>
+              <tr><td>bf, tf, tw, Iy</td><td colSpan={5}>Not available in the current section database. Reported design checks use available A and Zx values with estimated Ix/Sx for preliminary output.</td></tr>
+            </tbody>
+          </table>
+
+          <h2>Design Properties</h2>
+          <table className="report-table report-property-table">
+            <tbody>
+              <tr><td>Lb x-x</td><td>{unbracedLength.toFixed(2)} ft</td><td>K</td><td>1.0 assumed</td><td>Max Defl Ratio</td><td>L/{totalDeflectionLimit}</td></tr>
+              <tr><td>Live Defl Ratio</td><td>L/{deflectionLimit}</td><td>Sway</td><td>No</td><td>Max Defl Location</td><td>{maximumDeflection.position.toFixed(2)} ft</td></tr>
+              <tr><td>Function</td><td>Beam</td><td>Seismic DR</td><td>N/A</td><td>Span</td><td>{spanLength.toFixed(2)} ft</td></tr>
+            </tbody>
+          </table>
+
+          {includeModel && <div className="report-diagram-wrap">{renderReportBeamDiagram('geometry')}</div>}
+        </section>
+
         <section className="report-section report-page-break">
-          <h2>Member 1 design</h2>
-          <h3>Section details</h3>
-          <div className="report-two-col">
-            <div>
-              <p>Section type; {section}</p>
-              <p>Steel yield stress; Fy = {fy.toFixed(0)} ksi</p>
-              <p>Modulus of elasticity; E = {elasticModulus.toLocaleString()} ksi</p>
-              <p>Estimated section depth, d = {sectionDepth.toFixed(2)} in</p>
-              <p>Area of section, A = {selectedShape.A.toFixed(2)} in²</p>
-              <p>Plastic section modulus about x-axis, Zx = {selectedShape.Zx.toFixed(2)} in³</p>
-              <p>Estimated second moment of area about x-axis, Ix = {estimatedIx.toFixed(2)} in⁴</p>
-            </div>
-            <svg viewBox="0 0 130 110" className="report-section-sketch">
-              <rect x="20" y="12" width="90" height="13" fill="#e5e7eb" stroke="#111827" />
-              <rect x="56" y="25" width="18" height="58" fill="#e5e7eb" stroke="#111827" />
-              <rect x="20" y="83" width="90" height="13" fill="#e5e7eb" stroke="#111827" />
-              <text x="65" y="106" fontSize="8" textAnchor="middle">{section}</text>
-            </svg>
-          </div>
-          <h3>Design of members for shear</h3>
-          <p>Required shear strength; Vr,x = {analysis?.maxShear.toFixed(2) ?? '0.00'} kips</p>
-          <p>Nominal shear strength; Vn,x = 0.6 × Fy × A = {nominalShear.toFixed(2)} kips</p>
-          <p>Design shear strength; Vc,x = {designShear.toFixed(2)} kips</p>
-          <p>Vr,x / Vc,x = {formatRatio(shearUtilization)}</p>
-          <p className={shearUtilization <= 1 ? 'report-pass' : 'report-fail'}>{shearUtilization <= 1 ? 'PASS - Design shear strength exceeds required shear strength' : 'FAIL - Required shear strength exceeds design shear strength'}</p>
-          <h3>Design of members for flexure</h3>
-          <p>Required flexural strength; Mr,x = {analysis?.maxMoment.toFixed(2) ?? '0.00'} kip-ft</p>
-          <p>Nominal flexural strength; Mn,x = Fy × Zx = {nominalMoment.toFixed(2)} kip-ft</p>
-          <p>Unbraced length; Lb = {unbracedLength.toFixed(2)} ft</p>
-          <p>Design flexural strength; Mc,x = {designMoment.toFixed(2)} kip-ft</p>
-          <p>Mr,x / Mc,x = {formatRatio(momentUtilization)}</p>
-          <p className={momentUtilization <= 1 ? 'report-pass' : 'report-fail'}>{momentUtilization <= 1 ? 'PASS - Design flexural strength exceeds required flexural strength' : 'FAIL - Required flexural strength exceeds design flexural strength'}</p>
-          <h3>Design of members for x-x axis deflection</h3>
-          <p>Maximum deflection; δx = {maximumDeflection.value.toFixed(3)} in at {maximumDeflection.position.toFixed(2)} ft</p>
-          <p>Allowable deflection; δx,Allowable = L / {totalDeflectionLimit} = {totalServiceDeflectionLimit.toFixed(3)} in</p>
-          <p>δx / δx,Allowable = {formatRatio(deflectionUtilization)}</p>
-          <p className={deflectionUtilization <= 1 ? 'report-pass' : 'report-fail'}>{deflectionUtilization <= 1 ? 'PASS - Design deflection is within the selected limit' : 'FAIL - Design deflection exceeds the selected limit'}</p>
-          <p className="report-muted">Deflection and section-property values are preliminary estimates based on available section data and should be verified before construction use.</p>
-        </section>
-      )}
-    </div>
-  );
+          <h2>Loads and Analysis Diagrams</h2>
+          <h3>Load Combination Factors</h3>
+          <table className="report-table report-factor-table">
+            <thead><tr><th>Load case</th><th>Case name</th><th>Factor</th></tr></thead>
+            <tbody>
+              {(Object.keys(loadFactors) as LoadCase[]).map((loadCase) => (
+                <tr key={loadCase}><td>{loadCase}</td><td>{loadCaseNames[loadCase]}</td><td>{loadFactors[loadCase].toFixed(2)}</td></tr>
+              ))}
+            </tbody>
+          </table>
 
+          <h3>Element Loads</h3>
+          <table className="report-table">
+            <thead><tr><th>Element</th><th>Load case</th><th>Load Type</th><th>Orientation</th><th>Description</th></tr></thead>
+            <tbody>
+              {reportElementLoads.length === 0 ? <tr><td colSpan={5}>No element loads entered.</td></tr> : reportElementLoads.map((load) => (
+                <tr key={load.id}><td>{load.element}</td><td>{load.loadCase}</td><td>{load.loadType}</td><td>{load.orientation}</td><td>{load.description}</td></tr>
+              ))}
+            </tbody>
+          </table>
+
+          {includeModel && <div className="report-diagram-wrap">{renderReportBeamDiagram('loading')}</div>}
+
+          <h3>Diagrams</h3>
+          <div className="report-diagram-grid report-diagram-grid-3">
+            <div className="report-diagram-card"><h4>Deflection (in)</h4>{renderReportBeamDiagram('deflection')}</div>
+            <div className="report-diagram-card"><h4>Shear Force (k)</h4>{renderReportBeamDiagram('shear')}</div>
+            <div className="report-diagram-card"><h4>Moment (kip-ft)</h4>{renderReportBeamDiagram('moment')}</div>
+          </div>
+
+          {includeResults && (
+            <>
+              <h3>Envelope Results</h3>
+              <div className="report-result-grid">
+                <div><strong>{(analysis?.maxMoment ?? 0).toFixed(2)}</strong><span>Moment envelope (kip-ft)</span></div>
+                <div><strong>{(analysis?.maxShear ?? 0).toFixed(2)}</strong><span>Shear envelope (k)</span></div>
+                <div><strong>{maximumDeflection.value.toFixed(3)}</strong><span>Deflection envelope (in)</span></div>
+              </div>
+              <table className="report-table">
+                <thead><tr><th>Member</th><th>Maximum Deflection Location</th><th>Local Deflection</th><th>Reaction A</th><th>Reaction B</th><th>Total Vertical Load</th></tr></thead>
+                <tbody><tr><td>M1</td><td>{maximumDeflection.position.toFixed(2)} ft</td><td>{maximumDeflection.value.toFixed(3)} in</td><td>{analysis?.ra.toFixed(2) ?? '0.00'} k</td><td>{analysis?.rb.toFixed(2) ?? '0.00'} k</td><td>{analysis?.totalVerticalLoad.toFixed(2) ?? '0.00'} k</td></tr></tbody>
+              </table>
+            </>
+          )}
+        </section>
+
+        {includeCalculations && (
+          <section className="report-section report-page-break">
+            <h2>{activeAiscYear}: {method} Code Check</h2>
+            <table className="report-table report-check-table">
+              <thead><tr><th>Limit State</th><th>Required</th><th>Available</th><th>Unity Check</th><th>Result</th></tr></thead>
+              <tbody>
+                {limitStateRows.map((row) => (
+                  <tr key={row.label}>
+                    <td>{row.label}</td>
+                    <td>{row.required}</td>
+                    <td>{row.available}</td>
+                    <td>{row.unity}</td>
+                    <td className={row.result === 'Pass' ? 'report-pass' : 'report-fail'}>{row.result}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            <h3>Flexural Analysis: Strong Axis</h3>
+            <table className="report-table report-formula-table">
+              <tbody>
+                {flexureDetailRows.map(([symbol, value, description]) => (
+                  <tr key={symbol}><td className="report-formula-symbol">{symbol}</td><td>{value}</td><td>{description}</td></tr>
+                ))}
+                <tr><td colSpan={3} className={momentUtilization <= 1 ? 'report-pass' : 'report-fail'}>{momentUtilization <= 1 ? 'PASS - Design flexural strength exceeds required flexural strength.' : 'FAIL - Required flexural strength exceeds design flexural strength.'}</td></tr>
+              </tbody>
+            </table>
+
+            <h3>Shear Analysis</h3>
+            <table className="report-table report-formula-table">
+              <tbody>
+                {shearDetailRows.map(([symbol, value, description]) => (
+                  <tr key={symbol}><td className="report-formula-symbol">{symbol}</td><td>{value}</td><td>{description}</td></tr>
+                ))}
+                <tr><td colSpan={3} className={shearUtilization <= 1 ? 'report-pass' : 'report-fail'}>{shearUtilization <= 1 ? 'PASS - Design shear strength exceeds required shear strength.' : 'FAIL - Required shear strength exceeds design shear strength.'}</td></tr>
+              </tbody>
+            </table>
+
+            <h3>Deflection Check</h3>
+            <table className="report-table report-formula-table">
+              <tbody>
+                {deflectionDetailRows.map(([symbol, value, description]) => (
+                  <tr key={symbol}><td className="report-formula-symbol">{symbol}</td><td>{value}</td><td>{description}</td></tr>
+                ))}
+                <tr><td colSpan={3} className={deflectionUtilization <= 1 ? 'report-pass' : 'report-fail'}>{deflectionUtilization <= 1 ? 'PASS - Design deflection is within the selected limit.' : 'FAIL - Design deflection exceeds the selected limit.'}</td></tr>
+              </tbody>
+            </table>
+
+            <h3>Safety Factors</h3>
+            <table className="report-table report-compact-table">
+              <tbody>
+                <tr><td>Flexure</td><td>{method === 'LRFD' ? `φb = ${aiscFactors.phi_b.toFixed(2)}` : `Ωb = ${aiscFactors.omega_b.toFixed(2)}`}</td></tr>
+                <tr><td>Shear</td><td>{method === 'LRFD' ? `φv = ${aiscFactors.phi_b.toFixed(2)}` : `Ωv = ${aiscFactors.omega_b.toFixed(2)}`}</td></tr>
+                <tr><td>Tension</td><td>{method === 'LRFD' ? `φt = ${aiscFactors.phi_t.toFixed(2)}` : `Ωt = ${aiscFactors.omega_t.toFixed(2)}`}</td></tr>
+              </tbody>
+            </table>
+
+            <p className="report-muted">
+              This detailed output is intended to make the calculation trail easier to review. Values based on missing geometric properties are identified as estimated and should be verified before construction use.
+            </p>
+          </section>
+        )}
+      </div>
+    );
+  };
 
   const refreshProjectDocuments = () => {
     const activeProject = getActiveProject();
@@ -1470,13 +1618,24 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
       .report-section h1 { margin: 0 0 8px; font-size: 15px; text-decoration: underline; }
       .report-section h2 { margin: 0 0 14px; font-size: 14px; text-decoration: underline; }
       .report-section h3 { margin: 14px 0 8px; font-size: 12px; }
+      .report-detail-title-grid { display: grid; grid-template-columns: 1fr 130px; gap: 16px; align-items: center; }
+      .report-unity-box { border: 1px solid #111827; padding: 8px; text-align: center; background: #f9fafb; }
+      .report-unity-box span { display: block; font-size: 9px; color: #4b5563; text-transform: uppercase; }
+      .report-unity-box strong { display: block; font-size: 22px; line-height: 1.1; }
+      .report-unity-box em { display: block; font-size: 10px; color: #374151; font-style: normal; }
+      .report-info-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
       .report-table { width: 100%; border-collapse: collapse; margin: 8px 0 10px; }
       .report-table th, .report-table td { border: 1px solid #111827; padding: 3px 5px; vertical-align: top; }
       .report-table th { font-weight: 700; background: #f3f4f6; }
+      .report-property-table td:nth-child(odd) { width: 16%; font-weight: 700; color: #374151; background: #f9fafb; }
+      .report-check-table td:nth-child(4), .report-check-table th:nth-child(4), .report-check-table td:nth-child(5), .report-check-table th:nth-child(5) { text-align: center; }
+      .report-formula-table td { border-left: 0; border-right: 0; }
+      .report-formula-symbol { width: 30%; font-family: Georgia, 'Times New Roman', serif; font-size: 12px; background: #f9fafb; }
       .report-factor-table { max-width: 560px; }
       .report-compact-table { max-width: 360px; }
       .report-diagram-wrap { margin: 8px 0 14px; text-align: center; }
       .report-diagram-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 8px 0 14px; }
+      .report-diagram-grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
       .report-diagram-card { border: 1px solid #111827; padding: 8px; }
       .report-diagram-card h4 { margin: 0 0 6px; font-size: 11px; }
       .report-diagram { width: 100%; max-height: 170px; border: 0; }
