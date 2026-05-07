@@ -1308,9 +1308,10 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
       setSelectedDocumentId(savedDocument.id);
       setEditingDocumentId(savedDocument.id);
       setLoadedDocumentName(savedDocument.name);
+      setDocumentName(savedDocument.name);
       setSaveMode('overwrite');
       setSaveSucceeded(true);
-      setSaveMessage('Saved as a new editable project document.');
+      setSaveMessage(`Saved as a new editable project document${savedDocument.name !== payload.name ? ` named "${savedDocument.name}"` : ''}.`);
     }
 
     refreshProjectDocuments();

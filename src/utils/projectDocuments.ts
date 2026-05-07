@@ -91,12 +91,42 @@ export const getDocumentById = (documentId: string) => {
   return getAllProjectDocuments().find((document) => document.id === documentId) ?? null;
 };
 
+const normalizeDocumentName = (name: string) => name.trim().replace(/\s+/g, ' ') || 'Untitled Document';
+
+const stripTrailingCopyNumber = (name: string) => name.replace(/\s+\(\d+\)$/u, '').trim();
+
+export const getUniqueProjectDocumentName = (
+  projectId: string,
+  requestedName: string,
+  excludeDocumentId = '',
+) => {
+  const baseName = stripTrailingCopyNumber(normalizeDocumentName(requestedName));
+  const documents = getAllProjectDocuments().filter(
+    (document) => document.projectId === projectId && document.id !== excludeDocumentId,
+  );
+  const usedNames = new Set(documents.map((document) => document.name.trim().toLowerCase()));
+
+  if (!usedNames.has(baseName.toLowerCase())) return baseName;
+
+  let index = 1;
+  let candidate = `${baseName} (${index})`;
+
+  while (usedNames.has(candidate.toLowerCase())) {
+    index += 1;
+    candidate = `${baseName} (${index})`;
+  }
+
+  return candidate;
+};
+
 export const saveNewProjectDocument = (
   document: Omit<ProjectDocument, 'id' | 'createdAt' | 'updatedAt'>,
 ) => {
   const now = new Date().toISOString();
+  const uniqueName = getUniqueProjectDocumentName(document.projectId, document.name);
   const newDocument: ProjectDocument = {
     ...document,
+    name: uniqueName,
     id: makeDocumentId(),
     createdAt: now,
     updatedAt: now,
@@ -118,6 +148,7 @@ export const overwriteProjectDocument = (
   const updatedDocument: ProjectDocument = {
     ...existingDocument,
     ...patch,
+    name: getUniqueProjectDocumentName(existingDocument.projectId, patch.name, documentId),
     updatedAt: new Date().toISOString(),
   };
 
@@ -127,9 +158,14 @@ export const overwriteProjectDocument = (
 
 export const renameProjectDocument = (documentId: string, name: string) => {
   const documents = getAllProjectDocuments();
+  const existingDocument = documents.find((document) => document.id === documentId);
+  if (!existingDocument) return;
+
+  const uniqueName = getUniqueProjectDocumentName(existingDocument.projectId, name, documentId);
+
   writeAllProjectDocuments(
     documents.map((document) =>
-      document.id === documentId ? { ...document, name, updatedAt: new Date().toISOString() } : document,
+      document.id === documentId ? { ...document, name: uniqueName, updatedAt: new Date().toISOString() } : document,
     ),
   );
 };
