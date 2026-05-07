@@ -1,5 +1,18 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { Copy, Download, FileText, Pencil, Search, Trash2 } from 'lucide-react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  ArrowLeft,
+  Copy,
+  Download,
+  FileText,
+  Image as ImageIcon,
+  LayoutList,
+  Map,
+  Maximize2,
+  Pencil,
+  Search,
+  Trash2,
+  Upload,
+} from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import {
   deleteProjectDocument,
@@ -11,6 +24,61 @@ import {
   requestOpenProjectDocument,
   type ProjectDocument,
 } from '../utils/projectDocuments';
+
+type DocumentsView = 'list' | 'visual';
+type VisualBoardKind = 'Plan' | 'Elevation' | 'Site Photo' | 'Other';
+
+interface VisualBoard {
+  id: string;
+  projectId: string;
+  name: string;
+  kind: VisualBoardKind;
+  imageName: string;
+  imageDataUrl: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+const VISUAL_BOARDS_STORAGE_KEY = 'struccalc.visualBoards.v1';
+
+const makeVisualBoardId = () => `visual_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+
+const safeParse = <T,>(raw: string | null, fallback: T): T => {
+  if (!raw) return fallback;
+
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return fallback;
+  }
+};
+
+const getAllVisualBoards = (): VisualBoard[] => {
+  if (typeof window === 'undefined') return [];
+  return safeParse<VisualBoard[]>(window.localStorage.getItem(VISUAL_BOARDS_STORAGE_KEY), []);
+};
+
+const writeAllVisualBoards = (boards: VisualBoard[]) => {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(VISUAL_BOARDS_STORAGE_KEY, JSON.stringify(boards));
+};
+
+const getProjectVisualBoards = (projectId: string) => {
+  return getAllVisualBoards()
+    .filter((board) => board.projectId === projectId)
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+};
+
+const deleteVisualBoard = (boardId: string) => {
+  writeAllVisualBoards(getAllVisualBoards().filter((board) => board.id !== boardId));
+};
+
+const getDefaultBoardName = (fileName: string) => {
+  const withoutExtension = fileName.replace(/\.[^.]+$/u, '');
+  return withoutExtension.trim() || 'Untitled Visual Board';
+};
+
+const getBoardDocumentCount = () => 0;
 
 const getBeamDetails = (document: ProjectDocument) => {
   const inputs = document.inputs as {
@@ -198,15 +266,29 @@ const beamPrintStyles = `
 export const Documents: React.FC = () => {
   const navigate = useNavigate();
   const activeProject = getActiveProject();
+  const uploadInputRef = useRef<HTMLInputElement | null>(null);
   const [documents, setDocuments] = useState<ProjectDocument[]>(() =>
     activeProject ? getProjectDocuments(activeProject.id) : [],
   );
+  const [visualBoards, setVisualBoards] = useState<VisualBoard[]>(() =>
+    activeProject ? getProjectVisualBoards(activeProject.id) : [],
+  );
+  const [documentsView, setDocumentsView] = useState<DocumentsView>('list');
   const [searchText, setSearchText] = useState('');
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const [hoverDocument, setHoverDocument] = useState<ProjectDocument | null>(null);
   const [hoverPoint, setHoverPoint] = useState({ x: 0, y: 0 });
   const [printDocument, setPrintDocument] = useState<ProjectDocument | null>(null);
+  const [selectedBoardId, setSelectedBoardId] = useState<string | null>(null);
+  const [newBoardName, setNewBoardName] = useState('');
+  const [newBoardKind, setNewBoardKind] = useState<VisualBoardKind>('Plan');
+  const [uploadMessage, setUploadMessage] = useState('');
+
+  const selectedBoard = useMemo(
+    () => visualBoards.find((board) => board.id === selectedBoardId) ?? null,
+    [selectedBoardId, visualBoards],
+  );
 
   const refreshDocuments = () => {
     if (!activeProject) {
@@ -215,6 +297,15 @@ export const Documents: React.FC = () => {
     }
 
     setDocuments(getProjectDocuments(activeProject.id));
+  };
+
+  const refreshVisualBoards = () => {
+    if (!activeProject) {
+      setVisualBoards([]);
+      return;
+    }
+
+    setVisualBoards(getProjectVisualBoards(activeProject.id));
   };
 
   const filteredDocuments = useMemo(() => {
@@ -291,6 +382,66 @@ export const Documents: React.FC = () => {
     setPrintDocument(document);
   };
 
+  const handleVisualBoardUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !activeProject) return;
+
+    if (!file.type.startsWith('image/')) {
+      setUploadMessage('Please upload an image file such as PNG, JPG, or WebP.');
+      event.target.value = '';
+      return;
+    }
+
+    if (file.size > 3 * 1024 * 1024) {
+      setUploadMessage('This image is large. For now, use screenshots under about 3 MB so the browser can save the board locally.');
+      event.target.value = '';
+      return;
+    }
+
+    const reader = new FileReader();
+
+    reader.onload = () => {
+      const imageDataUrl = String(reader.result || '');
+      if (!imageDataUrl) {
+        setUploadMessage('The image could not be read. Try another file.');
+        return;
+      }
+
+      const now = new Date().toISOString();
+      const board: VisualBoard = {
+        id: makeVisualBoardId(),
+        projectId: activeProject.id,
+        name: newBoardName.trim() || getDefaultBoardName(file.name),
+        kind: newBoardKind,
+        imageName: file.name,
+        imageDataUrl,
+        createdAt: now,
+        updatedAt: now,
+      };
+
+      writeAllVisualBoards([board, ...getAllVisualBoards()]);
+      setNewBoardName('');
+      setUploadMessage('Visual board added.');
+      setSelectedBoardId(board.id);
+      refreshVisualBoards();
+    };
+
+    reader.onerror = () => {
+      setUploadMessage('The image could not be uploaded. Try another file.');
+    };
+
+    reader.readAsDataURL(file);
+    event.target.value = '';
+  };
+
+  const handleDeleteVisualBoard = (boardId: string) => {
+    deleteVisualBoard(boardId);
+    if (selectedBoardId === boardId) {
+      setSelectedBoardId(null);
+    }
+    refreshVisualBoards();
+  };
+
   if (!activeProject) {
     return (
       <div className="rounded-lg border border-amber-200 bg-amber-50 p-6 text-amber-900">
@@ -301,6 +452,278 @@ export const Documents: React.FC = () => {
       </div>
     );
   }
+
+  const renderListView = () => (
+    <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+      <div className="overflow-x-auto">
+        <table className="min-w-[980px] w-full border-collapse text-sm">
+          <thead className="bg-gray-50 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+            <tr>
+              <th className="border-b border-gray-200 px-4 py-3">Name</th>
+              <th className="border-b border-gray-200 px-4 py-3">Type</th>
+              <th className="border-b border-gray-200 px-4 py-3">Module</th>
+              <th className="border-b border-gray-200 px-4 py-3">Status</th>
+              <th className="border-b border-gray-200 px-4 py-3">Created</th>
+              <th className="border-b border-gray-200 px-4 py-3">Modified</th>
+              <th className="border-b border-gray-200 px-4 py-3">Source</th>
+              <th className="border-b border-gray-200 px-4 py-3 text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredDocuments.length === 0 ? (
+              <tr>
+                <td colSpan={8} className="px-4 py-10 text-center text-gray-500">
+                  No saved documents yet. Go to a calculation page and click Save Output.
+                </td>
+              </tr>
+            ) : (
+              filteredDocuments.map((document) => (
+                <tr key={document.id} className="hover:bg-blue-50/50">
+                  <td className="border-b border-gray-100 px-4 py-3">
+                    {renamingId === document.id ? (
+                      <div className="flex gap-2">
+                        <input
+                          value={renameValue}
+                          onChange={(event) => setRenameValue(event.target.value)}
+                          className="w-full rounded border border-gray-300 px-2 py-1 text-sm"
+                        />
+                        <button onClick={saveRename} className="rounded bg-blue-600 px-2 py-1 text-xs font-semibold text-white">Save</button>
+                      </div>
+                    ) : (
+                      <div className="font-semibold text-gray-900">{document.name}</div>
+                    )}
+                  </td>
+                  <td className="border-b border-gray-100 px-4 py-3 text-gray-700">{document.type}</td>
+                  <td className="border-b border-gray-100 px-4 py-3 text-gray-700">{document.module}</td>
+                  <td className="border-b border-gray-100 px-4 py-3">
+                    <span className="rounded-full bg-green-50 px-2 py-1 text-xs font-semibold text-green-700">{document.status}</span>
+                  </td>
+                  <td className="border-b border-gray-100 px-4 py-3 text-xs text-gray-600">{formatDocumentDate(document.createdAt)}</td>
+                  <td className="border-b border-gray-100 px-4 py-3 text-xs text-gray-600">{formatDocumentDate(document.updatedAt)}</td>
+                  <td className="border-b border-gray-100 px-4 py-3 font-mono text-xs text-gray-500">{document.sourcePath}</td>
+                  <td className="border-b border-gray-100 px-4 py-3">
+                    <div className="flex justify-end gap-2">
+                      <button onClick={() => handleOpen(document)} className="rounded border border-blue-200 bg-blue-50 px-2 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100" title="Open editable calculation">Open/Edit</button>
+                      <button
+                        onClick={() => handlePrint(document)}
+                        onMouseEnter={(event) => {
+                          setHoverDocument(document);
+                          setHoverPoint({ x: event.clientX, y: event.clientY });
+                        }}
+                        onMouseMove={(event) => setHoverPoint({ x: event.clientX, y: event.clientY })}
+                        onMouseLeave={() => setHoverDocument(null)}
+                        className="rounded border border-gray-200 bg-white p-1.5 text-gray-600 hover:bg-gray-50"
+                        title="Print document"
+                      >
+                        <Download size={15} />
+                      </button>
+                      <button onClick={() => startRename(document)} className="rounded border border-gray-200 bg-white p-1.5 text-gray-600 hover:bg-gray-50" title="Rename"><Pencil size={15} /></button>
+                      <button onClick={() => handleDuplicate(document.id)} className="rounded border border-gray-200 bg-white p-1.5 text-gray-600 hover:bg-gray-50" title="Duplicate"><Copy size={15} /></button>
+                      <button onClick={() => handleDelete(document.id)} className="rounded border border-gray-200 bg-white p-1.5 text-gray-500 hover:border-red-200 hover:bg-red-50 hover:text-red-600" title="Delete"><Trash2 size={15} /></button>
+                    </div>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="border-t border-gray-200 px-4 py-3 text-sm text-gray-500">
+        {filteredDocuments.length} document{filteredDocuments.length === 1 ? '' : 's'} shown
+      </div>
+    </div>
+  );
+
+  const renderVisualMapBoard = () => {
+    if (!selectedBoard) return null;
+
+    return (
+      <div className="space-y-4">
+        <button
+          onClick={() => setSelectedBoardId(null)}
+          className="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+        >
+          <ArrowLeft size={16} />
+          Back to Visual Map
+        </button>
+
+        <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
+          <div className="flex flex-col gap-3 border-b border-gray-200 p-4 md:flex-row md:items-center md:justify-between">
+            <div>
+              <h2 className="text-xl font-bold text-gray-900">{selectedBoard.name}</h2>
+              <p className="mt-1 text-sm text-gray-500">
+                {selectedBoard.kind} • {selectedBoard.imageName} • {formatDocumentDate(selectedBoard.updatedAt)}
+              </p>
+            </div>
+            <div className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
+              Markers and document links coming next
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-0 lg:grid-cols-[minmax(0,1fr)_280px]">
+            <div className="max-h-[72vh] overflow-auto bg-slate-100 p-4">
+              <div className="mx-auto w-fit rounded-lg border border-gray-300 bg-white p-2 shadow-sm">
+                <img
+                  src={selectedBoard.imageDataUrl}
+                  alt={selectedBoard.name}
+                  className="max-h-[68vh] max-w-full object-contain"
+                />
+              </div>
+            </div>
+
+            <aside className="border-t border-gray-200 bg-gray-50 p-4 lg:border-l lg:border-t-0">
+              <h3 className="text-sm font-bold text-gray-900">Board Details</h3>
+              <dl className="mt-3 space-y-2 text-sm">
+                <div>
+                  <dt className="text-xs font-semibold uppercase tracking-wide text-gray-500">Project</dt>
+                  <dd className="font-medium text-gray-900">{activeProject.name}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-semibold uppercase tracking-wide text-gray-500">Visual type</dt>
+                  <dd className="font-medium text-gray-900">{selectedBoard.kind}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-semibold uppercase tracking-wide text-gray-500">Linked documents</dt>
+                  <dd className="font-medium text-gray-900">{getBoardDocumentCount()} linked documents</dd>
+                </div>
+              </dl>
+
+              <div className="mt-5 rounded-lg border border-dashed border-gray-300 bg-white p-4 text-sm text-gray-600">
+                <div className="font-semibold text-gray-900">Next phase</div>
+                <p className="mt-2">
+                  This is where Add Marker, arrow labels, hover previews, and linked document controls will live.
+                </p>
+              </div>
+            </aside>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderVisualMapView = () => {
+    if (selectedBoard) return renderVisualMapBoard();
+
+    return (
+      <div className="space-y-6">
+        <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <h2 className="flex items-center gap-2 text-xl font-bold text-gray-900">
+                <Map className="text-blue-600" size={22} />
+                Visual Map
+              </h2>
+              <p className="mt-2 max-w-3xl text-sm text-gray-500">
+                Upload a plan, elevation, or site photo for {activeProject.name}. This creates a visual board that will later hold markers linked to saved calculations.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(180px,1fr)_150px_auto]">
+              <input
+                value={newBoardName}
+                onChange={(event) => setNewBoardName(event.target.value)}
+                className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                placeholder="Board name, optional"
+              />
+              <select
+                value={newBoardKind}
+                onChange={(event) => setNewBoardKind(event.target.value as VisualBoardKind)}
+                className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+              >
+                <option>Plan</option>
+                <option>Elevation</option>
+                <option>Site Photo</option>
+                <option>Other</option>
+              </select>
+              <button
+                onClick={() => uploadInputRef.current?.click()}
+                className="inline-flex items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+              >
+                <Upload size={16} />
+                Upload Plan / Photo
+              </button>
+              <input
+                ref={uploadInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                onChange={handleVisualBoardUpload}
+                className="hidden"
+              />
+            </div>
+          </div>
+
+          {uploadMessage && (
+            <div className="mt-4 rounded-md border border-blue-100 bg-blue-50 px-3 py-2 text-sm text-blue-800">
+              {uploadMessage}
+            </div>
+          )}
+        </div>
+
+        {visualBoards.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 p-10 text-center">
+            <ImageIcon className="mx-auto text-gray-400" size={42} />
+            <h3 className="mt-4 text-lg font-bold text-gray-900">No visual boards yet</h3>
+            <p className="mx-auto mt-2 max-w-xl text-sm text-gray-500">
+              Upload a plan, elevation, or site photo to start the visual document map for this project.
+            </p>
+          </div>
+        ) : (
+          <div>
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="text-sm font-bold uppercase tracking-wide text-gray-500">
+                {activeProject.name} Visual Boards
+              </h3>
+              <span className="text-sm text-gray-500">
+                {visualBoards.length} board{visualBoards.length === 1 ? '' : 's'}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {visualBoards.map((board) => (
+                <div key={board.id} className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedBoardId(board.id)}
+                    className="group block w-full text-left"
+                  >
+                    <div className="relative h-44 overflow-hidden bg-slate-100">
+                      <img src={board.imageDataUrl} alt={board.name} className="h-full w-full object-cover transition-transform group-hover:scale-[1.02]" />
+                      <div className="absolute right-3 top-3 rounded-full bg-white/90 p-2 text-gray-700 shadow-sm">
+                        <Maximize2 size={16} />
+                      </div>
+                    </div>
+                    <div className="p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <h4 className="font-bold text-gray-900">{board.name}</h4>
+                          <p className="mt-1 text-xs text-gray-500">{board.kind} • {board.imageName}</p>
+                        </div>
+                        <span className="rounded-full bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-600">
+                          {getBoardDocumentCount()} docs
+                        </span>
+                      </div>
+                      <p className="mt-3 text-xs text-gray-500">Last edited {formatDocumentDate(board.updatedAt)}</p>
+                    </div>
+                  </button>
+
+                  <div className="flex justify-end border-t border-gray-100 px-4 py-2">
+                    <button
+                      onClick={() => handleDeleteVisualBoard(board.id)}
+                      className="inline-flex items-center gap-1 rounded border border-gray-200 bg-white px-2 py-1 text-xs font-semibold text-gray-500 hover:border-red-200 hover:bg-red-50 hover:text-red-600"
+                    >
+                      <Trash2 size={13} />
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -313,103 +736,52 @@ export const Documents: React.FC = () => {
         <div>
           <h1 className="flex items-center gap-3 text-3xl font-bold tracking-tight text-gray-900">
             <FileText className="text-blue-600" />
-            Project Documents
+            Documents
           </h1>
           <p className="mt-2 text-gray-500">
-            Saved calculation outputs for <span className="font-semibold text-gray-800">{activeProject.name}</span>.
+            Saved calculation outputs and visual document maps for <span className="font-semibold text-gray-800">{activeProject.name}</span>.
           </p>
         </div>
 
-        <label className="relative w-full md:w-80">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-          <input
-            value={searchText}
-            onChange={(event) => setSearchText(event.target.value)}
-            className="w-full rounded-md border border-gray-300 py-2 pl-9 pr-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
-            placeholder="Search documents..."
-          />
-        </label>
+        {documentsView === 'list' && (
+          <label className="relative w-full md:w-80">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+            <input
+              value={searchText}
+              onChange={(event) => setSearchText(event.target.value)}
+              className="w-full rounded-md border border-gray-300 py-2 pl-9 pr-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+              placeholder="Search documents..."
+            />
+          </label>
+        )}
       </div>
 
-      <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
-        <div className="overflow-x-auto">
-          <table className="min-w-[980px] w-full border-collapse text-sm">
-            <thead className="bg-gray-50 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
-              <tr>
-                <th className="border-b border-gray-200 px-4 py-3">Name</th>
-                <th className="border-b border-gray-200 px-4 py-3">Type</th>
-                <th className="border-b border-gray-200 px-4 py-3">Module</th>
-                <th className="border-b border-gray-200 px-4 py-3">Status</th>
-                <th className="border-b border-gray-200 px-4 py-3">Created</th>
-                <th className="border-b border-gray-200 px-4 py-3">Modified</th>
-                <th className="border-b border-gray-200 px-4 py-3">Source</th>
-                <th className="border-b border-gray-200 px-4 py-3 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredDocuments.length === 0 ? (
-                <tr>
-                  <td colSpan={8} className="px-4 py-10 text-center text-gray-500">
-                    No saved documents yet. Go to a calculation page and click Save Output.
-                  </td>
-                </tr>
-              ) : (
-                filteredDocuments.map((document) => (
-                  <tr key={document.id} className="hover:bg-blue-50/50">
-                    <td className="border-b border-gray-100 px-4 py-3">
-                      {renamingId === document.id ? (
-                        <div className="flex gap-2">
-                          <input
-                            value={renameValue}
-                            onChange={(event) => setRenameValue(event.target.value)}
-                            className="w-full rounded border border-gray-300 px-2 py-1 text-sm"
-                          />
-                          <button onClick={saveRename} className="rounded bg-blue-600 px-2 py-1 text-xs font-semibold text-white">Save</button>
-                        </div>
-                      ) : (
-                        <div className="font-semibold text-gray-900">{document.name}</div>
-                      )}
-                    </td>
-                    <td className="border-b border-gray-100 px-4 py-3 text-gray-700">{document.type}</td>
-                    <td className="border-b border-gray-100 px-4 py-3 text-gray-700">{document.module}</td>
-                    <td className="border-b border-gray-100 px-4 py-3">
-                      <span className="rounded-full bg-green-50 px-2 py-1 text-xs font-semibold text-green-700">{document.status}</span>
-                    </td>
-                    <td className="border-b border-gray-100 px-4 py-3 text-xs text-gray-600">{formatDocumentDate(document.createdAt)}</td>
-                    <td className="border-b border-gray-100 px-4 py-3 text-xs text-gray-600">{formatDocumentDate(document.updatedAt)}</td>
-                    <td className="border-b border-gray-100 px-4 py-3 font-mono text-xs text-gray-500">{document.sourcePath}</td>
-                    <td className="border-b border-gray-100 px-4 py-3">
-                      <div className="flex justify-end gap-2">
-                        <button onClick={() => handleOpen(document)} className="rounded border border-blue-200 bg-blue-50 px-2 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100" title="Open editable calculation">Open/Edit</button>
-                        <button
-                          onClick={() => handlePrint(document)}
-                          onMouseEnter={(event) => {
-                            setHoverDocument(document);
-                            setHoverPoint({ x: event.clientX, y: event.clientY });
-                          }}
-                          onMouseMove={(event) => setHoverPoint({ x: event.clientX, y: event.clientY })}
-                          onMouseLeave={() => setHoverDocument(null)}
-                          className="rounded border border-gray-200 bg-white p-1.5 text-gray-600 hover:bg-gray-50"
-                          title="Print document"
-                        >
-                          <Download size={15} />
-                        </button>
-                        <button onClick={() => startRename(document)} className="rounded border border-gray-200 bg-white p-1.5 text-gray-600 hover:bg-gray-50" title="Rename"><Pencil size={15} /></button>
-                        <button onClick={() => handleDuplicate(document.id)} className="rounded border border-gray-200 bg-white p-1.5 text-gray-600 hover:bg-gray-50" title="Duplicate"><Copy size={15} /></button>
-                        <button onClick={() => handleDelete(document.id)} className="rounded border border-gray-200 bg-white p-1.5 text-gray-500 hover:border-red-200 hover:bg-red-50 hover:text-red-600" title="Delete"><Trash2 size={15} /></button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        <div className="border-t border-gray-200 px-4 py-3 text-sm text-gray-500">
-          {filteredDocuments.length} document{filteredDocuments.length === 1 ? '' : 's'} shown
-        </div>
+      <div className="flex w-fit rounded-lg border border-gray-200 bg-gray-50 p-1">
+        <button
+          onClick={() => setDocumentsView('list')}
+          className={`inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-semibold ${
+            documentsView === 'list'
+              ? 'bg-white text-blue-700 shadow-sm'
+              : 'text-gray-500 hover:text-gray-800'
+          }`}
+        >
+          <LayoutList size={16} />
+          List
+        </button>
+        <button
+          onClick={() => setDocumentsView('visual')}
+          className={`inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-semibold ${
+            documentsView === 'visual'
+              ? 'bg-white text-blue-700 shadow-sm'
+              : 'text-gray-500 hover:text-gray-800'
+          }`}
+        >
+          <Map size={16} />
+          Visual Map
+        </button>
       </div>
+
+      {documentsView === 'list' ? renderListView() : renderVisualMapView()}
 
       {hoverDocument && (
         <div
