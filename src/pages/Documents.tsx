@@ -676,7 +676,6 @@ export const Documents: React.FC = () => {
       style: markerStyle,
       direction: markerDirection,
       status: markerStatus,
-      status: markerStatus,
       createdAt: now,
       updatedAt: now,
     };
@@ -716,6 +715,7 @@ export const Documents: React.FC = () => {
       notes: markerNotes.trim(),
       style: markerStyle,
       direction: markerDirection,
+      status: markerStatus,
     });
     setEditingMarkerId(null);
     resetMarkerForm();
