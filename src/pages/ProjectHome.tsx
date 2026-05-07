@@ -18,8 +18,9 @@ interface ProjectRecord {
   updatedAt: string;
 }
 
-const STORAGE_KEY = 'struccalc.projects.v2';
-const ACTIVE_PROJECT_KEY = 'struccalc.activeProject.v2';
+const STORAGE_KEY = 'struccalc.projects.v3';
+const ACTIVE_PROJECT_KEY = 'struccalc.activeProject.v3';
+const SESSION_MODE_KEY = 'struccalc.sessionMode.v3';
 
 const makeProjectId = () => `project_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 
@@ -27,7 +28,7 @@ const readProjects = (): ProjectRecord[] => {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return [];
-    const parsed = JSON.parse(raw);
+    const parsed = JSON.parse(raw) as ProjectRecord[];
     return Array.isArray(parsed) ? parsed : [];
   } catch {
     return [];
@@ -95,12 +96,17 @@ export const ProjectHome: React.FC = () => {
     const nextProjects = projects.map((item) => (item.id === project.id ? updatedProject : item));
     storeProjects(nextProjects);
     window.localStorage.setItem(ACTIVE_PROJECT_KEY, updatedProject.id);
-    navigate('/workspace');
+    window.localStorage.setItem(SESSION_MODE_KEY, 'project');
+    navigate('/dashboard');
   };
 
   const deleteProject = (projectId: string) => {
     const nextProjects = projects.filter((project) => project.id !== projectId);
     storeProjects(nextProjects);
+
+    if (window.localStorage.getItem(ACTIVE_PROJECT_KEY) === projectId) {
+      window.localStorage.removeItem(ACTIVE_PROJECT_KEY);
+    }
   };
 
   const createProject = (event: React.FormEvent) => {
@@ -123,12 +129,14 @@ export const ProjectHome: React.FC = () => {
 
     storeProjects([project, ...projects]);
     window.localStorage.setItem(ACTIVE_PROJECT_KEY, project.id);
-    navigate('/workspace');
+    window.localStorage.setItem(SESSION_MODE_KEY, 'project');
+    navigate('/dashboard');
   };
 
   const startQuickCalculations = () => {
     window.localStorage.removeItem(ACTIVE_PROJECT_KEY);
-    navigate('/quick');
+    window.localStorage.setItem(SESSION_MODE_KEY, 'quick');
+    navigate('/dashboard');
   };
 
   return (

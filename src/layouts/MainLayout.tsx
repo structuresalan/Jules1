@@ -5,11 +5,33 @@ import { useAuth } from '../hooks/useAuth';
 import { signOut, auth } from '../firebase';
 import { DisclaimerModal } from '../components/DisclaimerModal';
 
+const getProjectLabel = () => {
+  try {
+    const rawProjects = window.localStorage.getItem('struccalc.projects.v3');
+    const activeProjectId = window.localStorage.getItem('struccalc.activeProject.v3');
+    const mode = window.localStorage.getItem('struccalc.sessionMode.v3');
+
+    if (mode === 'quick') return 'Quick Calculations';
+    if (!rawProjects || !activeProjectId) return 'No project selected';
+
+    const projects = JSON.parse(rawProjects) as Array<{ id: string; name: string }>;
+    return projects.find((project) => project.id === activeProjectId)?.name ?? 'No project selected';
+  } catch {
+    return 'No project selected';
+  }
+};
+
 export const MainLayout: React.FC = () => {
   const { user, mockLogout } = useAuth();
   const location = useLocation();
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(true);
-  const basePath = location.pathname.startsWith('/quick') ? '/quick' : '/workspace';
+  const [projectLabel, setProjectLabel] = React.useState(getProjectLabel);
+
+  React.useEffect(() => {
+    setProjectLabel(getProjectLabel());
+  }, [location.pathname]);
+
+  const isProjectHome = location.pathname === '/';
 
   const handleLogout = async () => {
     if (auth) {
@@ -23,14 +45,18 @@ export const MainLayout: React.FC = () => {
     }
   };
 
+  if (isProjectHome) {
+    return <Outlet />;
+  }
+
   const navItems = [
     { to: '/', icon: <FolderOpen size={18} />, label: 'Projects', end: true },
-    { to: basePath, icon: <Home size={18} />, label: 'Dashboard', end: true },
-    { to: `${basePath}/steel`, icon: <Frame size={18} />, label: 'Steel Design' },
-    { to: `${basePath}/concrete`, icon: <Layers size={18} />, label: 'Concrete Design' },
-    { to: `${basePath}/loads`, icon: <Wind size={18} />, label: 'Loads' },
-    { to: `${basePath}/variables`, icon: <Database size={18} />, label: 'Variables' },
-    { to: `${basePath}/settings`, icon: <Settings size={18} />, label: 'Settings' },
+    { to: '/dashboard', icon: <Home size={18} />, label: 'Dashboard', end: true },
+    { to: '/steel', icon: <Frame size={18} />, label: 'Steel Design' },
+    { to: '/concrete', icon: <Layers size={18} />, label: 'Concrete Design' },
+    { to: '/loads', icon: <Wind size={18} />, label: 'Loads' },
+    { to: '/variables', icon: <Database size={18} />, label: 'Variables' },
+    { to: '/settings', icon: <Settings size={18} />, label: 'Settings' },
   ];
 
   return (
@@ -56,10 +82,8 @@ export const MainLayout: React.FC = () => {
           </h1>
 
           <div className="mt-4 rounded-lg border border-gray-200 bg-white p-3 text-sm">
-            <div className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Current Mode</div>
-            <div className="mt-1 font-semibold text-gray-900">
-              {basePath === '/quick' ? 'Quick Calculations' : 'Project Workspace'}
-            </div>
+            <div className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Current Project / Mode</div>
+            <div className="mt-1 truncate font-semibold text-gray-900">{projectLabel}</div>
             <div className="mt-2 text-xs text-blue-600">Use Projects to open or create saved work.</div>
           </div>
         </div>

@@ -10,14 +10,15 @@ import { SteelDesign } from './pages/SteelDesign';
 import { Loads } from './pages/Loads';
 import { Variables } from './pages/Variables';
 import { VariablesProvider } from './context/VariablesContext';
+import { ProjectHome } from './pages/ProjectHome';
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, loading } = useAuth();
-  
+
   if (loading) {
     return <div className="h-screen flex items-center justify-center">Loading...</div>;
   }
-  
+
   if (!user) {
     return <Navigate to="/login" replace />;
   }
@@ -29,14 +30,36 @@ const AppContent = () => {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
-      <Route path="/" element={<ProtectedRoute><MainLayout /></ProtectedRoute>}>
-        <Route index element={<Dashboard />} />
+
+      <Route
+        path="/"
+        element={
+          <ProtectedRoute>
+            <MainLayout />
+          </ProtectedRoute>
+        }
+      >
+        <Route index element={<ProjectHome />} />
+        <Route path="dashboard" element={<Dashboard />} />
         <Route path="steel" element={<SteelDesign />} />
         <Route path="concrete" element={<ConcreteDesign />} />
         <Route path="loads" element={<Loads />} />
         <Route path="variables" element={<Variables />} />
         <Route path="settings" element={<div className="p-8">Settings Coming Soon</div>} />
       </Route>
+
+      <Route path="/workspace" element={<Navigate to="/dashboard" replace />} />
+      <Route path="/workspace/steel" element={<Navigate to="/steel" replace />} />
+      <Route path="/workspace/concrete" element={<Navigate to="/concrete" replace />} />
+      <Route path="/workspace/loads" element={<Navigate to="/loads" replace />} />
+      <Route path="/workspace/variables" element={<Navigate to="/variables" replace />} />
+      <Route path="/quick" element={<Navigate to="/dashboard" replace />} />
+      <Route path="/quick/steel" element={<Navigate to="/steel" replace />} />
+      <Route path="/quick/concrete" element={<Navigate to="/concrete" replace />} />
+      <Route path="/quick/loads" element={<Navigate to="/loads" replace />} />
+      <Route path="/quick/variables" element={<Navigate to="/variables" replace />} />
+
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 };
