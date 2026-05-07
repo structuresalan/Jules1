@@ -512,8 +512,6 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
   const designShear = method === 'LRFD' ? aiscFactors.phi_b * nominalShear : nominalShear / aiscFactors.omega_b;
   const momentUtilization = analysis ? analysis.maxMoment / Math.max(designMoment, 0.001) : 0;
   const shearUtilization = analysis ? analysis.maxShear / Math.max(designShear, 0.001) : 0;
-  const controllingUtilization = Math.max(momentUtilization, shearUtilization);
-  const isPassing = controllingUtilization <= 1;
   const liveDeflectionLimit = analysis ? (analysis.fullLength * 12) / Math.max(deflectionLimit, 1) : 0;
   const totalServiceDeflectionLimit = analysis ? (analysis.fullLength * 12) / Math.max(totalDeflectionLimit, 1) : 0;
   const maximumDeflection = useMemo(() => {
@@ -549,6 +547,14 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
   }, [analysis, elasticModulus, estimatedIx]);
 
   const deflectionUtilization = maximumDeflection.value / Math.max(totalServiceDeflectionLimit, 0.001);
+  const controllingUtilization = Math.max(momentUtilization, shearUtilization, deflectionUtilization);
+  const governingLimitState =
+    controllingUtilization === deflectionUtilization
+      ? 'Deflection'
+      : controllingUtilization === momentUtilization
+        ? 'Moment'
+        : 'Shear';
+  const isPassing = controllingUtilization <= 1;
   const reportElementLoads = [
     ...(includeSelfWeight ? [{ id: 'self-weight', element: 1, loadCase: 'Dead', loadType: 'Self weight', orientation: 'Global Z', description: `${selfWeightKipPerFt.toFixed(3)} kips/ft` }] : []),
     ...loads.map((load, index) => {
@@ -866,32 +872,36 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
   const renderBrowserDesignChecks = () => {
     const limitStateRows = [
       {
-        label: 'Flexural Analysis (Strong Axis)',
+        label: 'Moment',
+        check: 'Flexural Analysis (Strong Axis)',
         required: `${(analysis?.maxMoment ?? 0).toFixed(2)} kip-ft`,
         available: `${designMoment.toFixed(2)} kip-ft`,
         unity: formatRatio(momentUtilization),
         result: momentUtilization <= 1 ? 'Pass' : 'Fail',
       },
       {
-        label: 'Shear Analysis',
+        label: 'Shear',
+        check: 'Shear Analysis',
         required: `${(analysis?.maxShear ?? 0).toFixed(2)} k`,
         available: `${designShear.toFixed(2)} k`,
         unity: formatRatio(shearUtilization),
         result: shearUtilization <= 1 ? 'Pass' : 'Fail',
       },
       {
-        label: 'Deflection Check',
+        label: 'Deflection',
+        check: 'Deflection Check',
         required: `${maximumDeflection.value.toFixed(3)} in`,
         available: `${totalServiceDeflectionLimit.toFixed(3)} in`,
         unity: formatRatio(deflectionUtilization),
         result: deflectionUtilization <= 1 ? 'Pass' : 'Fail',
       },
       {
-        label: 'Combined Utilization',
+        label: 'Governing',
+        check: `${governingLimitState} controls`,
         required: '-',
         available: '-',
-        unity: formatRatio(Math.max(momentUtilization, shearUtilization, deflectionUtilization)),
-        result: Math.max(momentUtilization, shearUtilization, deflectionUtilization) <= 1 ? 'Pass' : 'Fail',
+        unity: formatRatio(controllingUtilization),
+        result: isPassing ? 'Pass' : 'Fail',
       },
     ];
 
@@ -900,18 +910,19 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
         <div className="border-b border-gray-200 bg-gray-50 px-4 py-3">
           <h3 className="text-base font-semibold text-gray-900">Detailed Design Checks</h3>
           <p className="mt-1 text-xs text-gray-500">
-            Browser preview of the same design-check categories used in the detailed output report.
+            Expanded calculation trail. The governing unity below matches the utilization summary above.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 gap-4 p-4 xl:grid-cols-2">
+        <div className="space-y-5 p-4">
           <div>
             <h4 className="mb-2 text-sm font-semibold text-gray-800">Limit state summary</h4>
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[560px] border-collapse text-xs">
+              <table className="w-full min-w-[620px] border-collapse text-xs">
                 <thead className="bg-gray-100 text-gray-600">
                   <tr>
-                    <th className="border border-gray-200 px-2 py-2 text-left">Limit State</th>
+                    <th className="border border-gray-200 px-2 py-2 text-left">Type</th>
+                    <th className="border border-gray-200 px-2 py-2 text-left">Check</th>
                     <th className="border border-gray-200 px-2 py-2 text-right">Required</th>
                     <th className="border border-gray-200 px-2 py-2 text-right">Available</th>
                     <th className="border border-gray-200 px-2 py-2 text-right">Unity</th>
@@ -920,8 +931,9 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
                 </thead>
                 <tbody>
                   {limitStateRows.map((row) => (
-                    <tr key={row.label}>
-                      <td className="border border-gray-200 px-2 py-2 font-medium">{row.label}</td>
+                    <tr key={row.label} className={row.label === 'Governing' ? 'bg-blue-50 font-semibold' : undefined}>
+                      <td className="border border-gray-200 px-2 py-2">{row.label}</td>
+                      <td className="border border-gray-200 px-2 py-2">{row.check}</td>
                       <td className="border border-gray-200 px-2 py-2 text-right">{row.required}</td>
                       <td className="border border-gray-200 px-2 py-2 text-right">{row.available}</td>
                       <td className="border border-gray-200 px-2 py-2 text-right">{row.unity}</td>
@@ -934,75 +946,51 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
           </div>
 
           <div>
-            <h4 className="mb-2 text-sm font-semibold text-gray-800">Input / design properties</h4>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div className="rounded border border-gray-200 bg-gray-50 p-3 text-xs">
-                <div className="font-semibold text-gray-800">Member input</div>
-                <dl className="mt-2 grid grid-cols-2 gap-1">
-                  <dt className="text-gray-500">Type</dt><dd>{memberType}</dd>
-                  <dt className="text-gray-500">Material</dt><dd>{materialType}</dd>
-                  <dt className="text-gray-500">Rule</dt><dd>{designRule}</dd>
-                  <dt className="text-gray-500">Sections</dt><dd>{internalSections}</dd>
-                  <dt className="text-gray-500">Span</dt><dd>{analysis?.fullLength.toFixed(2) ?? '0.00'} ft</dd>
-                </dl>
+            <h4 className="mb-2 text-sm font-semibold text-gray-800">Calculation trail</h4>
+            <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
+              <div className={`rounded border p-3 text-xs ${governingLimitState === 'Moment' ? 'border-blue-300 bg-blue-50' : 'border-gray-200 bg-white'}`}>
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="font-semibold text-gray-900">Moment</span>
+                  <span className="font-semibold">{formatRatio(momentUtilization)}</span>
+                </div>
+                <p>Mr,x = {(analysis?.maxMoment ?? 0).toFixed(2)} kip-ft</p>
+                <p>Mn = Fy × Zx / 12 = {nominalMoment.toFixed(2)} kip-ft</p>
+                <p>Available = {designMoment.toFixed(2)} kip-ft</p>
+                <p className={momentUtilization <= 1 ? 'mt-2 font-semibold text-green-700' : 'mt-2 font-semibold text-red-700'}>
+                  {momentUtilization <= 1 ? 'Pass' : 'Review required'}
+                </p>
               </div>
-              <div className="rounded border border-gray-200 bg-gray-50 p-3 text-xs">
-                <div className="font-semibold text-gray-800">Material / shape</div>
-                <dl className="mt-2 grid grid-cols-2 gap-1">
-                  <dt className="text-gray-500">Fy</dt><dd>{fy.toFixed(0)} ksi</dd>
-                  <dt className="text-gray-500">Fu</dt><dd>{estimatedFu.toFixed(0)} ksi est.</dd>
-                  <dt className="text-gray-500">E</dt><dd>{elasticModulus.toLocaleString()} ksi</dd>
-                  <dt className="text-gray-500">A</dt><dd>{selectedShape.A.toFixed(2)} in²</dd>
-                  <dt className="text-gray-500">Zx</dt><dd>{selectedShape.Zx.toFixed(2)} in³</dd>
-                  <dt className="text-gray-500">λf est.</dt><dd>{flangeSlenderness.toFixed(2)}</dd>
-                  <dt className="text-gray-500">λw est.</dt><dd>{webSlenderness.toFixed(2)}</dd>
-                </dl>
+
+              <div className={`rounded border p-3 text-xs ${governingLimitState === 'Shear' ? 'border-blue-300 bg-blue-50' : 'border-gray-200 bg-white'}`}>
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="font-semibold text-gray-900">Shear</span>
+                  <span className="font-semibold">{formatRatio(shearUtilization)}</span>
+                </div>
+                <p>Vr,x = {(analysis?.maxShear ?? 0).toFixed(2)} k</p>
+                <p>Vn = 0.6 × Fy × A = {nominalShear.toFixed(2)} k</p>
+                <p>Available = {designShear.toFixed(2)} k</p>
+                <p className={shearUtilization <= 1 ? 'mt-2 font-semibold text-green-700' : 'mt-2 font-semibold text-red-700'}>
+                  {shearUtilization <= 1 ? 'Pass' : 'Review required'}
+                </p>
               </div>
-              <div className="rounded border border-gray-200 bg-gray-50 p-3 text-xs sm:col-span-2">
-                <div className="font-semibold text-gray-800">Stability / deflection settings</div>
-                <dl className="mt-2 grid grid-cols-2 gap-1 sm:grid-cols-4">
-                  <dt className="text-gray-500">Lb y-y</dt><dd>{lbyy.toFixed(2)} ft</dd>
-                  <dt className="text-gray-500">Lb z-z</dt><dd>{lbzz.toFixed(2)} ft</dd>
-                  <dt className="text-gray-500">Ky-y</dt><dd>{ky.toFixed(2)}</dd>
-                  <dt className="text-gray-500">Kz-z</dt><dd>{kz.toFixed(2)}</dd>
-                  <dt className="text-gray-500">L/ live</dt><dd>{deflectionLimit}</dd>
-                  <dt className="text-gray-500">L/ total</dt><dd>{totalDeflectionLimit}</dd>
-                  <dt className="text-gray-500">Seismic DR</dt><dd>{seismicDesignRule}</dd>
-                  <dt className="text-gray-500">Sway</dt><dd>y {ySway}, z {zSway}</dd>
-                  <dt className="text-gray-500">KL/r y est.</dt><dd>{compressionSlendernessY.toFixed(1)}</dd>
-                  <dt className="text-gray-500">KL/r z est.</dt><dd>{compressionSlendernessZ.toFixed(1)}</dd>
-                </dl>
+
+              <div className={`rounded border p-3 text-xs ${governingLimitState === 'Deflection' ? 'border-blue-300 bg-blue-50' : 'border-gray-200 bg-white'}`}>
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="font-semibold text-gray-900">Deflection</span>
+                  <span className="font-semibold">{formatRatio(deflectionUtilization)}</span>
+                </div>
+                <p>δmax = {maximumDeflection.value.toFixed(3)} in</p>
+                <p>Location = {maximumDeflection.position.toFixed(2)} ft</p>
+                <p>δallow = L / {totalDeflectionLimit} = {totalServiceDeflectionLimit.toFixed(3)} in</p>
+                <p className={deflectionUtilization <= 1 ? 'mt-2 font-semibold text-green-700' : 'mt-2 font-semibold text-red-700'}>
+                  {deflectionUtilization <= 1 ? 'Pass' : 'Review required'}
+                </p>
               </div>
             </div>
           </div>
 
-          <div className="xl:col-span-2">
-            <h4 className="mb-2 text-sm font-semibold text-gray-800">Calculation trail</h4>
-            <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
-              <div className="rounded border border-gray-200 p-3 text-xs">
-                <div className="mb-2 font-semibold text-gray-900">Flexure</div>
-                <p>Mr,x = {(analysis?.maxMoment ?? 0).toFixed(2)} kip-ft</p>
-                <p>Mn = Fy × Zx / 12 = {nominalMoment.toFixed(2)} kip-ft</p>
-                <p>Available = {designMoment.toFixed(2)} kip-ft</p>
-                <p>Unity = {formatRatio(momentUtilization)}</p>
-              </div>
-              <div className="rounded border border-gray-200 p-3 text-xs">
-                <div className="mb-2 font-semibold text-gray-900">Shear</div>
-                <p>Vr,x = {(analysis?.maxShear ?? 0).toFixed(2)} k</p>
-                <p>Vn = 0.6 × Fy × A = {nominalShear.toFixed(2)} k</p>
-                <p>Available = {designShear.toFixed(2)} k</p>
-                <p>Unity = {formatRatio(shearUtilization)}</p>
-              </div>
-              <div className="rounded border border-gray-200 p-3 text-xs">
-                <div className="mb-2 font-semibold text-gray-900">Deflection</div>
-                <p>δmax = {maximumDeflection.value.toFixed(3)} in at {maximumDeflection.position.toFixed(2)} ft</p>
-                <p>δallow = L / {totalDeflectionLimit} = {totalServiceDeflectionLimit.toFixed(3)} in</p>
-                <p>Unity = {formatRatio(deflectionUtilization)}</p>
-              </div>
-            </div>
-            <p className="mt-3 text-xs text-gray-500">
-              Some section properties are estimated from the currently available shape data. Final engineering output should be verified against the project specification and full section database.
-            </p>
+          <div className="rounded border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+            Some section properties are estimated from the currently available shape data. Final engineering output should be verified against the project specification and full section database.
           </div>
         </div>
       </div>
@@ -2026,19 +2014,10 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
           <div>{renderPanel()}</div>
 
           <div className="space-y-4">
-            <div className={`rounded-lg border p-4 ${isPassing ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'}`}>
-              <div className="mb-2 flex items-center justify-between">
-                <div className="text-sm font-semibold text-gray-900">Utilization summary</div>
-                {isPassing ? <CheckCircle2 className="text-green-600" size={20} /> : <AlertCircle className="text-red-600" size={20} />}
-              </div>
-              <div className="text-3xl font-bold text-gray-900">{formatRatio(controllingUtilization)}</div>
-              <div className={`mt-1 text-sm font-semibold ${isPassing ? 'text-green-700' : 'text-red-700'}`}>{isPassing ? 'PASS' : 'REVIEW REQUIRED'}</div>
-            </div>
-
             <div className="rounded-lg border border-gray-200 bg-white p-4">
               <div className="mb-3 text-sm font-semibold text-gray-900">Selected section</div>
               <div className="flex items-center gap-4">
-                <svg viewBox="0 0 120 120" className="h-24 w-24 rounded border border-gray-200 bg-gray-50">
+                <svg viewBox="0 0 120 120" className="h-24 w-24 shrink-0 rounded border border-gray-200 bg-gray-50">
                   <rect x="24" y="16" width="72" height="14" rx="2" fill="#cbd5e1" stroke="#64748b" />
                   <rect x="52" y="30" width="16" height="60" fill="#cbd5e1" stroke="#64748b" />
                   <rect x="24" y="90" width="72" height="14" rx="2" fill="#cbd5e1" stroke="#64748b" />
@@ -2050,22 +2029,63 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
                   <div>Area = {selectedShape.A.toFixed(2)} in²</div>
                   <div>Zx = {selectedShape.Zx.toFixed(1)} in³</div>
                   <div>Fy = {fy.toFixed(0)} ksi</div>
+                  <div>Method = {method}</div>
+                </div>
+              </div>
+            </div>
+
+            <div className={`rounded-lg border p-4 ${isPassing ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'}`}>
+              <div className="mb-2 flex items-center justify-between">
+                <div className="text-sm font-semibold text-gray-900">Governing utilization</div>
+                {isPassing ? <CheckCircle2 className="text-green-600" size={20} /> : <AlertCircle className="text-red-600" size={20} />}
+              </div>
+              <div className="text-3xl font-bold text-gray-900">{formatRatio(controllingUtilization)}</div>
+              <div className={`mt-1 text-sm font-semibold ${isPassing ? 'text-green-700' : 'text-red-700'}`}>
+                {isPassing ? 'PASS' : 'REVIEW REQUIRED'}
+              </div>
+              <div className="mt-2 text-xs text-gray-600">
+                Governing check: <span className="font-semibold">{governingLimitState}</span>
+              </div>
+              <div className="mt-3 grid grid-cols-3 gap-2 text-center text-xs">
+                <div className={`rounded border px-2 py-1 ${governingLimitState === 'Moment' ? 'border-blue-300 bg-blue-50 text-blue-800' : 'border-gray-200 bg-white text-gray-600'}`}>
+                  <div>Moment</div>
+                  <strong>{formatRatio(momentUtilization)}</strong>
+                </div>
+                <div className={`rounded border px-2 py-1 ${governingLimitState === 'Shear' ? 'border-blue-300 bg-blue-50 text-blue-800' : 'border-gray-200 bg-white text-gray-600'}`}>
+                  <div>Shear</div>
+                  <strong>{formatRatio(shearUtilization)}</strong>
+                </div>
+                <div className={`rounded border px-2 py-1 ${governingLimitState === 'Deflection' ? 'border-blue-300 bg-blue-50 text-blue-800' : 'border-gray-200 bg-white text-gray-600'}`}>
+                  <div>Defl.</div>
+                  <strong>{formatRatio(deflectionUtilization)}</strong>
                 </div>
               </div>
             </div>
 
             <div className="rounded-lg border border-gray-200 bg-white p-4 text-sm">
-              <div className="mb-3 font-semibold text-gray-900">Design checks</div>
+              <div className="mb-3 font-semibold text-gray-900">Forces and reactions</div>
               <div className="space-y-2">
-                <div className="grid grid-cols-3 gap-2 rounded bg-gray-50 p-2"><span>Moment</span><span className="text-right">{analysis?.maxMoment.toFixed(1) ?? '0.0'} / {designMoment.toFixed(1)}</span><span className="text-right font-semibold">{formatRatio(momentUtilization)}</span></div>
-                <div className="grid grid-cols-3 gap-2 rounded bg-gray-50 p-2"><span>Shear</span><span className="text-right">{analysis?.maxShear.toFixed(1) ?? '0.0'} / {designShear.toFixed(1)}</span><span className="text-right font-semibold">{formatRatio(shearUtilization)}</span></div>
-                <div className="grid grid-cols-3 gap-2 rounded bg-gray-50 p-2"><span>RA</span><span className="col-span-2 text-right">{analysis?.ra.toFixed(2) ?? '0.00'} k</span></div>
-                <div className="grid grid-cols-3 gap-2 rounded bg-gray-50 p-2"><span>RB</span><span className="col-span-2 text-right">{analysis?.rb.toFixed(2) ?? '0.00'} k</span></div>
+                <div className="grid grid-cols-2 gap-2 rounded bg-gray-50 p-2">
+                  <span>Moment</span>
+                  <span className="text-right font-semibold">{analysis?.maxMoment.toFixed(2) ?? '0.00'} kip-ft</span>
+                </div>
+                <div className="grid grid-cols-2 gap-2 rounded bg-gray-50 p-2">
+                  <span>Shear</span>
+                  <span className="text-right font-semibold">{analysis?.maxShear.toFixed(2) ?? '0.00'} k</span>
+                </div>
+                <div className="grid grid-cols-2 gap-2 rounded bg-gray-50 p-2">
+                  <span>RA</span>
+                  <span className="text-right font-semibold">{analysis?.ra.toFixed(2) ?? '0.00'} k</span>
+                </div>
+                <div className="grid grid-cols-2 gap-2 rounded bg-gray-50 p-2">
+                  <span>RB</span>
+                  <span className="text-right font-semibold">{analysis?.rb.toFixed(2) ?? '0.00'} k</span>
+                </div>
               </div>
             </div>
 
             <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-xs text-gray-500">
-              Results are for preliminary review and should be checked by the engineer of record before use.
+              Summary cards show only section, governing unity, and primary force/reaction values. Detailed checks are listed below.
             </div>
           </div>
         </div>
