@@ -1,7 +1,8 @@
 import React, { useMemo, useState } from 'react';
-import { Calculator, Clock3, FileText, FolderOpen, Pencil, Plus, Save, Search, Trash2, X } from 'lucide-react';
+import { Calculator, Clock3, FileText, FolderOpen, LogOut, Pencil, Plus, Save, Search, Trash2, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import simplifyStructLogo from '../assets/simplifystruct-logo.png';
+import { useAuth } from '../hooks/useAuth';
 
 type ProjectStatus = 'Active' | 'On Hold' | 'Closed' | 'Archived';
 type ProjectCalculationType = 'Mixed' | 'Steel' | 'Concrete' | 'Loads';
@@ -59,6 +60,7 @@ const formatDateTime = (isoDate: string) => {
 
 export const ProjectHome: React.FC = () => {
   const navigate = useNavigate();
+  const { user, logout } = useAuth();
   const [projects, setProjects] = useState<ProjectRecord[]>(readProjects);
   const [selectedMode, setSelectedMode] = useState<'new' | 'existing'>('new');
   const [searchText, setSearchText] = useState('');
@@ -178,6 +180,11 @@ export const ProjectHome: React.FC = () => {
     navigate('/dashboard');
   };
 
+  const handleSignOut = async () => {
+    await logout();
+    navigate('/login', { replace: true });
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 px-6 py-8 text-gray-900">
       <div className="mx-auto max-w-7xl">
@@ -192,13 +199,26 @@ export const ProjectHome: React.FC = () => {
             </div>
           </div>
 
-          <button
-            onClick={startQuickCalculations}
-            className="inline-flex w-fit items-center gap-2 rounded-md bg-amber-500 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-600"
-          >
-            <Calculator size={18} />
-            Quick Calculations
-          </button>
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="text-right text-xs text-gray-500">
+              <div className="font-semibold text-gray-700">{user?.email}</div>
+              <div>Signed in</div>
+            </div>
+            <button
+              onClick={startQuickCalculations}
+              className="inline-flex w-fit items-center gap-2 rounded-md bg-amber-500 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-600"
+            >
+              <Calculator size={18} />
+              Quick Calculations
+            </button>
+            <button
+              onClick={handleSignOut}
+              className="inline-flex w-fit items-center gap-2 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+            >
+              <LogOut size={18} />
+              Sign Out
+            </button>
+          </div>
         </header>
 
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">

@@ -1,6 +1,7 @@
 import { initializeApp } from "firebase/app";
 import {
   getAuth,
+  createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   signOut,
   onAuthStateChanged,
@@ -40,5 +41,11 @@ try {
   console.error("Firebase initialization error", error);
 }
 
-export { auth, signInWithEmailAndPassword, signOut, onAuthStateChanged };
+export {
+  auth,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signOut,
+  onAuthStateChanged,
+};
 export type { User };

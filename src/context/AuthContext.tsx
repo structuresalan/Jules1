@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   auth,
+  createUserWithEmailAndPassword,
   onAuthStateChanged,
   signInWithEmailAndPassword,
   signOut,
@@ -13,18 +14,45 @@ const getAllowedEmail = () =>
     .trim()
     .toLowerCase();
 
-const isAllowedUser = (candidate: User | null) => {
+const isAllowedEmail = (email: string) => {
   const allowedEmail = getAllowedEmail();
-  if (!candidate) return true;
   if (!allowedEmail) return true;
 
-  return candidate.email?.trim().toLowerCase() === allowedEmail;
+  return email.trim().toLowerCase() === allowedEmail;
+};
+
+const isAllowedUser = (candidate: User | null) => {
+  if (!candidate) return true;
+  return isAllowedEmail(candidate.email || '');
 };
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const authConfigured = Boolean(auth);
+
+  const createAccount = async (email: string, password: string) => {
+    const activeAuth = auth;
+    const normalizedEmail = email.trim();
+
+    if (!activeAuth) {
+      throw new Error('Firebase is not configured yet. Add the Firebase environment variables in Vercel before creating an account.');
+    }
+
+    if (!isAllowedEmail(normalizedEmail)) {
+      throw new Error('This email is not authorized to create a SimplifyStruct account.');
+    }
+
+    const credential = await createUserWithEmailAndPassword(activeAuth, normalizedEmail, password);
+
+    if (!isAllowedUser(credential.user)) {
+      await signOut(activeAuth);
+      setUser(null);
+      throw new Error('This email is not authorized for SimplifyStruct.');
+    }
+
+    setUser(credential.user);
+  };
 
   const login = async (email: string, password: string) => {
     const activeAuth = auth;
@@ -93,6 +121,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         user,
         loading,
         authConfigured,
+        createAccount,
         login,
         logout,
         mockLogin,

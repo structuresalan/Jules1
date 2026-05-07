@@ -3,13 +3,17 @@ import { Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import simplifyStructLogo from '../assets/simplifystruct-logo.png';
 
+type AuthMode = 'signin' | 'create';
+
 export const Login: React.FC = () => {
-  const { user, login, authConfigured } = useAuth();
+  const { user, login, createAccount, authConfigured } = useAuth();
   const navigate = useNavigate();
+  const [authMode, setAuthMode] = useState<AuthMode>('signin');
   const [email, setEmail] = useState(import.meta.env.VITE_ALLOWED_EMAIL || '');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
-  const [isSigningIn, setIsSigningIn] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   if (user) {
     return <Navigate to="/" replace />;
@@ -18,16 +22,34 @@ export const Login: React.FC = () => {
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     setErrorMessage('');
-    setIsSigningIn(true);
+
+    if (authMode === 'create' && password !== confirmPassword) {
+      setErrorMessage('Passwords do not match.');
+      return;
+    }
+
+    setIsSubmitting(true);
 
     try {
-      await login(email, password);
+      if (authMode === 'create') {
+        await createAccount(email, password);
+      } else {
+        await login(email, password);
+      }
+
       navigate('/', { replace: true });
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : 'Unable to sign in.');
+      setErrorMessage(error instanceof Error ? error.message : 'Unable to continue.');
     } finally {
-      setIsSigningIn(false);
+      setIsSubmitting(false);
     }
+  };
+
+  const switchMode = (mode: AuthMode) => {
+    setAuthMode(mode);
+    setErrorMessage('');
+    setPassword('');
+    setConfirmPassword('');
   };
 
   return (
@@ -42,11 +64,34 @@ export const Login: React.FC = () => {
         </div>
 
         <h1 className="text-center text-2xl font-bold text-gray-900">
-          Sign in to SimplifyStruct
+          {authMode === 'create' ? 'Create a SimplifyStruct account' : 'Sign in to SimplifyStruct'}
         </h1>
         <p className="mt-3 text-center text-gray-500">
-          Access is limited to the approved SimplifyStruct account.
+          {authMode === 'create'
+            ? 'Create the approved account for this SimplifyStruct site.'
+            : 'Access is limited to approved SimplifyStruct accounts.'}
         </p>
+
+        <div className="mt-6 grid grid-cols-2 rounded-lg border border-gray-200 bg-gray-50 p-1">
+          <button
+            type="button"
+            onClick={() => switchMode('signin')}
+            className={`rounded-md px-3 py-2 text-sm font-semibold ${
+              authMode === 'signin' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-500 hover:text-gray-800'
+            }`}
+          >
+            Sign in
+          </button>
+          <button
+            type="button"
+            onClick={() => switchMode('create')}
+            className={`rounded-md px-3 py-2 text-sm font-semibold ${
+              authMode === 'create' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-500 hover:text-gray-800'
+            }`}
+          >
+            Create account
+          </button>
+        </div>
 
         {!authConfigured && (
           <div className="mt-6 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
@@ -82,19 +127,48 @@ export const Login: React.FC = () => {
               onChange={(event) => setPassword(event.target.value)}
               className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
               placeholder="Password"
-              autoComplete="current-password"
+              autoComplete={authMode === 'create' ? 'new-password' : 'current-password'}
+              minLength={6}
               required
             />
           </label>
 
+          {authMode === 'create' && (
+            <label className="block text-sm font-medium text-gray-700">
+              Confirm password
+              <input
+                type="password"
+                value={confirmPassword}
+                onChange={(event) => setConfirmPassword(event.target.value)}
+                className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                placeholder="Confirm password"
+                autoComplete="new-password"
+                minLength={6}
+                required
+              />
+            </label>
+          )}
+
           <button
             type="submit"
-            disabled={!authConfigured || isSigningIn}
+            disabled={!authConfigured || isSubmitting}
             className="w-full rounded-md bg-blue-600 px-4 py-3 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {isSigningIn ? 'Signing in...' : 'Sign In'}
+            {isSubmitting
+              ? authMode === 'create'
+                ? 'Creating account...'
+                : 'Signing in...'
+              : authMode === 'create'
+                ? 'Create Account'
+                : 'Sign In'}
           </button>
         </form>
+
+        {authMode === 'create' && (
+          <p className="mt-4 text-center text-xs text-gray-500">
+            If VITE_ALLOWED_EMAIL is set, only that exact email can create an account.
+          </p>
+        )}
       </div>
     </div>
   );
