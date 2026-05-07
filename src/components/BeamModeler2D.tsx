@@ -112,6 +112,21 @@ const AISC_SHAPES_CSV_URL = 'https://raw.githubusercontent.com/ambaker1/aisc-csv
 
 const preferredShapeTypeOrder = ['W', 'M', 'S', 'HP', 'C', 'MC', 'WT', 'MT', 'ST', 'L', '2L', 'HSS', 'PIPE'];
 
+const normalizeShapeName = (value: string) => value.replace(/\s+/g, '').toUpperCase();
+
+const shapeSearchScore = (name: string, search: string) => {
+  const normalizedName = normalizeShapeName(name);
+  const normalizedSearch = normalizeShapeName(search);
+
+  if (!normalizedSearch) return 0;
+  if (normalizedName === normalizedSearch) return 1;
+  if (normalizedName.startsWith(`${normalizedSearch}X`)) return 2;
+  if (normalizedName.startsWith(normalizedSearch)) return 3;
+  if (normalizedName.includes(normalizedSearch)) return 4;
+
+  return 99;
+};
+
 const parseSteelNumber = (value: string | undefined) => {
   if (!value) return undefined;
   const parsed = Number(value.trim());
@@ -363,18 +378,32 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
     return ['~', 'All', ...preferredShapeTypeOrder.filter((type) => availableTypes.includes(type)), ...availableTypes.filter((type) => !preferredShapeTypeOrder.includes(type)).sort()];
   }, [shapeDatabase, shapeNames]);
 
+  const normalizedShapeSearch = normalizeShapeName(shapeSearch.trim());
   const filteredShapeNames = useMemo(() => {
-    const search = shapeSearch.trim().toLowerCase();
+    return shapeNames
+      .filter((name) => {
+        const shape = shapeDatabase[name];
+        const matchesType = shapeTypeFilter === '~' || shapeTypeFilter === 'All' || (shape?.Type || 'Other') === shapeTypeFilter;
+        const matchesSearch = !normalizedShapeSearch || shapeSearchScore(name, normalizedShapeSearch) < 99;
 
-    return shapeNames.filter((name) => {
-      const shape = shapeDatabase[name];
-      const matchesType = shapeTypeFilter === '~' || shapeTypeFilter === 'All' || (shape?.Type || 'Other') === shapeTypeFilter;
-      const matchesSearch = !search || name.toLowerCase().includes(search);
+        return matchesType && matchesSearch;
+      })
+      .sort((a, b) => {
+        const scoreDifference = shapeSearchScore(a, normalizedShapeSearch) - shapeSearchScore(b, normalizedShapeSearch);
+        if (scoreDifference !== 0) return scoreDifference;
 
-      return matchesType && matchesSearch;
-    });
-  }, [shapeDatabase, shapeNames, shapeSearch, shapeTypeFilter]);
+        return a.localeCompare(b, undefined, { numeric: true });
+      });
+  }, [shapeDatabase, shapeNames, normalizedShapeSearch, shapeTypeFilter]);
 
+  const exactShapeSearchMatch = useMemo(() => {
+    if (!normalizedShapeSearch) return '';
+
+    return filteredShapeNames.find((name) => normalizeShapeName(name) === normalizedShapeSearch) ?? '';
+  }, [filteredShapeNames, normalizedShapeSearch]);
+
+  const suggestedShapeNames = normalizedShapeSearch ? filteredShapeNames.slice(0, 8) : [];
+  const sectionSelectOptions = filteredShapeNames.includes(section) ? filteredShapeNames : [section, ...filteredShapeNames];
   const selectedShape = shapeDatabase[section] ?? shapeDatabase[shapeNames[0]] ?? { A: 10, Zx: 50, Type: 'W', AISC_Manual_Label: section };
   const aiscFactors = (aiscData as Record<string, typeof aiscData['AISC 360-16']>)[activeAiscYear] ?? aiscData['AISC 360-16'];
   const sectionDepth = Math.max(selectedShape.d ?? Number(section.match(/\d+(?:\.\d+)?/)?.[0] ?? 12), 1);
@@ -458,10 +487,10 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
   }, []);
 
   useEffect(() => {
-    if (!shapeDatabase[section] && filteredShapeNames.length > 0) {
-      setSection(filteredShapeNames[0]);
+    if (!shapeDatabase[section] && shapeNames.length > 0) {
+      setSection(shapeNames[0]);
     }
-  }, [filteredShapeNames, section, shapeDatabase]);
+  }, [section, shapeDatabase, shapeNames]);
 
   useEffect(() => {
     const documentToOpen = consumeOpenProjectDocumentRequest();
@@ -1315,17 +1344,64 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
               </label>
               <label className="text-sm font-medium text-gray-700">
                 {fieldLabel('Search section')}
-                <input value={shapeSearch} onChange={(event) => setShapeSearch(event.target.value)} className="mt-1 w-full rounded border border-gray-300 bg-white p-2 text-sm" placeholder="~/ W12, HSS, L4..." />
+                <input
+                  value={shapeSearch}
+                  onChange={(event) => setShapeSearch(event.target.value)}
+                  className="mt-1 w-full rounded border border-gray-300 bg-white p-2 text-sm"
+                  placeholder="Type section, e.g. W8X18"
+                />
+                {normalizedShapeSearch && (
+                  <div className={`mt-1 text-xs ${exactShapeSearchMatch ? 'text-green-700' : 'text-amber-700'}`}>
+                    {exactShapeSearchMatch
+                      ? `Exact match available: ${exactShapeSearchMatch}`
+                      : 'No exact match. Choose a suggested close match below.'}
+                  </div>
+                )}
               </label>
               <label className="text-sm font-medium text-gray-700">
                 {fieldLabel('Selected section', true)}
                 <select value={section} onChange={(event) => setSection(event.target.value)} className="mt-1 w-full rounded border border-gray-300 bg-white p-2 text-sm">
-                  {filteredShapeNames.map((name) => <option key={name}>{name}</option>)}
+                  {sectionSelectOptions.map((name) => <option key={name}>{name}</option>)}
                 </select>
               </label>
+              {normalizedShapeSearch && (
+                <div className="rounded border border-gray-200 bg-gray-50 p-2 text-xs text-gray-600 sm:col-span-3">
+                  <div className="mb-2 font-semibold text-gray-800">Suggested sections</div>
+                  {suggestedShapeNames.length > 0 ? (
+                    <div className="flex flex-wrap gap-2">
+                      {suggestedShapeNames.map((name) => (
+                        <button
+                          key={name}
+                          type="button"
+                          onClick={() => {
+                            setSection(name);
+                            setShapeSearch(name);
+                          }}
+                          className={`rounded border px-2 py-1 font-semibold ${
+                            section === name
+                              ? 'border-blue-300 bg-blue-100 text-blue-800'
+                              : 'border-gray-200 bg-white text-gray-700 hover:border-blue-200 hover:bg-blue-50'
+                          }`}
+                        >
+                          {name}
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-amber-700">No close section names found. Try a broader search like W8, HSS6, or L4.</div>
+                  )}
+                </div>
+              )}
               <div className="rounded border border-gray-200 bg-gray-50 p-2 text-xs text-gray-600 sm:col-span-3">
                 <div><span className="font-semibold">Shape database:</span> {shapeDatabaseSource}</div>
-                <div>{shapeTypeFilter === '~' || shapeTypeFilter === 'All' ? shapeNames.length : filteredShapeNames.length} section{(shapeTypeFilter === '~' || shapeTypeFilter === 'All' ? shapeNames.length : filteredShapeNames.length) === 1 ? '' : 's'} shown{shapeDatabaseError ? `; fallback reason: ${shapeDatabaseError}` : ''}.</div>
+                <div>
+                  {normalizedShapeSearch
+                    ? filteredShapeNames.length
+                    : shapeTypeFilter === '~' || shapeTypeFilter === 'All'
+                      ? shapeNames.length
+                      : filteredShapeNames.length}{' '}
+                  section{(normalizedShapeSearch ? filteredShapeNames.length : shapeTypeFilter === '~' || shapeTypeFilter === 'All' ? shapeNames.length : filteredShapeNames.length) === 1 ? '' : 's'} shown{shapeDatabaseError ? `; fallback reason: ${shapeDatabaseError}` : ''}.
+                </div>
               </div>
               <label className="text-sm font-medium text-gray-700">{fieldLabel('Internal sections', true)}<input type="number" min={3} value={internalSections} onChange={(event) => setInternalSections(Number(event.target.value))} className="mt-1 w-full rounded border border-gray-300 p-2 text-sm" /></label>
               <label className="text-sm font-medium text-gray-700">{fieldLabel('Fy (ksi)', true)}<input type="number" value={fy} onChange={(event) => setFy(Number(event.target.value))} className="mt-1 w-full rounded border border-gray-300 p-2 text-sm" /></label>

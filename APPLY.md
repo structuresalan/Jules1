@@ -1,14 +1,18 @@
-# Optional Steel Fields Default to ~
+# Steel Section Search Suggestions
 
 Replace this file:
 - src/components/BeamModeler2D.tsx
 
 Commit message:
-Change optional steel defaults to tilde
+Add steel section search suggestions
 
 What changed:
-- Optional Steel Beam fields now use ~ instead of Null.
-- Optional dropdowns now start with ~.
-- Optional numeric fields start blank and show ~ in reports/output until changed.
-- Required fields still use * and still block calculations if missing/invalid.
-- Optional fields still do not block calculations.
+- Search section now shows close suggested sections.
+- Typing a partial section like W8X5 no longer silently changes the selected section.
+- The user must click a suggestion or choose a section from the dropdown to actually change the selected section.
+- Exact matches are shown clearly.
+- Suggestions are sorted by closeness:
+  1. Exact match
+  2. Prefix match
+  3. Contains match
+  4. Natural numeric sort
