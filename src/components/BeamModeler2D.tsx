@@ -368,10 +368,13 @@ export const BeamModeler2D: React.FC = () => {
           return (
             <g key={`dist-${index}`}>
               <rect x={x1} y={Math.min(topY, arrowEndY)} width={Math.max(x2 - x1, 1)} height={Math.abs(arrowEndY - topY)} fill="#2563eb" fillOpacity="0.08" stroke="#2563eb" strokeDasharray="3,3" />
-              {Array.from({ length: Math.max(2, Math.min(9, Math.round((x2 - x1) / 58))) }, (_, arrowIndex, arrows) => {
-                const arrowX = x1 + ((x2 - x1) * arrowIndex) / Math.max(arrows.length - 1, 1);
-                return <line key={arrowIndex} x1={arrowX} y1={topY} x2={arrowX} y2={arrowEndY} stroke="#2563eb" strokeWidth="2" markerEnd="url(#beamLoadArrow)" />;
-              })}
+              {(() => {
+                const arrowCount = Math.max(2, Math.min(9, Math.round((x2 - x1) / 58)));
+                return Array.from({ length: arrowCount }, (_unused, arrowIndex) => {
+                  const arrowX = x1 + ((x2 - x1) * arrowIndex) / Math.max(arrowCount - 1, 1);
+                  return <line key={arrowIndex} x1={arrowX} y1={topY} x2={arrowX} y2={arrowEndY} stroke="#2563eb" strokeWidth="2" markerEnd="url(#beamLoadArrow)" />;
+                });
+              })()}
               <text x={(x1 + x2) / 2} y={load.w >= 0 ? 44 : 186} fontSize="12" textAnchor="middle" fill="#1d4ed8" fontWeight="700">
                 {Math.abs(load.w).toFixed(2)} k/ft {load.label}
               </text>
