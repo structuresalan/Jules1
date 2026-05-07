@@ -1,36 +1,33 @@
-import React, { useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React from 'react';
 import { useAuth } from '../hooks/useAuth';
+import simplifyStructLogo from '../assets/simplifystruct-logo.png';
 
 export const Login: React.FC = () => {
-  const { user, mockLogin } = useAuth();
-  const navigate = useNavigate();
-
-  useEffect(() => {
-    if (user) {
-      navigate('/', { replace: true });
-    }
-  }, [user, navigate]);
+  const { signInWithGoogle, mockLogin } = useAuth();
 
   return (
-    <div className="flex h-screen items-center justify-center bg-gray-50">
-      <div className="w-full max-w-md p-8 bg-white rounded-lg shadow-sm border border-gray-200">
-        <div className="mb-8 text-center">
-          <div className="w-12 h-12 bg-blue-600 rounded-lg mx-auto mb-4"></div>
-          <h1 className="text-2xl font-semibold text-gray-900">Sign in to StrucCalc</h1>
-          <p className="text-gray-500 mt-2">Professional structural calculations.</p>
-        </div>
-        
-        <div className="space-y-4">
-          <div className="p-4 bg-blue-50 text-blue-800 rounded-md text-sm">
-            Firebase is not fully configured in this prototype. Click below to use the mock login.
-          </div>
-          <button
-            onClick={mockLogin}
-            className="w-full flex justify-center py-2.5 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
-          >
-            Sign In (Mock)
-          </button>
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+      <div className="max-w-md w-full bg-white rounded-xl shadow-sm border border-gray-200 p-8">
+        <div className="mb-6 flex justify-center"><img src={simplifyStructLogo} alt="SimplifyStruct logo" className="h-20 w-auto object-contain" /></div>
+        <h1 className="text-center text-2xl font-bold text-gray-900">Sign in to SimplifyStruct</h1>
+        <p className="mt-2 text-gray-500">Access your structural calculation workspace.</p>
+        <div className="mt-6 space-y-3">
+          {signInWithGoogle && (
+            <button
+              onClick={signInWithGoogle}
+              className="w-full rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+            >
+              Sign in with Google
+            </button>
+          )}
+          {mockLogin && (
+            <button
+              onClick={mockLogin}
+              className="w-full rounded-md border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+            >
+              Demo Login
+            </button>
+          )}
         </div>
       </div>
     </div>
