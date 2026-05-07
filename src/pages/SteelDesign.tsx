@@ -10,13 +10,15 @@ import { BeamModeler2D } from '../components/BeamModeler2D';
 const shapes = wShapesData as Record<string, { A: number; Zx: number }>;
 const shapeNames = Object.keys(shapes);
 
+type SteelTab = 'Beam' | 'Column' | 'Composite Beam' | 'Single Angle' | 'Base Plate' | 'Anchorage';
+
 export const SteelDesign: React.FC = () => {
   const { toPDF, targetRef } = usePDF({ filename: 'steel-design-report.pdf' });
 
   const [ibcYear, setIbcYear] = useState('IBC 2018');
   const [aiscYear, setAiscYear] = useState(IBC_TO_AISC_MAP['IBC 2018']);
   const [isOverridden, setIsOverridden] = useState(false);
-  const [activeTab, setActiveTab] = useState<'Beam' | 'Column'>('Beam');
+  const [activeTab, setActiveTab] = useState<SteelTab>('Beam');
 
   const [method, setMethod] = useState('LRFD');
   const [section, setSection] = useState(shapeNames[1]);
@@ -36,12 +38,21 @@ export const SteelDesign: React.FC = () => {
   const interaction = pu / designTension >= 0.2 ? pu / designTension + (8 / 9) * (mu / designMoment) : pu / (2 * designTension) + mu / designMoment;
   const isOk = interaction <= 1;
 
+  const tabs: SteelTab[] = ['Beam', 'Column', 'Composite Beam', 'Single Angle', 'Base Plate', 'Anchorage'];
+
+  const renderPlaceholder = (name: string) => (
+    <div className="bg-white border border-gray-200 rounded-lg p-8">
+      <h2 className="text-xl font-semibold text-gray-900 mb-2">{name}</h2>
+      <p className="text-gray-600">Section kept in place so you can fill in your design logic without losing workflow structure.</p>
+    </div>
+  );
+
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-gray-900 flex items-center gap-3"><Frame className="text-blue-600" />Steel Design</h1>
-          <p className="mt-2 text-gray-500">Separated Beam and Column workflows with a new 2D beam modeler scaffold.</p>
+          <p className="mt-2 text-gray-500">Beam modeler added while preserving all steel module sections.</p>
         </div>
         <div className="flex items-center gap-4 bg-white p-2 rounded-lg border border-gray-200 shadow-sm w-full lg:w-auto">
           <div className="flex items-center gap-3 pr-4 border-r border-gray-200">
@@ -57,9 +68,9 @@ export const SteelDesign: React.FC = () => {
         </div>
       </div>
 
-      <div className="border-b border-gray-200">
-        <nav className="-mb-px flex space-x-8">
-          {(['Beam', 'Column'] as const).map((tab) => (
+      <div className="border-b border-gray-200 overflow-x-auto">
+        <nav className="-mb-px flex space-x-8 min-w-max">
+          {tabs.map((tab) => (
             <button key={tab} onClick={() => setActiveTab(tab)} className={`py-3 px-1 border-b-2 text-sm font-medium ${activeTab === tab ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500'}`}>
               {tab}
             </button>
@@ -68,9 +79,9 @@ export const SteelDesign: React.FC = () => {
       </div>
 
       <div ref={targetRef}>
-        {activeTab === 'Beam' ? (
-          <BeamModeler2D />
-        ) : (
+        {activeTab === 'Beam' && <BeamModeler2D />}
+
+        {activeTab === 'Column' && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <div className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm space-y-4">
               <h2 className="text-lg font-semibold">Column Quick Check</h2>
@@ -93,6 +104,11 @@ export const SteelDesign: React.FC = () => {
             </div>
           </div>
         )}
+
+        {activeTab === 'Composite Beam' && renderPlaceholder('Composite Beam')}
+        {activeTab === 'Single Angle' && renderPlaceholder('Single Angle')}
+        {activeTab === 'Base Plate' && renderPlaceholder('Base Plate')}
+        {activeTab === 'Anchorage' && renderPlaceholder('Anchorage')}
       </div>
     </div>
   );
