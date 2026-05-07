@@ -1,7 +1,9 @@
 import { initializeApp } from "firebase/app";
 import {
   getAuth,
+  browserLocalPersistence,
   createUserWithEmailAndPassword,
+  setPersistence,
   signInWithEmailAndPassword,
   signOut,
   onAuthStateChanged,
@@ -43,7 +45,9 @@ try {
 
 export {
   auth,
+  browserLocalPersistence,
   createUserWithEmailAndPassword,
+  setPersistence,
   signInWithEmailAndPassword,
   signOut,
   onAuthStateChanged,

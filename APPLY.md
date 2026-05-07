@@ -1,22 +1,21 @@
-# Fix Login Kickout with Invite-Code Signup
+# Fix Firebase Login Loop
 
-Replace/add these files:
+Replace these files:
+- src/firebase.ts
 - src/context/AuthContext.tsx
-- src/pages/Login.tsx
-- .env.example
 
 Commit message:
-Fix invite code login persistence
+Fix Firebase login loop for tester accounts
 
 What changed:
-- Invite code is now used only for creating new accounts.
-- Existing Firebase users can sign in normally.
-- Removed the old VITE_ALLOWED_EMAIL enforcement from login/auth state.
-- This prevents the app from signing a user in for a second and then kicking them back to /login.
-- Login page no longer pre-fills the old allowed email variable.
+- Sets Firebase auth persistence to browser local persistence.
+- Prevents a stale null auth-state event from immediately kicking a newly signed-in user back to /login.
+- Keeps invite code required for account creation only.
+- Existing users can sign in normally.
+- Keeps sign out behavior working.
 
-Vercel setup:
-- Keep all VITE_FIREBASE_* variables.
-- Keep VITE_SIGNUP_INVITE_CODE.
-- Delete VITE_ALLOWED_EMAIL or leave it; this code no longer uses it.
-- Redeploy after pushing.
+After replacing:
+1. Commit and push.
+2. Let Vercel redeploy.
+3. Hard refresh the website.
+4. Try signing in with the tester account again.
