@@ -11,7 +11,9 @@ import {
   MapPin,
   Maximize2,
   MousePointer2,
+  Move,
   Pencil,
+  Save,
   Search,
   Trash2,
   Upload,
@@ -30,6 +32,8 @@ import {
 
 type DocumentsView = 'list' | 'visual';
 type VisualBoardKind = 'Plan' | 'Elevation' | 'Site Photo' | 'Other';
+type VisualMarkerStyle = 'Pin' | 'Arrow';
+type VisualMarkerDirection = 'Up' | 'Down' | 'Left' | 'Right';
 
 interface VisualBoard {
   id: string;
@@ -51,6 +55,8 @@ interface VisualMarker {
   notes: string;
   xPercent: number;
   yPercent: number;
+  style?: VisualMarkerStyle;
+  direction?: VisualMarkerDirection;
   createdAt: string;
   updatedAt: string;
 }
@@ -125,6 +131,16 @@ const getMarkerDocument = (marker: VisualMarker | null, documents: ProjectDocume
   if (!marker) return null;
   return documents.find((document) => document.id === marker.documentId) ?? null;
 };
+
+const markerArrowSymbol = (direction: VisualMarkerDirection | undefined) => {
+  if (direction === 'Down') return '↓';
+  if (direction === 'Left') return '←';
+  if (direction === 'Right') return '→';
+  return '↑';
+};
+
+const normalizeMarkerStyle = (style: VisualMarker['style']): VisualMarkerStyle => style || 'Pin';
+const normalizeMarkerDirection = (direction: VisualMarker['direction']): VisualMarkerDirection => direction || 'Down';
 
 const getBeamDetails = (document: ProjectDocument) => {
   const inputs = document.inputs as {
@@ -335,7 +351,11 @@ export const Documents: React.FC = () => {
   const [markerLabel, setMarkerLabel] = useState('');
   const [markerDocumentId, setMarkerDocumentId] = useState('');
   const [markerNotes, setMarkerNotes] = useState('');
+  const [markerStyle, setMarkerStyle] = useState<VisualMarkerStyle>('Pin');
+  const [markerDirection, setMarkerDirection] = useState<VisualMarkerDirection>('Down');
   const [selectedMarkerId, setSelectedMarkerId] = useState<string | null>(null);
+  const [editingMarkerId, setEditingMarkerId] = useState<string | null>(null);
+  const [movingMarkerId, setMovingMarkerId] = useState<string | null>(null);
   const [hoverVisualMarker, setHoverVisualMarker] = useState<VisualMarker | null>(null);
   const [newBoardName, setNewBoardName] = useState('');
   const [newBoardKind, setNewBoardKind] = useState<VisualBoardKind>('Plan');
@@ -515,27 +535,62 @@ export const Documents: React.FC = () => {
     event.target.value = '';
   };
 
+  const resetMarkerForm = () => {
+    setMarkerLabel('');
+    setMarkerDocumentId('');
+    setMarkerNotes('');
+    setMarkerStyle('Pin');
+    setMarkerDirection('Down');
+  };
+
+  const updateVisualMarker = (markerId: string, patch: Partial<VisualMarker>) => {
+    const now = new Date().toISOString();
+    writeAllVisualMarkers(
+      getAllVisualMarkers().map((marker) =>
+        marker.id === markerId
+          ? {
+              ...marker,
+              ...patch,
+              updatedAt: now,
+            }
+          : marker,
+      ),
+    );
+    refreshVisualMarkers();
+  };
+
   const handleBoardImageClick = (event: React.MouseEvent<HTMLImageElement>) => {
-    if (!isAddingMarker || !selectedBoard) return;
+    if (!selectedBoard) return;
+    if (!isAddingMarker && !movingMarkerId) return;
 
     const rect = event.currentTarget.getBoundingClientRect();
     const xPercent = Math.min(100, Math.max(0, ((event.clientX - rect.left) / rect.width) * 100));
     const yPercent = Math.min(100, Math.max(0, ((event.clientY - rect.top) / rect.height) * 100));
 
+    if (movingMarkerId) {
+      updateVisualMarker(movingMarkerId, { xPercent, yPercent });
+      setSelectedMarkerId(movingMarkerId);
+      setMovingMarkerId(null);
+      return;
+    }
+
     setPendingMarkerPoint({ xPercent, yPercent });
     setMarkerLabel(`M${selectedBoardMarkers.length + 1}`);
     setMarkerDocumentId(documents[0]?.id ?? '');
     setMarkerNotes('');
+    setMarkerStyle('Pin');
+    setMarkerDirection('Down');
     setSelectedMarkerId(null);
+    setEditingMarkerId(null);
     setIsAddingMarker(false);
   };
 
   const cancelPendingMarker = () => {
     setPendingMarkerPoint(null);
-    setMarkerLabel('');
-    setMarkerDocumentId('');
-    setMarkerNotes('');
+    resetMarkerForm();
     setIsAddingMarker(false);
+    setEditingMarkerId(null);
+    setMovingMarkerId(null);
   };
 
   const savePendingMarker = () => {
@@ -551,23 +606,69 @@ export const Documents: React.FC = () => {
       notes: markerNotes.trim(),
       xPercent: pendingMarkerPoint.xPercent,
       yPercent: pendingMarkerPoint.yPercent,
+      style: markerStyle,
+      direction: markerDirection,
       createdAt: now,
       updatedAt: now,
     };
 
     writeAllVisualMarkers([marker, ...getAllVisualMarkers()]);
     setPendingMarkerPoint(null);
-    setMarkerLabel('');
-    setMarkerDocumentId('');
-    setMarkerNotes('');
+    resetMarkerForm();
     setSelectedMarkerId(marker.id);
     refreshVisualMarkers();
+  };
+
+  const startEditMarker = (marker: VisualMarker) => {
+    setEditingMarkerId(marker.id);
+    setMarkerLabel(marker.label);
+    setMarkerDocumentId(marker.documentId);
+    setMarkerNotes(marker.notes);
+    setMarkerStyle(normalizeMarkerStyle(marker.style));
+    setMarkerDirection(normalizeMarkerDirection(marker.direction));
+    setPendingMarkerPoint(null);
+    setIsAddingMarker(false);
+    setMovingMarkerId(null);
+  };
+
+  const cancelEditMarker = () => {
+    setEditingMarkerId(null);
+    resetMarkerForm();
+  };
+
+  const saveMarkerEdit = () => {
+    if (!editingMarkerId || !markerDocumentId) return;
+
+    updateVisualMarker(editingMarkerId, {
+      documentId: markerDocumentId,
+      label: markerLabel.trim() || 'Marker',
+      notes: markerNotes.trim(),
+      style: markerStyle,
+      direction: markerDirection,
+    });
+    setEditingMarkerId(null);
+    resetMarkerForm();
+  };
+
+  const startMoveMarker = (markerId: string) => {
+    setMovingMarkerId(markerId);
+    setSelectedMarkerId(markerId);
+    setEditingMarkerId(null);
+    setPendingMarkerPoint(null);
+    setIsAddingMarker(false);
   };
 
   const handleDeleteVisualMarker = (markerId: string) => {
     deleteVisualMarker(markerId);
     if (selectedMarkerId === markerId) {
       setSelectedMarkerId(null);
+    }
+    if (editingMarkerId === markerId) {
+      setEditingMarkerId(null);
+      resetMarkerForm();
+    }
+    if (movingMarkerId === markerId) {
+      setMovingMarkerId(null);
     }
     setHoverVisualMarker(null);
     refreshVisualMarkers();
@@ -579,6 +680,8 @@ export const Documents: React.FC = () => {
       setSelectedBoardId(null);
     }
     setSelectedMarkerId(null);
+    setEditingMarkerId(null);
+    setMovingMarkerId(null);
     setHoverVisualMarker(null);
     refreshVisualBoards();
     refreshVisualMarkers();
@@ -677,6 +780,150 @@ export const Documents: React.FC = () => {
     </div>
   );
 
+  const renderMarkerForm = (mode: 'new' | 'edit') => (
+    <div className="mt-4 rounded-lg border border-blue-200 bg-white p-3">
+      <h4 className="flex items-center gap-2 text-sm font-bold text-gray-900">
+        <MapPin size={15} className="text-blue-600" />
+        {mode === 'new' ? 'New marker' : 'Edit marker'}
+      </h4>
+
+      <label className="mt-3 block text-xs font-semibold text-gray-600">
+        Marker label
+        <input
+          value={markerLabel}
+          onChange={(event) => setMarkerLabel(event.target.value)}
+          className="mt-1 w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
+          placeholder="B12, Grid A-3, etc."
+        />
+      </label>
+
+      <label className="mt-3 block text-xs font-semibold text-gray-600">
+        Linked document
+        <select
+          value={markerDocumentId}
+          onChange={(event) => setMarkerDocumentId(event.target.value)}
+          className="mt-1 w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm"
+        >
+          <option value="">Select document...</option>
+          {documents.map((document) => (
+            <option key={document.id} value={document.id}>
+              {document.name}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        <label className="block text-xs font-semibold text-gray-600">
+          Marker style
+          <select
+            value={markerStyle}
+            onChange={(event) => setMarkerStyle(event.target.value as VisualMarkerStyle)}
+            className="mt-1 w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm"
+          >
+            <option>Pin</option>
+            <option>Arrow</option>
+          </select>
+        </label>
+
+        <label className="block text-xs font-semibold text-gray-600">
+          Direction
+          <select
+            value={markerDirection}
+            onChange={(event) => setMarkerDirection(event.target.value as VisualMarkerDirection)}
+            className="mt-1 w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm"
+          >
+            <option>Up</option>
+            <option>Down</option>
+            <option>Left</option>
+            <option>Right</option>
+          </select>
+        </label>
+      </div>
+
+      <label className="mt-3 block text-xs font-semibold text-gray-600">
+        Notes
+        <textarea
+          value={markerNotes}
+          onChange={(event) => setMarkerNotes(event.target.value)}
+          className="mt-1 h-20 w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
+          placeholder="Optional location note..."
+        />
+      </label>
+
+      <div className="mt-3 flex gap-2">
+        <button
+          onClick={mode === 'new' ? savePendingMarker : saveMarkerEdit}
+          disabled={!markerDocumentId}
+          className="inline-flex items-center gap-1 rounded bg-blue-600 px-3 py-2 text-xs font-bold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <Save size={13} />
+          {mode === 'new' ? 'Save Marker' : 'Save Changes'}
+        </button>
+        <button
+          onClick={mode === 'new' ? cancelPendingMarker : cancelEditMarker}
+          className="rounded border border-gray-300 bg-white px-3 py-2 text-xs font-bold text-gray-700 hover:bg-gray-50"
+        >
+          Cancel
+        </button>
+      </div>
+
+      {documents.length === 0 && (
+        <div className="mt-2 rounded bg-amber-50 p-2 text-xs text-amber-800">
+          Save a calculation document first, then link it to this marker.
+        </div>
+      )}
+    </div>
+  );
+
+  const renderVisualMarkerButton = (marker: VisualMarker) => {
+    const markerDocument = getMarkerDocument(marker, documents);
+    const style = normalizeMarkerStyle(marker.style);
+    const direction = normalizeMarkerDirection(marker.direction);
+    const isSelected = selectedMarkerId === marker.id;
+    const isMoving = movingMarkerId === marker.id;
+
+    return (
+      <button
+        key={marker.id}
+        type="button"
+        onClick={(event) => {
+          event.stopPropagation();
+          setSelectedMarkerId(marker.id);
+          setPendingMarkerPoint(null);
+          setIsAddingMarker(false);
+        }}
+        onMouseEnter={(event) => {
+          setHoverVisualMarker(marker);
+          setHoverPoint({ x: event.clientX, y: event.clientY });
+        }}
+        onMouseMove={(event) => setHoverPoint({ x: event.clientX, y: event.clientY })}
+        onMouseLeave={() => setHoverVisualMarker(null)}
+        className={`absolute z-10 -translate-x-1/2 -translate-y-full rounded-full border px-2 py-1 text-xs font-bold shadow-lg ${
+          isMoving
+            ? 'border-amber-500 bg-amber-400 text-white'
+            : isSelected
+              ? 'border-blue-700 bg-blue-600 text-white'
+              : 'border-blue-200 bg-white text-blue-700 hover:bg-blue-50'
+        }`}
+        style={{
+          left: `${marker.xPercent}%`,
+          top: `${marker.yPercent}%`,
+        }}
+        title={markerDocument ? `${marker.label}: ${markerDocument.name}` : marker.label}
+      >
+        <span className="inline-flex items-center gap-1">
+          {style === 'Arrow' ? (
+            <span className="text-sm leading-none">{markerArrowSymbol(direction)}</span>
+          ) : (
+            <MapPin size={13} />
+          )}
+          {marker.label}
+        </span>
+      </button>
+    );
+  };
+
   const renderVisualMapBoard = () => {
     if (!selectedBoard) return null;
 
@@ -708,6 +955,8 @@ export const Documents: React.FC = () => {
                   setIsAddingMarker(true);
                   setPendingMarkerPoint(null);
                   setSelectedMarkerId(null);
+                  setEditingMarkerId(null);
+                  setMovingMarkerId(null);
                 }}
                 className={`inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold ${
                   isAddingMarker
@@ -718,7 +967,7 @@ export const Documents: React.FC = () => {
                 <MapPin size={16} />
                 {isAddingMarker ? 'Click plan/photo to place marker' : 'Add Marker'}
               </button>
-              {(isAddingMarker || pendingMarkerPoint) && (
+              {(isAddingMarker || pendingMarkerPoint || movingMarkerId) && (
                 <button
                   onClick={cancelPendingMarker}
                   className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
@@ -738,6 +987,15 @@ export const Documents: React.FC = () => {
             </div>
           )}
 
+          {movingMarkerId && (
+            <div className="border-b border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+              <div className="flex items-center gap-2 font-semibold">
+                <Move size={16} />
+                Click a new location on the plan/photo to move the selected marker.
+              </div>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 gap-0 lg:grid-cols-[minmax(0,1fr)_320px]">
             <div className="max-h-[72vh] overflow-auto bg-slate-100 p-4">
               <div className="mx-auto w-fit rounded-lg border border-gray-300 bg-white p-2 shadow-sm">
@@ -746,45 +1004,10 @@ export const Documents: React.FC = () => {
                     src={selectedBoard.imageDataUrl}
                     alt={selectedBoard.name}
                     onClick={handleBoardImageClick}
-                    className={`max-h-[68vh] max-w-full object-contain ${isAddingMarker ? 'cursor-crosshair' : ''}`}
+                    className={`max-h-[68vh] max-w-full object-contain ${isAddingMarker || movingMarkerId ? 'cursor-crosshair' : ''}`}
                   />
 
-                  {selectedBoardMarkers.map((marker) => {
-                    const markerDocument = getMarkerDocument(marker, documents);
-                    return (
-                      <button
-                        key={marker.id}
-                        type="button"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          setSelectedMarkerId(marker.id);
-                          setPendingMarkerPoint(null);
-                          setIsAddingMarker(false);
-                        }}
-                        onMouseEnter={(event) => {
-                          setHoverVisualMarker(marker);
-                          setHoverPoint({ x: event.clientX, y: event.clientY });
-                        }}
-                        onMouseMove={(event) => setHoverPoint({ x: event.clientX, y: event.clientY })}
-                        onMouseLeave={() => setHoverVisualMarker(null)}
-                        className={`absolute z-10 -translate-x-1/2 -translate-y-full rounded-full border px-2 py-1 text-xs font-bold shadow-lg ${
-                          selectedMarkerId === marker.id
-                            ? 'border-blue-700 bg-blue-600 text-white'
-                            : 'border-blue-200 bg-white text-blue-700 hover:bg-blue-50'
-                        }`}
-                        style={{
-                          left: `${marker.xPercent}%`,
-                          top: `${marker.yPercent}%`,
-                        }}
-                        title={markerDocument ? `${marker.label}: ${markerDocument.name}` : marker.label}
-                      >
-                        <span className="inline-flex items-center gap-1">
-                          <MapPin size={13} />
-                          {marker.label}
-                        </span>
-                      </button>
-                    );
-                  })}
+                  {selectedBoardMarkers.map((marker) => renderVisualMarkerButton(marker))}
 
                   {pendingMarkerPoint && (
                     <div
@@ -817,79 +1040,31 @@ export const Documents: React.FC = () => {
                 </div>
               </dl>
 
-              {pendingMarkerPoint && (
-                <div className="mt-4 rounded-lg border border-blue-200 bg-white p-3">
-                  <h4 className="flex items-center gap-2 text-sm font-bold text-gray-900">
-                    <MapPin size={15} className="text-blue-600" />
-                    New marker
-                  </h4>
+              {pendingMarkerPoint && renderMarkerForm('new')}
 
-                  <label className="mt-3 block text-xs font-semibold text-gray-600">
-                    Marker label
-                    <input
-                      value={markerLabel}
-                      onChange={(event) => setMarkerLabel(event.target.value)}
-                      className="mt-1 w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
-                      placeholder="B12, Grid A-3, etc."
-                    />
-                  </label>
+              {editingMarkerId && renderMarkerForm('edit')}
 
-                  <label className="mt-3 block text-xs font-semibold text-gray-600">
-                    Linked document
-                    <select
-                      value={markerDocumentId}
-                      onChange={(event) => setMarkerDocumentId(event.target.value)}
-                      className="mt-1 w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm"
-                    >
-                      <option value="">Select document...</option>
-                      {documents.map((document) => (
-                        <option key={document.id} value={document.id}>
-                          {document.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-
-                  <label className="mt-3 block text-xs font-semibold text-gray-600">
-                    Notes
-                    <textarea
-                      value={markerNotes}
-                      onChange={(event) => setMarkerNotes(event.target.value)}
-                      className="mt-1 h-20 w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
-                      placeholder="Optional location note..."
-                    />
-                  </label>
-
-                  <div className="mt-3 flex gap-2">
-                    <button
-                      onClick={savePendingMarker}
-                      disabled={!markerDocumentId}
-                      className="rounded bg-blue-600 px-3 py-2 text-xs font-bold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      Save Marker
-                    </button>
-                    <button
-                      onClick={cancelPendingMarker}
-                      className="rounded border border-gray-300 bg-white px-3 py-2 text-xs font-bold text-gray-700 hover:bg-gray-50"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-
-                  {documents.length === 0 && (
-                    <div className="mt-2 rounded bg-amber-50 p-2 text-xs text-amber-800">
-                      Save a calculation document first, then link it to this marker.
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {selectedMarker && (
+              {selectedMarker && !editingMarkerId && (
                 <div className="mt-4 rounded-lg border border-gray-200 bg-white p-3">
                   <h4 className="flex items-center gap-2 text-sm font-bold text-gray-900">
                     <MapPin size={15} className="text-blue-600" />
                     {selectedMarker.label}
                   </h4>
+
+                  <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                    <div className="rounded bg-gray-50 p-2">
+                      <div className="font-semibold text-gray-500">Style</div>
+                      <div className="mt-1 font-bold text-gray-900">
+                        {normalizeMarkerStyle(selectedMarker.style)}
+                      </div>
+                    </div>
+                    <div className="rounded bg-gray-50 p-2">
+                      <div className="font-semibold text-gray-500">Direction</div>
+                      <div className="mt-1 font-bold text-gray-900">
+                        {normalizeMarkerDirection(selectedMarker.direction)}
+                      </div>
+                    </div>
+                  </div>
 
                   <div className="mt-3 rounded bg-gray-50 p-2 text-xs text-gray-600">
                     <div className="flex items-center gap-1 font-semibold text-gray-900">
@@ -924,6 +1099,18 @@ export const Documents: React.FC = () => {
                       </>
                     )}
                     <button
+                      onClick={() => startEditMarker(selectedMarker)}
+                      className="rounded border border-gray-200 bg-white px-2 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => startMoveMarker(selectedMarker.id)}
+                      className="rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs font-semibold text-amber-700 hover:bg-amber-100"
+                    >
+                      Move
+                    </button>
+                    <button
                       onClick={() => handleDeleteVisualMarker(selectedMarker.id)}
                       className="rounded border border-red-200 bg-red-50 px-2 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100"
                     >
@@ -944,14 +1131,21 @@ export const Documents: React.FC = () => {
                       return (
                         <button
                           key={marker.id}
-                          onClick={() => setSelectedMarkerId(marker.id)}
+                          onClick={() => {
+                            setSelectedMarkerId(marker.id);
+                            setEditingMarkerId(null);
+                            setMovingMarkerId(null);
+                          }}
                           className={`w-full rounded border px-3 py-2 text-left text-xs ${
                             selectedMarkerId === marker.id
                               ? 'border-blue-300 bg-blue-50 text-blue-900'
                               : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
                           }`}
                         >
-                          <div className="font-bold">{marker.label}</div>
+                          <div className="flex items-center gap-2 font-bold">
+                            {normalizeMarkerStyle(marker.style) === 'Arrow' ? markerArrowSymbol(normalizeMarkerDirection(marker.direction)) : <MapPin size={13} />}
+                            {marker.label}
+                          </div>
                           <div className="mt-1 truncate text-gray-500">{markerDocument?.name ?? 'Document not found'}</div>
                         </button>
                       );
@@ -1190,10 +1384,17 @@ export const Documents: React.FC = () => {
         >
           <div className="mb-2 border-b border-gray-100 pb-2">
             <div className="flex items-center gap-2 font-semibold text-gray-900">
-              <MapPin size={14} className="text-blue-600" />
+              {normalizeMarkerStyle(hoverVisualMarker.style) === 'Arrow' ? (
+                <span className="text-blue-600">{markerArrowSymbol(normalizeMarkerDirection(hoverVisualMarker.direction))}</span>
+              ) : (
+                <MapPin size={14} className="text-blue-600" />
+              )}
               {hoverVisualMarker.label}
             </div>
             <div className="mt-1 text-gray-500">{hoverVisualMarkerDocument?.name ?? 'Document not found'}</div>
+            <div className="mt-1 text-[11px] text-gray-400">
+              {normalizeMarkerStyle(hoverVisualMarker.style)} • {normalizeMarkerDirection(hoverVisualMarker.direction)}
+            </div>
           </div>
 
           {hoverVisualMarkerDocument ? (
