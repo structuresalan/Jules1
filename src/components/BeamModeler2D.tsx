@@ -1,7 +1,8 @@
 import React, { useMemo, useState } from 'react';
-import { AlertCircle, CheckCircle2, Download, Plus, Printer, Trash2 } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Download, Plus, Printer, Save, Trash2, X } from 'lucide-react';
 import wShapesData from '../data/aisc/shapes_w.json';
 import aiscData from '../data/aisc/code_factors.json';
+import { getActiveProject, getProjectDocuments, getSessionMode, overwriteProjectDocument, saveNewProjectDocument, type ProjectDocument } from '../utils/projectDocuments';
 
 type SupportType = 'None' | 'Pinned' | 'Roller' | 'Fixed';
 type LoadType = 'Point' | 'Line' | 'Area';
@@ -128,6 +129,12 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
   const [reportSectionName, setReportSectionName] = useState('Steel Beam');
   const [reportSheetNumber, setReportSheetNumber] = useState('1');
   const [reportCalcBy, setReportCalcBy] = useState('');
+  const [showSaveOutputModal, setShowSaveOutputModal] = useState(false);
+  const [saveMode, setSaveMode] = useState<'new' | 'overwrite'>('new');
+  const [documentName, setDocumentName] = useState('Steel Beam Design');
+  const [selectedDocumentId, setSelectedDocumentId] = useState('');
+  const [projectDocuments, setProjectDocuments] = useState<ProjectDocument[]>([]);
+  const [saveMessage, setSaveMessage] = useState('');
 
   const [activePanel, setActivePanel] = useState<BeamPanel>('Design options');
   const [displayOptions, setDisplayOptions] = useState<Record<DisplayKey, boolean>>({
@@ -1086,6 +1093,95 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
     </div>
   );
 
+
+  const refreshProjectDocuments = () => {
+    const activeProject = getActiveProject();
+    setProjectDocuments(activeProject ? getProjectDocuments(activeProject.id) : []);
+  };
+
+  const openSaveOutputModal = () => {
+    const activeProject = getActiveProject();
+
+    refreshProjectDocuments();
+    setSaveMessage('');
+
+    if (!activeProject || getSessionMode() === 'quick') {
+      setSaveMessage('Open or create a project before saving calculation output. Quick calculations can be printed, but they are not saved to project documents.');
+    }
+
+    if (!documentName.trim()) {
+      setDocumentName(`${section} Beam Design`);
+    }
+
+    setShowSaveOutputModal(true);
+  };
+
+  const buildDocumentPayload = () => {
+    const wrapper = window.document.createElement('div');
+    wrapper.innerHTML = '';
+    const reportElement = window.document.querySelector('.beam-print-report .print-sheet');
+    const reportHtml = reportElement ? reportElement.outerHTML : '<div>Report preview was not available.</div>';
+
+    return {
+      name: documentName.trim() || `${section} Beam Design`,
+      type: 'Steel Beam Design',
+      module: 'Steel' as const,
+      status: 'Active' as const,
+      sourcePath: '/steel',
+      inputs: {
+        method,
+        section,
+        fy,
+        unbracedLength,
+        deflectionLimit,
+        totalDeflectionLimit,
+        includeSelfWeight,
+        loadFactors,
+        nodes,
+        loads,
+      },
+      summary: {
+        designStandard: activeAiscYear,
+        maxMoment: analysis?.maxMoment ?? 0,
+        maxShear: analysis?.maxShear ?? 0,
+        maxDeflection: maximumDeflection.value,
+        controllingUtilization,
+        passing: isPassing,
+      },
+      reportHtml,
+    };
+  };
+
+  const handleSaveOutput = () => {
+    const activeProject = getActiveProject();
+
+    if (!activeProject || getSessionMode() === 'quick') {
+      setSaveMessage('No active project is selected. Go to Projects, create/open a project, then save this output.');
+      return;
+    }
+
+    const payload = buildDocumentPayload();
+
+    if (saveMode === 'overwrite') {
+      if (!selectedDocumentId) {
+        setSaveMessage('Select an existing document to overwrite.');
+        return;
+      }
+
+      overwriteProjectDocument(selectedDocumentId, payload);
+      setSaveMessage('Existing project document overwritten.');
+    } else {
+      const savedDocument = saveNewProjectDocument({
+        ...payload,
+        projectId: activeProject.id,
+      });
+      setSelectedDocumentId(savedDocument.id);
+      setSaveMessage('Saved as a new project document.');
+    }
+
+    refreshProjectDocuments();
+  };
+
   const printStyles = (
     <style>{`
       .beam-print-report { display: none; }
@@ -1145,6 +1241,9 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
             <p className="text-sm text-gray-500">2D beam workspace for supports, loads, envelopes, and section utilization.</p>
           </div>
           <div className="flex flex-wrap gap-2">
+            <button onClick={openSaveOutputModal} className="inline-flex w-fit items-center gap-2 rounded border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-medium text-blue-700 hover:bg-blue-100">
+              <Save size={16} /> Save Output
+            </button>
             <button onClick={() => setShowOutputPreview((prev) => !prev)} className="inline-flex w-fit items-center gap-2 rounded border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100">
               <Download size={16} /> {showOutputPreview ? 'Hide output' : 'Preview output'}
             </button>
@@ -1253,6 +1352,90 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
           </div>
         </div>
       </div>
+
+
+      {showSaveOutputModal && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-gray-900/50 p-4">
+          <div className="w-full max-w-2xl rounded-xl bg-white shadow-xl">
+            <div className="flex items-start justify-between border-b border-gray-200 p-5">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">Save calculation output</h3>
+                <p className="mt-1 text-sm text-gray-500">Save this beam report into the active project as a project document.</p>
+              </div>
+              <button onClick={() => setShowSaveOutputModal(false)} className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700">
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="space-y-5 p-5">
+              {saveMessage && (
+                <div className={`rounded border px-3 py-2 text-sm ${saveMessage.includes('Saved') || saveMessage.includes('overwritten') ? 'border-green-200 bg-green-50 text-green-800' : 'border-amber-200 bg-amber-50 text-amber-800'}`}>
+                  {saveMessage}
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <label className={`cursor-pointer rounded-lg border p-4 ${saveMode === 'new' ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-100' : 'border-gray-200 bg-white'}`}>
+                  <div className="flex items-center gap-2">
+                    <input type="radio" checked={saveMode === 'new'} onChange={() => setSaveMode('new')} />
+                    <span className="font-semibold text-gray-900">Save as new document</span>
+                  </div>
+                  <p className="mt-2 text-sm text-gray-500">Create a new saved output in the active project.</p>
+                </label>
+
+                <label className={`cursor-pointer rounded-lg border p-4 ${saveMode === 'overwrite' ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-100' : 'border-gray-200 bg-white'}`}>
+                  <div className="flex items-center gap-2">
+                    <input type="radio" checked={saveMode === 'overwrite'} onChange={() => setSaveMode('overwrite')} />
+                    <span className="font-semibold text-gray-900">Overwrite existing document</span>
+                  </div>
+                  <p className="mt-2 text-sm text-gray-500">Replace an existing saved output with this report.</p>
+                </label>
+              </div>
+
+              {saveMode === 'new' ? (
+                <label className="block text-sm font-medium text-gray-700">
+                  Document name
+                  <input
+                    value={documentName}
+                    onChange={(event) => setDocumentName(event.target.value)}
+                    className="mt-1 w-full rounded-md border border-gray-300 p-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                    placeholder="Example: W12x26 Beam Check - Grid B"
+                  />
+                </label>
+              ) : (
+                <label className="block text-sm font-medium text-gray-700">
+                  Select document to overwrite
+                  <select
+                    value={selectedDocumentId}
+                    onChange={(event) => setSelectedDocumentId(event.target.value)}
+                    className="mt-1 w-full rounded-md border border-gray-300 bg-white p-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                  >
+                    <option value="">Select an existing document...</option>
+                    {projectDocuments.map((document) => (
+                      <option key={document.id} value={document.id}>
+                        {document.name} — {document.type}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+
+              <div className="rounded bg-gray-50 p-3 text-xs text-gray-600">
+                Saved documents are stored in this browser for now. The output can be reviewed from the Documents page.
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 border-t border-gray-200 p-5">
+              <button onClick={() => setShowSaveOutputModal(false)} className="rounded border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+                Cancel
+              </button>
+              <button onClick={handleSaveOutput} className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showOutputPreview && (
         <div className="beam-screen-report rounded-lg border border-gray-200 bg-gray-100 p-4 shadow-sm">

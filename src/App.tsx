@@ -9,6 +9,7 @@ import { ConcreteDesign } from './pages/ConcreteDesign';
 import { SteelDesign } from './pages/SteelDesign';
 import { Loads } from './pages/Loads';
 import { Variables } from './pages/Variables';
+import { Documents } from './pages/Documents';
 import { VariablesProvider } from './context/VariablesContext';
 import { ProjectHome } from './pages/ProjectHome';
 
@@ -44,6 +45,7 @@ const AppContent = () => {
         <Route path="steel" element={<SteelDesign />} />
         <Route path="concrete" element={<ConcreteDesign />} />
         <Route path="loads" element={<Loads />} />
+        <Route path="documents" element={<Documents />} />
         <Route path="variables" element={<Variables />} />
         <Route path="settings" element={<div className="p-8">Settings Coming Soon</div>} />
       </Route>
@@ -52,11 +54,13 @@ const AppContent = () => {
       <Route path="/workspace/steel" element={<Navigate to="/steel" replace />} />
       <Route path="/workspace/concrete" element={<Navigate to="/concrete" replace />} />
       <Route path="/workspace/loads" element={<Navigate to="/loads" replace />} />
+      <Route path="/workspace/documents" element={<Navigate to="/documents" replace />} />
       <Route path="/workspace/variables" element={<Navigate to="/variables" replace />} />
       <Route path="/quick" element={<Navigate to="/dashboard" replace />} />
       <Route path="/quick/steel" element={<Navigate to="/steel" replace />} />
       <Route path="/quick/concrete" element={<Navigate to="/concrete" replace />} />
       <Route path="/quick/loads" element={<Navigate to="/loads" replace />} />
+      <Route path="/quick/documents" element={<Navigate to="/documents" replace />} />
       <Route path="/quick/variables" element={<Navigate to="/variables" replace />} />
 
       <Route path="*" element={<Navigate to="/" replace />} />
