@@ -146,6 +146,13 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
   const [projectDocuments, setProjectDocuments] = useState<ProjectDocument[]>([]);
   const [saveMessage, setSaveMessage] = useState('');
   const [saveSucceeded, setSaveSucceeded] = useState(false);
+  const [diagramHover, setDiagramHover] = useState<{
+    mode: 'moment' | 'shear' | 'deflection';
+    x: number;
+    y: number;
+    svgX: number;
+    svgY: number;
+  } | null>(null);
 
   const [activePanel, setActivePanel] = useState<BeamPanel>('Design options');
   const [displayOptions, setDisplayOptions] = useState<Record<DisplayKey, boolean>>({
@@ -667,13 +674,52 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
           { value: -config.peak, y: yScale(-config.peak) },
         ];
 
+    const activeHover = diagramHover?.mode === mode ? diagramHover : null;
+
+    const handleDiagramMouseMove = (event: React.MouseEvent<SVGSVGElement>) => {
+      if (!analysis || analysis.xs.length === 0) return;
+
+      const svg = event.currentTarget;
+      const rect = svg.getBoundingClientRect();
+      const rawSvgX = ((event.clientX - rect.left) / rect.width) * width;
+      const clampedSvgX = Math.max(leftPad, Math.min(width - rightPad, rawSvgX));
+      const modelX = start + ((clampedSvgX - leftPad) / (width - leftPad - rightPad)) * length;
+
+      let nearestIndex = 0;
+      let nearestDistance = Number.POSITIVE_INFINITY;
+
+      analysis.xs.forEach((x, index) => {
+        const distance = Math.abs(x - modelX);
+        if (distance < nearestDistance) {
+          nearestDistance = distance;
+          nearestIndex = index;
+        }
+      });
+
+      const xValue = analysis.xs[nearestIndex] ?? modelX;
+      const yValue = config.values[nearestIndex] ?? 0;
+
+      setDiagramHover({
+        mode,
+        x: xValue,
+        y: yValue,
+        svgX: mapX(xValue),
+        svgY: yScale(yValue),
+      });
+    };
+
     return (
       <div className="rounded-lg border border-gray-200 bg-white p-3 shadow-sm">
         <div className="mb-2 flex items-center justify-between gap-3">
           <div className="text-sm font-semibold text-gray-900">{config.title}</div>
           <div className="text-xs font-semibold" style={{ color: config.color }}>{config.valueText}</div>
         </div>
-        <svg viewBox={`0 0 ${width} ${height}`} className="h-[220px] w-full min-w-[320px]">
+        <svg
+          viewBox={`0 0 ${width} ${height}`}
+          className="h-[220px] w-full min-w-[320px] cursor-crosshair"
+          onMouseMove={handleDiagramMouseMove}
+          onMouseLeave={() => setDiagramHover((currentHover) => currentHover?.mode === mode ? null : currentHover)}
+        >
           <rect x="1" y="1" width={width - 2} height={height - 2} rx="10" fill="#f8fafc" stroke="#e2e8f0" />
           <line x1={leftPad} y1={plotTop} x2={leftPad} y2={plotBottom} stroke="#9ca3af" />
           <line x1={leftPad} y1={baselineY} x2={width - rightPad} y2={baselineY} stroke="#cbd5e1" strokeDasharray="5,5" />
@@ -700,6 +746,20 @@ export const BeamModeler2D: React.FC<BeamModeler2DProps> = ({ aiscYear = 'AISC 3
           })}
 
           {points && <polyline points={points} fill="none" stroke={config.color} strokeWidth="3" />}
+
+          {activeHover && (
+            <g>
+              <line x1={activeHover.svgX} y1={plotTop} x2={activeHover.svgX} y2={plotBottom} stroke="#334155" strokeDasharray="3,3" />
+              <line x1={leftPad} y1={activeHover.svgY} x2={width - rightPad} y2={activeHover.svgY} stroke="#334155" strokeDasharray="3,3" />
+              <circle cx={activeHover.svgX} cy={activeHover.svgY} r="4" fill={config.color} stroke="#ffffff" strokeWidth="2" />
+              <g transform={`translate(${Math.min(activeHover.svgX + 10, width - 200)}, ${Math.max(activeHover.svgY - 38, 34)})`}>
+                <rect width="188" height="32" rx="6" fill="#0f172a" opacity="0.92" />
+                <text x="10" y="13" fontSize="10" fill="#cbd5e1">({activeHover.x.toFixed(2)} ft, {activeHover.y.toFixed(mode === 'deflection' ? 3 : 2)} {config.unit})</text>
+                <text x="10" y="25" fontSize="9" fill="#94a3b8">x, y</text>
+              </g>
+            </g>
+          )}
+
           <text x={leftPad} y="20" fontSize="11" fill="#64748b">{config.yLabel}</text>
           <text x={(leftPad + width - rightPad) / 2} y={height - 7} fontSize="11" textAnchor="middle" fill="#64748b">Position (ft)</text>
         </svg>
