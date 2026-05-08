@@ -1,44 +1,34 @@
-# Visual Map PDF-Style Tools
+# Desktop Glass Website Style
 
-Replace this file:
+Replace/add these files:
+
+- src/App.tsx
+- src/layouts/MainLayout.tsx
+- src/pages/Login.tsx
+- src/pages/Dashboard.tsx
+- src/pages/SettingsPage.tsx
+- src/utils/websiteStyle.ts
+- src/styles/websiteTheme.css
 - src/pages/Documents.tsx
 
 Commit message:
-Add visual map PDF style tools
+Add desktop glass website style
 
 What changed:
-- Adds expanded Visual Map tabs: Markup, Documents, Measure, View, Review, Settings.
-- Keeps direct marker dragging and adds PDF-style shortcuts:
-  - double-click marker to edit
-  - Delete/Backspace removes selected marker
-  - Escape cancels current action
-- Adds quick Markup buttons for Arrow, Pin, Box, Cloud, and Text.
-- Adds structural stamp presets:
-  - PASS
-  - REVIEW
-  - FAIL
-  - FIELD VERIFY
-  - TYP.
-  - SEE CALC
-  - REVISED
-  - VOID
-- Adds Measure tab:
-  - measure length by clicking two points
-  - optional actual length in feet
-  - measurement overlays on the board
-  - measurement list in inspector
-- Adds View tab controls:
-  - zoom in
-  - zoom out
-  - reset zoom
-  - label display override
-  - status filters
-- Adds Review tab:
-  - marker schedule
-  - CSV export of marker schedule
-- Adds board notes in Settings.
-- Adds board-level measurement cleanup when deleting a board.
-
-Notes:
-- This is still localStorage-based.
-- This is a large usability upgrade; markers/documents remain compatible with prior versions.
+- Adds a website style system saved in localStorage.
+- Default style is Desktop Dark + Glass.
+- Settings page now has Website Style options:
+  - Classic
+  - Desktop Dark
+  - Desktop Dark + Glass
+- Adds Accent Color and Density options.
+- Adds Fireflies-inspired dark glass styling:
+  - dark background
+  - blurred glow gradients
+  - glass sidebar and panels
+  - rounded desktop-window feel
+- Updates login page to the desktop dark/glass style.
+- Updates main app shell/sidebar to the desktop dark/glass style.
+- Updates dashboard cards to the desktop dark/glass style.
+- Keeps Classic style available if you want the original light interface.
+- Includes the latest Visual Map PDF-style tools file.

@@ -12,6 +12,9 @@ import { Variables } from './pages/Variables';
 import { Documents } from './pages/Documents';
 import { VariablesProvider } from './context/VariablesContext';
 import { ProjectHome } from './pages/ProjectHome';
+import { SettingsPage } from './pages/SettingsPage';
+import { applyWebsiteStyleSettings, getWebsiteStyleSettings } from './utils/websiteStyle';
+import './styles/websiteTheme.css';
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, loading } = useAuth();
@@ -28,6 +31,10 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 };
 
 const AppContent = () => {
+  React.useEffect(() => {
+    applyWebsiteStyleSettings(getWebsiteStyleSettings());
+  }, []);
+
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
@@ -47,7 +54,7 @@ const AppContent = () => {
         <Route path="loads" element={<Loads />} />
         <Route path="documents" element={<Documents />} />
         <Route path="variables" element={<Variables />} />
-        <Route path="settings" element={<div className="p-8">Settings Coming Soon</div>} />
+        <Route path="settings" element={<SettingsPage />} />
       </Route>
 
       <Route path="/workspace" element={<Navigate to="/dashboard" replace />} />
