@@ -31,6 +31,7 @@ import {
 } from '../utils/projectDocuments';
 
 type DocumentsView = 'list' | 'visual';
+type VisualBoardTab = 'Markup' | 'Documents' | 'View' | 'Settings';
 type VisualBoardKind = 'Plan' | 'Elevation' | 'Site Photo' | 'Other';
 type VisualMarkerStyle = 'Pin' | 'Arrow';
 type VisualMarkerDirection = 'Up' | 'Down' | 'Left' | 'Right';
@@ -398,6 +399,7 @@ export const Documents: React.FC = () => {
     activeProject ? getProjectVisualBoards(activeProject.id) : [],
   );
   const [documentsView, setDocumentsView] = useState<DocumentsView>('list');
+  const [activeVisualBoardTab, setActiveVisualBoardTab] = useState<VisualBoardTab>('Markup');
   const [searchText, setSearchText] = useState('');
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
@@ -1041,6 +1043,7 @@ export const Documents: React.FC = () => {
           onClick={() => {
             setSelectedBoardId(null);
             setSelectedMarkerId(null);
+            setActiveVisualBoardTab('Markup');
             cancelPendingMarker();
           }}
           className="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
@@ -1057,31 +1060,122 @@ export const Documents: React.FC = () => {
                 {selectedBoard.kind} • {selectedBoard.imageName} • {formatDocumentDate(selectedBoard.updatedAt)}
               </p>
             </div>
-            <div className="flex flex-wrap gap-2">
-              <button
-                onClick={() => {
-                  setIsAddingMarker(true);
-                  setPendingMarkerPoint(null);
-                  setSelectedMarkerId(null);
-                  setEditingMarkerId(null);
-                  setMovingMarkerId(null);
-                }}
-                className={`inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold ${
-                  isAddingMarker
-                    ? 'bg-amber-500 text-white hover:bg-amber-600'
-                    : 'bg-blue-600 text-white hover:bg-blue-700'
-                }`}
-              >
-                <MapPin size={16} />
-                {isAddingMarker ? 'Click plan/photo to place marker' : 'Add Marker'}
-              </button>
-              {(isAddingMarker || pendingMarkerPoint || movingMarkerId) && (
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              <span className={`rounded-full border px-3 py-1 font-bold ${markerStatusClasses(getBoardPrimaryStatus(selectedBoard.id, visualMarkers))}`}>
+                {getBoardPrimaryStatus(selectedBoard.id, visualMarkers)}
+              </span>
+              <span className="rounded-full border border-gray-200 bg-gray-50 px-3 py-1 font-semibold text-gray-600">
+                {selectedBoardMarkers.length} marker{selectedBoardMarkers.length === 1 ? '' : 's'}
+              </span>
+              <span className="rounded-full border border-gray-200 bg-gray-50 px-3 py-1 font-semibold text-gray-600">
+                {getBoardDocumentCount(selectedBoard.id, visualMarkers)} linked doc{getBoardDocumentCount(selectedBoard.id, visualMarkers) === 1 ? '' : 's'}
+              </span>
+            </div>
+          </div>
+
+          <div className="border-b border-gray-200 bg-slate-50">
+            <div className="flex min-w-max gap-1 overflow-x-auto px-3 pt-3">
+              {(['Markup', 'Documents', 'View', 'Settings'] as VisualBoardTab[]).map((tab) => (
                 <button
-                  onClick={cancelPendingMarker}
-                  className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+                  key={tab}
+                  onClick={() => setActiveVisualBoardTab(tab)}
+                  className={`rounded-t-md border px-4 py-2 text-xs font-bold transition-colors ${
+                    activeVisualBoardTab === tab
+                      ? 'border-gray-200 border-b-white bg-white text-blue-700'
+                      : 'border-transparent text-gray-500 hover:bg-white hover:text-gray-900'
+                  }`}
                 >
-                  Cancel
+                  {tab}
                 </button>
+              ))}
+            </div>
+
+            <div className="border-t border-gray-200 bg-white px-4 py-3">
+              {activeVisualBoardTab === 'Markup' && (
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    onClick={() => {
+                      setIsAddingMarker(true);
+                      setPendingMarkerPoint(null);
+                      setSelectedMarkerId(null);
+                      setEditingMarkerId(null);
+                      setMovingMarkerId(null);
+                    }}
+                    className={`inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold ${
+                      isAddingMarker
+                        ? 'bg-amber-500 text-white hover:bg-amber-600'
+                        : 'bg-blue-600 text-white hover:bg-blue-700'
+                    }`}
+                  >
+                    <MapPin size={16} />
+                    {isAddingMarker ? 'Click plan/photo to place marker' : 'Add Marker'}
+                  </button>
+                  <button
+                    onClick={() => selectedMarker && startMoveMarker(selectedMarker.id)}
+                    disabled={!selectedMarker}
+                    className="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <Move size={16} />
+                    Move Selected
+                  </button>
+                  {(isAddingMarker || pendingMarkerPoint || movingMarkerId) && (
+                    <button
+                      onClick={cancelPendingMarker}
+                      className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+                    >
+                      Cancel
+                    </button>
+                  )}
+                  <span className="text-xs text-gray-500">
+                    Use Markup tools to place and move map callouts. Arrow, box, and cloud upgrades can live here next.
+                  </span>
+                </div>
+              )}
+
+              {activeVisualBoardTab === 'Documents' && (
+                <div className="flex flex-wrap items-center gap-2 text-sm text-gray-600">
+                  <LinkIcon size={16} className="text-blue-600" />
+                  <span className="font-semibold text-gray-900">Linked documents:</span>
+                  <span>{selectedMarker ? `${selectedMarkerDocuments.length} on selected marker` : `${getBoardDocumentCount(selectedBoard.id, visualMarkers)} on this board`}</span>
+                  {selectedMarkerDocuments[0] && (
+                    <button
+                      onClick={() => handleOpen(selectedMarkerDocuments[0])}
+                      className="rounded border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100"
+                    >
+                      Open primary
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {activeVisualBoardTab === 'View' && (
+                <div className="flex flex-wrap items-center gap-2 text-sm text-gray-600">
+                  <Maximize2 size={16} className="text-blue-600" />
+                  <span className="font-semibold text-gray-900">View tools:</span>
+                  <button className="rounded border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs font-semibold text-gray-500" disabled>
+                    Fit to screen coming soon
+                  </button>
+                  <button className="rounded border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs font-semibold text-gray-500" disabled>
+                    Zoom/pan coming soon
+                  </button>
+                  <span className="text-xs text-gray-500">Status colors and marker labels are currently always visible.</span>
+                </div>
+              )}
+
+              {activeVisualBoardTab === 'Settings' && (
+                <div className="flex flex-wrap items-center gap-2 text-sm text-gray-600">
+                  <span className="font-semibold text-gray-900">Board settings:</span>
+                  <span>{selectedBoard.kind}</span>
+                  <span>•</span>
+                  <span>{selectedBoard.imageName}</span>
+                  <button
+                    onClick={() => handleDeleteVisualBoard(selectedBoard.id)}
+                    className="inline-flex items-center gap-1 rounded border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100"
+                  >
+                    <Trash2 size={13} />
+                    Delete board
+                  </button>
+                </div>
               )}
             </div>
           </div>
@@ -1136,7 +1230,7 @@ export const Documents: React.FC = () => {
             </div>
 
             <aside className="border-t border-gray-200 bg-gray-50 p-4 lg:border-l lg:border-t-0">
-              <h3 className="text-sm font-bold text-gray-900">Visual Map Controls</h3>
+              <h3 className="text-sm font-bold text-gray-900">{activeVisualBoardTab} Inspector</h3>
               <dl className="mt-3 grid grid-cols-2 gap-2 text-xs">
                 <div className="rounded border border-gray-200 bg-white p-2">
                   <dt className="font-semibold uppercase tracking-wide text-gray-500">Markers</dt>
@@ -1390,6 +1484,7 @@ export const Documents: React.FC = () => {
                     onClick={() => {
                       setSelectedBoardId(board.id);
                       setSelectedMarkerId(null);
+                      setActiveVisualBoardTab('Markup');
                       cancelPendingMarker();
                     }}
                     className="group block w-full text-left"
