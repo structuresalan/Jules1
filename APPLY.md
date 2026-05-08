@@ -1,26 +1,15 @@
-# Visual Map Marker Style Upgrade
+# Fix Unused Visual Marker Dot Helper
 
 Replace this file:
 - src/pages/Documents.tsx
 
 Commit message:
-Add visual map marker style upgrade
+Fix unused visual marker helper
 
 What changed:
-- Upgrades Arrow markers into transparent engineering-style leader callouts with longer shafts and larger arrowheads.
-- Removes the extra dot from Arrow markers.
-- Adds new marker styles:
-  - Arrow
-  - Pin
-  - Box
-  - Cloud
-  - Text
-- Adds marker size options:
-  - Small
-  - Medium
-  - Large
-- Adds label display options:
-  - Always
-  - Hover only
-- Applies status color to the actual marker/callout.
-- Updates the selected marker inspector, marker list, and hover card to reflect the new style/size behavior.
+- Removes the unused markerStatusDotClasses helper.
+- Keeps the Visual Map marker style upgrade:
+  - transparent arrow callouts
+  - Pin / Arrow / Box / Cloud / Text marker types
+  - Small / Medium / Large marker sizing
+  - Always / Hover-only labels

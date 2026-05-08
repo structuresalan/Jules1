@@ -197,13 +197,6 @@ const markerStatusClasses = (status: VisualMarkerStatus) => {
   return 'border-blue-200 bg-blue-50 text-blue-700';
 };
 
-const markerStatusDotClasses = (status: VisualMarkerStatus) => {
-  if (status === 'Pass') return 'bg-green-500';
-  if (status === 'Review') return 'bg-amber-500';
-  if (status === 'Fail') return 'bg-red-500';
-  if (status === 'Draft') return 'bg-gray-400';
-  return 'bg-blue-500';
-};
 
 const markerStatusLabel = (status: VisualMarkerStatus) => status;
 
