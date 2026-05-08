@@ -445,8 +445,11 @@ export const Documents: React.FC = () => {
   const [selectedMarkerId, setSelectedMarkerId] = useState<string | null>(null);
   const [editingMarkerId, setEditingMarkerId] = useState<string | null>(null);
   const [movingMarkerId, setMovingMarkerId] = useState<string | null>(null);
+  const [draggingMarkerId, setDraggingMarkerId] = useState<string | null>(null);
   const [hoverVisualMarker, setHoverVisualMarker] = useState<VisualMarker | null>(null);
   const [newBoardName, setNewBoardName] = useState('');
+  const boardCanvasRef = useRef<HTMLDivElement | null>(null);
+  const latestVisualMarkersRef = useRef<VisualMarker[]>([]);
   const [newBoardKind, setNewBoardKind] = useState<VisualBoardKind>('Plan');
   const [uploadMessage, setUploadMessage] = useState('');
 
@@ -471,6 +474,10 @@ export const Documents: React.FC = () => {
     [documents, hoverVisualMarker],
   );
   const hoverVisualMarkerPrimaryDocument = hoverVisualMarkerDocuments[0] ?? null;
+
+  useEffect(() => {
+    latestVisualMarkersRef.current = visualMarkers;
+  }, [visualMarkers]);
 
   const refreshDocuments = () => {
     if (!activeProject) {
@@ -652,6 +659,65 @@ export const Documents: React.FC = () => {
     refreshVisualMarkers();
   };
 
+  const getBoardCanvasPercentFromClientPoint = (clientX: number, clientY: number) => {
+    const rect = boardCanvasRef.current?.getBoundingClientRect();
+    if (!rect || !rect.width || !rect.height) return null;
+
+    return {
+      xPercent: Math.min(100, Math.max(0, ((clientX - rect.left) / rect.width) * 100)),
+      yPercent: Math.min(100, Math.max(0, ((clientY - rect.top) / rect.height) * 100)),
+    };
+  };
+
+  const updateMarkerPositionLocally = (markerId: string, xPercent: number, yPercent: number) => {
+    setVisualMarkers((currentMarkers) =>
+      currentMarkers.map((marker) =>
+        marker.id === markerId
+          ? {
+              ...marker,
+              xPercent,
+              yPercent,
+            }
+          : marker,
+      ),
+    );
+  };
+
+  useEffect(() => {
+    if (!draggingMarkerId) return;
+
+    const handleMouseMove = (event: MouseEvent) => {
+      const point = getBoardCanvasPercentFromClientPoint(event.clientX, event.clientY);
+      if (!point) return;
+
+      updateMarkerPositionLocally(draggingMarkerId, point.xPercent, point.yPercent);
+      setHoverPoint({ x: event.clientX, y: event.clientY });
+    };
+
+    const handleMouseUp = () => {
+      const marker = latestVisualMarkersRef.current.find((item) => item.id === draggingMarkerId);
+      if (marker) {
+        updateVisualMarker(draggingMarkerId, {
+          xPercent: marker.xPercent,
+          yPercent: marker.yPercent,
+        });
+        setSelectedMarkerId(draggingMarkerId);
+      }
+
+      setDraggingMarkerId(null);
+    };
+
+    document.body.style.userSelect = 'none';
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      document.body.style.userSelect = '';
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [draggingMarkerId]);
+
   const handleBoardImageClick = (event: React.MouseEvent<HTMLImageElement>) => {
     if (!selectedBoard) return;
     if (!isAddingMarker && !movingMarkerId) return;
@@ -687,6 +753,7 @@ export const Documents: React.FC = () => {
     setIsAddingMarker(false);
     setEditingMarkerId(null);
     setMovingMarkerId(null);
+    setDraggingMarkerId(null);
   };
 
   const savePendingMarker = () => {
@@ -777,6 +844,9 @@ export const Documents: React.FC = () => {
     if (movingMarkerId === markerId) {
       setMovingMarkerId(null);
     }
+    if (draggingMarkerId === markerId) {
+      setDraggingMarkerId(null);
+    }
     setHoverVisualMarker(null);
     refreshVisualMarkers();
   };
@@ -789,6 +859,7 @@ export const Documents: React.FC = () => {
     setSelectedMarkerId(null);
     setEditingMarkerId(null);
     setMovingMarkerId(null);
+    setDraggingMarkerId(null);
     setHoverVisualMarker(null);
     refreshVisualBoards();
     refreshVisualMarkers();
@@ -1074,6 +1145,18 @@ export const Documents: React.FC = () => {
     const commonProps = {
       key: marker.id,
       type: 'button' as const,
+      draggable: false,
+      onDragStart: (event: React.DragEvent<HTMLButtonElement>) => event.preventDefault(),
+      onMouseDown: (event: React.MouseEvent<HTMLButtonElement>) => {
+        if (event.button !== 0) return;
+        event.preventDefault();
+        event.stopPropagation();
+        setSelectedMarkerId(marker.id);
+        setPendingMarkerPoint(null);
+        setIsAddingMarker(false);
+        setEditingMarkerId(null);
+        setDraggingMarkerId(marker.id);
+      },
       onClick: (event: React.MouseEvent<HTMLButtonElement>) => {
         event.stopPropagation();
         setSelectedMarkerId(marker.id);
@@ -1133,7 +1216,7 @@ export const Documents: React.FC = () => {
       return (
         <button
           {...commonProps}
-          className="absolute z-10 overflow-visible bg-transparent p-0"
+          className="absolute z-10 overflow-visible bg-transparent p-0 cursor-grab active:cursor-grabbing"
           style={wrapperStyle}
         >
           {showLabel && (
@@ -1161,7 +1244,7 @@ export const Documents: React.FC = () => {
       return (
         <button
           {...commonProps}
-          className="absolute z-10 overflow-visible bg-transparent p-0"
+          className="absolute z-10 overflow-visible bg-transparent p-0 cursor-grab active:cursor-grabbing"
           style={wrapperStyle}
         >
           <span
@@ -1187,7 +1270,7 @@ export const Documents: React.FC = () => {
       return (
         <button
           {...commonProps}
-          className="absolute z-10 overflow-visible bg-transparent p-0"
+          className="absolute z-10 overflow-visible bg-transparent p-0 cursor-grab active:cursor-grabbing"
           style={{ left: `${marker.xPercent}%`, top: `${marker.yPercent}%`, transform: 'translate(-50%, -50%)' }}
         >
           <span className="whitespace-nowrap rounded-md border px-2 py-1 font-bold shadow-sm" style={labelStyle}>
@@ -1201,7 +1284,7 @@ export const Documents: React.FC = () => {
     return (
       <button
         {...commonProps}
-        className="absolute z-10 overflow-visible bg-transparent p-0"
+        className="absolute z-10 overflow-visible bg-transparent p-0 cursor-grab active:cursor-grabbing"
         style={{ left: `${marker.xPercent}%`, top: `${marker.yPercent}%`, transform: 'translate(-50%, -100%)' }}
       >
         <span
@@ -1300,14 +1383,9 @@ export const Documents: React.FC = () => {
                     <MapPin size={16} />
                     {isAddingMarker ? 'Click plan/photo to place marker' : 'Add Marker'}
                   </button>
-                  <button
-                    onClick={() => selectedMarker && startMoveMarker(selectedMarker.id)}
-                    disabled={!selectedMarker}
-                    className="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    <Move size={16} />
-                    Move Selected
-                  </button>
+                  <span className="rounded-md border border-blue-100 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700">
+                    Drag any marker directly with your mouse to reposition it.
+                  </span>
                   {(isAddingMarker || pendingMarkerPoint || movingMarkerId) && (
                     <button
                       onClick={cancelPendingMarker}
@@ -1317,7 +1395,7 @@ export const Documents: React.FC = () => {
                     </button>
                   )}
                   <span className="text-xs text-gray-500">
-                    Use Markup tools to place and move callouts. Arrow, Pin, Box, Cloud, and Text markers are supported. Arrow markers now use transparent engineering-style leader lines.
+                    Use Markup tools to place callouts. You can now drag markers directly with your mouse like a PDF annotation tool. Arrow, Pin, Box, Cloud, and Text markers are supported.
                   </span>
                 </div>
               )}
@@ -1383,7 +1461,7 @@ export const Documents: React.FC = () => {
             <div className="border-b border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
               <div className="flex items-center gap-2 font-semibold">
                 <Move size={16} />
-                Click a new location on the plan/photo to move the selected marker.
+                Click a new location on the plan/photo to move the selected marker, or just drag a marker directly with your mouse.
               </div>
             </div>
           )}
@@ -1391,12 +1469,13 @@ export const Documents: React.FC = () => {
           <div className="grid grid-cols-1 gap-0 lg:grid-cols-[minmax(0,1fr)_320px]">
             <div className="max-h-[72vh] overflow-auto bg-slate-100 p-4">
               <div className="mx-auto w-fit rounded-lg border border-gray-300 bg-white p-2 shadow-sm">
-                <div className="relative inline-block">
+                <div ref={boardCanvasRef} className="relative inline-block">
                   <img
                     src={selectedBoard.imageDataUrl}
                     alt={selectedBoard.name}
                     onClick={handleBoardImageClick}
-                    className={`max-h-[68vh] max-w-full object-contain ${isAddingMarker || movingMarkerId ? 'cursor-crosshair' : ''}`}
+                    draggable={false}
+                    className={`max-h-[68vh] max-w-full object-contain ${isAddingMarker || movingMarkerId ? 'cursor-crosshair' : draggingMarkerId ? 'cursor-grabbing' : ''}`}
                   />
 
                   {selectedBoardMarkers.map((marker) => renderVisualMarkerButton(marker))}
