@@ -1,21 +1,26 @@
-# Visual Map Toolbar Tabs
+# Visual Map Marker Style Upgrade
 
 Replace this file:
 - src/pages/Documents.tsx
 
 Commit message:
-Add visual map toolbar tabs
+Add visual map marker style upgrade
 
 What changed:
-- Adds an Autodesk-style ribbon area to opened Visual Map boards.
-- Adds board-level tabs:
-  - Markup
-  - Documents
-  - View
-  - Settings
-- Moves Add Marker and Move Selected into the Markup tab.
-- Adds a Documents tab with linked-document context and Open Primary action.
-- Adds a View tab placeholder for future zoom, pan, fit-to-screen, filters, and label controls.
-- Adds a Settings tab with board information and Delete Board.
-- Keeps the right panel as an inspector for selected markers and board status.
-- Keeps existing marker editing, moving, multi-document links, and status colors.
+- Upgrades Arrow markers into transparent engineering-style leader callouts with longer shafts and larger arrowheads.
+- Removes the extra dot from Arrow markers.
+- Adds new marker styles:
+  - Arrow
+  - Pin
+  - Box
+  - Cloud
+  - Text
+- Adds marker size options:
+  - Small
+  - Medium
+  - Large
+- Adds label display options:
+  - Always
+  - Hover only
+- Applies status color to the actual marker/callout.
+- Updates the selected marker inspector, marker list, and hover card to reflect the new style/size behavior.

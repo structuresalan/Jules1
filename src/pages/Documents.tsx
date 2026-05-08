@@ -33,9 +33,11 @@ import {
 type DocumentsView = 'list' | 'visual';
 type VisualBoardTab = 'Markup' | 'Documents' | 'View' | 'Settings';
 type VisualBoardKind = 'Plan' | 'Elevation' | 'Site Photo' | 'Other';
-type VisualMarkerStyle = 'Pin' | 'Arrow';
+type VisualMarkerStyle = 'Pin' | 'Arrow' | 'Box' | 'Cloud' | 'Text';
 type VisualMarkerDirection = 'Up' | 'Down' | 'Left' | 'Right';
 type VisualMarkerStatus = 'Pass' | 'Review' | 'Fail' | 'Draft' | 'Unknown';
+type VisualMarkerSize = 'Small' | 'Medium' | 'Large';
+type VisualMarkerLabelVisibility = 'Always' | 'Hover only';
 
 interface VisualBoard {
   id: string;
@@ -61,6 +63,8 @@ interface VisualMarker {
   style?: VisualMarkerStyle;
   direction?: VisualMarkerDirection;
   status?: VisualMarkerStatus;
+  size?: VisualMarkerSize;
+  labelVisibility?: VisualMarkerLabelVisibility;
   createdAt: string;
   updatedAt: string;
 }
@@ -159,6 +163,31 @@ const markerArrowSymbol = (direction: VisualMarkerDirection | undefined) => {
 const normalizeMarkerStyle = (style: VisualMarker['style']): VisualMarkerStyle => style || 'Pin';
 const normalizeMarkerDirection = (direction: VisualMarker['direction']): VisualMarkerDirection => direction || 'Down';
 const normalizeMarkerStatus = (status: VisualMarker['status']): VisualMarkerStatus => status || 'Unknown';
+const normalizeMarkerSize = (size: VisualMarker['size']): VisualMarkerSize => size || 'Medium';
+const normalizeMarkerLabelVisibility = (labelVisibility: VisualMarker['labelVisibility']): VisualMarkerLabelVisibility =>
+  labelVisibility || 'Always';
+
+const getMarkerSizeConfig = (size: VisualMarkerSize) => {
+  if (size === 'Small') return { arrowLength: 56, boxWidth: 74, boxHeight: 38, cloudWidth: 88, cloudHeight: 42, pinDiameter: 14, textSize: 11 };
+  if (size === 'Large') return { arrowLength: 112, boxWidth: 138, boxHeight: 74, cloudWidth: 152, cloudHeight: 78, pinDiameter: 20, textSize: 14 };
+  return { arrowLength: 82, boxWidth: 104, boxHeight: 56, cloudWidth: 118, cloudHeight: 60, pinDiameter: 16, textSize: 12 };
+};
+
+const markerStatusColor = (status: VisualMarkerStatus) => {
+  if (status === 'Pass') return '#16a34a';
+  if (status === 'Review') return '#d97706';
+  if (status === 'Fail') return '#dc2626';
+  if (status === 'Draft') return '#6b7280';
+  return '#2563eb';
+};
+
+const markerStatusFill = (status: VisualMarkerStatus) => {
+  if (status === 'Pass') return 'rgba(220, 252, 231, 0.96)';
+  if (status === 'Review') return 'rgba(254, 243, 199, 0.96)';
+  if (status === 'Fail') return 'rgba(254, 226, 226, 0.96)';
+  if (status === 'Draft') return 'rgba(243, 244, 246, 0.96)';
+  return 'rgba(239, 246, 255, 0.96)';
+};
 
 const markerStatusClasses = (status: VisualMarkerStatus) => {
   if (status === 'Pass') return 'border-green-300 bg-green-100 text-green-800';
@@ -418,6 +447,8 @@ export const Documents: React.FC = () => {
   const [markerStyle, setMarkerStyle] = useState<VisualMarkerStyle>('Pin');
   const [markerDirection, setMarkerDirection] = useState<VisualMarkerDirection>('Down');
   const [markerStatus, setMarkerStatus] = useState<VisualMarkerStatus>('Unknown');
+  const [markerSize, setMarkerSize] = useState<VisualMarkerSize>('Medium');
+  const [markerLabelVisibility, setMarkerLabelVisibility] = useState<VisualMarkerLabelVisibility>('Always');
   const [selectedMarkerId, setSelectedMarkerId] = useState<string | null>(null);
   const [editingMarkerId, setEditingMarkerId] = useState<string | null>(null);
   const [movingMarkerId, setMovingMarkerId] = useState<string | null>(null);
@@ -608,6 +639,8 @@ export const Documents: React.FC = () => {
     setMarkerStyle('Pin');
     setMarkerDirection('Down');
     setMarkerStatus('Unknown');
+    setMarkerSize('Medium');
+    setMarkerLabelVisibility('Always');
   };
 
   const updateVisualMarker = (markerId: string, patch: Partial<VisualMarker>) => {
@@ -645,9 +678,11 @@ export const Documents: React.FC = () => {
     setMarkerLabel(`M${selectedBoardMarkers.length + 1}`);
     setMarkerDocumentIds(documents[0]?.id ? [documents[0].id] : []);
     setMarkerNotes('');
-    setMarkerStyle('Pin');
-    setMarkerDirection('Down');
+    setMarkerStyle('Arrow');
+    setMarkerDirection('Right');
     setMarkerStatus('Unknown');
+    setMarkerSize('Medium');
+    setMarkerLabelVisibility('Always');
     setSelectedMarkerId(null);
     setEditingMarkerId(null);
     setIsAddingMarker(false);
@@ -678,6 +713,8 @@ export const Documents: React.FC = () => {
       style: markerStyle,
       direction: markerDirection,
       status: markerStatus,
+      size: markerSize,
+      labelVisibility: markerLabelVisibility,
       createdAt: now,
       updatedAt: now,
     };
@@ -697,6 +734,8 @@ export const Documents: React.FC = () => {
     setMarkerStyle(normalizeMarkerStyle(marker.style));
     setMarkerDirection(normalizeMarkerDirection(marker.direction));
     setMarkerStatus(normalizeMarkerStatus(marker.status));
+    setMarkerSize(normalizeMarkerSize(marker.size));
+    setMarkerLabelVisibility(normalizeMarkerLabelVisibility(marker.labelVisibility));
     setPendingMarkerPoint(null);
     setIsAddingMarker(false);
     setMovingMarkerId(null);
@@ -718,6 +757,8 @@ export const Documents: React.FC = () => {
       style: markerStyle,
       direction: markerDirection,
       status: markerStatus,
+      size: markerSize,
+      labelVisibility: markerLabelVisibility,
     });
     setEditingMarkerId(null);
     resetMarkerForm();
@@ -913,8 +954,11 @@ export const Documents: React.FC = () => {
             onChange={(event) => setMarkerStyle(event.target.value as VisualMarkerStyle)}
             className="mt-1 w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm"
           >
-            <option>Pin</option>
             <option>Arrow</option>
+            <option>Pin</option>
+            <option>Box</option>
+            <option>Cloud</option>
+            <option>Text</option>
           </select>
         </label>
 
@@ -924,11 +968,37 @@ export const Documents: React.FC = () => {
             value={markerDirection}
             onChange={(event) => setMarkerDirection(event.target.value as VisualMarkerDirection)}
             className="mt-1 w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm"
+            disabled={markerStyle !== 'Arrow'}
           >
             <option>Up</option>
             <option>Down</option>
             <option>Left</option>
             <option>Right</option>
+          </select>
+        </label>
+
+        <label className="block text-xs font-semibold text-gray-600">
+          Marker size
+          <select
+            value={markerSize}
+            onChange={(event) => setMarkerSize(event.target.value as VisualMarkerSize)}
+            className="mt-1 w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm"
+          >
+            <option>Small</option>
+            <option>Medium</option>
+            <option>Large</option>
+          </select>
+        </label>
+
+        <label className="block text-xs font-semibold text-gray-600">
+          Label display
+          <select
+            value={markerLabelVisibility}
+            onChange={(event) => setMarkerLabelVisibility(event.target.value as VisualMarkerLabelVisibility)}
+            className="mt-1 w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm"
+          >
+            <option>Always</option>
+            <option>Hover only</option>
           </select>
         </label>
       </div>
@@ -947,6 +1017,10 @@ export const Documents: React.FC = () => {
           <option>Fail</option>
         </select>
       </label>
+
+      <div className="mt-2 rounded border border-gray-200 bg-gray-50 px-3 py-2 text-[11px] text-gray-600">
+        <span className="font-semibold text-gray-800">Marker types:</span> Arrow callout, Pin, Box region, Cloud review, and Text-only labels.
+      </div>
 
       <label className="mt-3 block text-xs font-semibold text-gray-600">
         Notes
@@ -988,47 +1062,170 @@ export const Documents: React.FC = () => {
     const markerDocument = markerDocuments[0] ?? null;
     const style = normalizeMarkerStyle(marker.style);
     const direction = normalizeMarkerDirection(marker.direction);
+    const status = normalizeMarkerStatus(marker.status);
+    const size = normalizeMarkerSize(marker.size);
+    const labelVisibility = normalizeMarkerLabelVisibility(marker.labelVisibility);
+    const sizeConfig = getMarkerSizeConfig(size);
     const isSelected = selectedMarkerId === marker.id;
     const isMoving = movingMarkerId === marker.id;
+    const isHovered = hoverVisualMarker?.id === marker.id;
+    const showLabel = labelVisibility === 'Always' || isSelected || isMoving || isHovered;
+    const accentColor = markerStatusColor(status);
+    const labelStyle: React.CSSProperties = {
+      borderColor: isSelected || isMoving ? '#1d4ed8' : accentColor,
+      backgroundColor: isSelected || isMoving ? '#dbeafe' : markerStatusFill(status),
+      color: isSelected || isMoving ? '#1d4ed8' : accentColor,
+      fontSize: `${sizeConfig.textSize}px`,
+    };
+
+    const commonProps = {
+      key: marker.id,
+      type: 'button' as const,
+      onClick: (event: React.MouseEvent<HTMLButtonElement>) => {
+        event.stopPropagation();
+        setSelectedMarkerId(marker.id);
+        setPendingMarkerPoint(null);
+        setIsAddingMarker(false);
+      },
+      onMouseEnter: (event: React.MouseEvent<HTMLButtonElement>) => {
+        setHoverVisualMarker(marker);
+        setHoverPoint({ x: event.clientX, y: event.clientY });
+      },
+      onMouseMove: (event: React.MouseEvent<HTMLButtonElement>) => setHoverPoint({ x: event.clientX, y: event.clientY }),
+      onMouseLeave: () => setHoverVisualMarker(null),
+      title: markerDocument
+        ? `${marker.label}: ${markerDocument.name}${markerDocuments.length > 1 ? ` + ${markerDocuments.length - 1} more` : ''}`
+        : marker.label,
+    };
+
+    const countBadge = markerDocuments.length > 1 ? (
+      <span className="ml-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-white/90 px-1 text-[10px] font-bold text-slate-700 shadow-sm">
+        {markerDocuments.length}
+      </span>
+    ) : null;
+
+    if (style === 'Arrow') {
+      const line = sizeConfig.arrowLength;
+      const arrowHead = size === 'Large' ? 12 : size === 'Small' ? 8 : 10;
+      const cross = size === 'Large' ? 26 : size === 'Small' ? 18 : 22;
+      const tipOffset = 4;
+
+      let wrapperStyle: React.CSSProperties = {};
+      let labelPosition: React.CSSProperties = {};
+      let lineStyle: React.CSSProperties = { backgroundColor: accentColor };
+      let headStyle: React.CSSProperties = {};
+
+      if (direction === 'Right') {
+        wrapperStyle = { left: `calc(${marker.xPercent}% - ${line + arrowHead + tipOffset}px)`, top: `calc(${marker.yPercent}% - ${cross / 2}px)`, width: `${line + arrowHead + tipOffset}px`, height: `${cross}px` };
+        labelPosition = { left: 0, top: `${-sizeConfig.textSize - 12}px` };
+        lineStyle = { ...lineStyle, position: 'absolute', left: 0, top: '50%', width: `${line}px`, height: '2px', transform: 'translateY(-50%)' };
+        headStyle = { position: 'absolute', left: `${line}px`, top: '50%', width: 0, height: 0, transform: 'translateY(-50%)', borderTop: `${arrowHead / 1.3}px solid transparent`, borderBottom: `${arrowHead / 1.3}px solid transparent`, borderLeft: `${arrowHead}px solid ${accentColor}` };
+      } else if (direction === 'Left') {
+        wrapperStyle = { left: `${marker.xPercent}%`, top: `calc(${marker.yPercent}% - ${cross / 2}px)`, width: `${line + arrowHead + tipOffset}px`, height: `${cross}px` };
+        labelPosition = { right: 0, top: `${-sizeConfig.textSize - 12}px` };
+        lineStyle = { ...lineStyle, position: 'absolute', left: `${arrowHead}px`, top: '50%', width: `${line}px`, height: '2px', transform: 'translateY(-50%)' };
+        headStyle = { position: 'absolute', left: 0, top: '50%', width: 0, height: 0, transform: 'translateY(-50%)', borderTop: `${arrowHead / 1.3}px solid transparent`, borderBottom: `${arrowHead / 1.3}px solid transparent`, borderRight: `${arrowHead}px solid ${accentColor}` };
+      } else if (direction === 'Up') {
+        wrapperStyle = { left: `calc(${marker.xPercent}% - ${cross / 2}px)`, top: `${marker.yPercent}%`, width: `${cross}px`, height: `${line + arrowHead + tipOffset}px` };
+        labelPosition = { left: `${cross + 8}px`, top: `${line - 8}px` };
+        lineStyle = { ...lineStyle, position: 'absolute', left: '50%', top: `${arrowHead}px`, width: '2px', height: `${line}px`, transform: 'translateX(-50%)' };
+        headStyle = { position: 'absolute', left: '50%', top: 0, width: 0, height: 0, transform: 'translateX(-50%)', borderLeft: `${arrowHead / 1.3}px solid transparent`, borderRight: `${arrowHead / 1.3}px solid transparent`, borderBottom: `${arrowHead}px solid ${accentColor}` };
+      } else {
+        wrapperStyle = { left: `calc(${marker.xPercent}% - ${cross / 2}px)`, top: `calc(${marker.yPercent}% - ${line + arrowHead + tipOffset}px)`, width: `${cross}px`, height: `${line + arrowHead + tipOffset}px` };
+        labelPosition = { left: `${cross + 8}px`, top: `${line - 8}px` };
+        lineStyle = { ...lineStyle, position: 'absolute', left: '50%', top: 0, width: '2px', height: `${line}px`, transform: 'translateX(-50%)' };
+        headStyle = { position: 'absolute', left: '50%', top: `${line}px`, width: 0, height: 0, transform: 'translateX(-50%)', borderLeft: `${arrowHead / 1.3}px solid transparent`, borderRight: `${arrowHead / 1.3}px solid transparent`, borderTop: `${arrowHead}px solid ${accentColor}` };
+      }
+
+      return (
+        <button
+          {...commonProps}
+          className="absolute z-10 overflow-visible bg-transparent p-0"
+          style={wrapperStyle}
+        >
+          {showLabel && (
+            <span className="absolute whitespace-nowrap rounded-md border px-2 py-1 font-bold shadow-sm" style={labelPosition && labelStyle ? { ...labelPosition, ...labelStyle } : labelStyle}>
+              {marker.label}
+              {countBadge}
+            </span>
+          )}
+          <span style={lineStyle} />
+          <span style={headStyle} />
+        </button>
+      );
+    }
+
+    if (style === 'Box' || style === 'Cloud') {
+      const width = style === 'Cloud' ? sizeConfig.cloudWidth : sizeConfig.boxWidth;
+      const height = style === 'Cloud' ? sizeConfig.cloudHeight : sizeConfig.boxHeight;
+      const wrapperStyle: React.CSSProperties = {
+        left: `calc(${marker.xPercent}% - ${width / 2}px)`,
+        top: `calc(${marker.yPercent}% - ${height / 2}px)`,
+        width: `${width}px`,
+        height: `${height}px`,
+      };
+
+      return (
+        <button
+          {...commonProps}
+          className="absolute z-10 overflow-visible bg-transparent p-0"
+          style={wrapperStyle}
+        >
+          <span
+            className="absolute inset-0"
+            style={{
+              border: `2px ${style === 'Cloud' ? 'dashed' : 'solid'} ${accentColor}`,
+              borderRadius: style === 'Cloud' ? `${height / 1.7}px` : '8px',
+              backgroundColor: style === 'Cloud' ? `${markerStatusFill(status)}` : 'rgba(255,255,255,0.08)',
+              boxShadow: isSelected ? '0 0 0 2px rgba(37, 99, 235, 0.18)' : 'none',
+            }}
+          />
+          {showLabel && (
+            <span className="absolute -top-7 left-0 whitespace-nowrap rounded-md border px-2 py-1 font-bold shadow-sm" style={labelStyle}>
+              {marker.label}
+              {countBadge}
+            </span>
+          )}
+        </button>
+      );
+    }
+
+    if (style === 'Text') {
+      return (
+        <button
+          {...commonProps}
+          className="absolute z-10 overflow-visible bg-transparent p-0"
+          style={{ left: `${marker.xPercent}%`, top: `${marker.yPercent}%`, transform: 'translate(-50%, -50%)' }}
+        >
+          <span className="whitespace-nowrap rounded-md border px-2 py-1 font-bold shadow-sm" style={labelStyle}>
+            {marker.label}
+            {countBadge}
+          </span>
+        </button>
+      );
+    }
 
     return (
       <button
-        key={marker.id}
-        type="button"
-        onClick={(event) => {
-          event.stopPropagation();
-          setSelectedMarkerId(marker.id);
-          setPendingMarkerPoint(null);
-          setIsAddingMarker(false);
-        }}
-        onMouseEnter={(event) => {
-          setHoverVisualMarker(marker);
-          setHoverPoint({ x: event.clientX, y: event.clientY });
-        }}
-        onMouseMove={(event) => setHoverPoint({ x: event.clientX, y: event.clientY })}
-        onMouseLeave={() => setHoverVisualMarker(null)}
-        className={`absolute z-10 -translate-x-1/2 -translate-y-full rounded-full border px-2 py-1 text-xs font-bold shadow-lg ${
-          isMoving
-            ? 'border-amber-500 bg-amber-400 text-white'
-            : isSelected
-              ? 'border-blue-700 bg-blue-600 text-white'
-              : `${markerStatusClasses(normalizeMarkerStatus(marker.status))} hover:ring-2 hover:ring-blue-200`
-        }`}
-        style={{
-          left: `${marker.xPercent}%`,
-          top: `${marker.yPercent}%`,
-        }}
-        title={markerDocument ? `${marker.label}: ${markerDocument.name}${markerDocuments.length > 1 ? ` + ${markerDocuments.length - 1} more` : ''}` : marker.label}
+        {...commonProps}
+        className="absolute z-10 overflow-visible bg-transparent p-0"
+        style={{ left: `${marker.xPercent}%`, top: `${marker.yPercent}%`, transform: 'translate(-50%, -100%)' }}
       >
-        <span className="inline-flex items-center gap-1">
-          <span className={`h-2 w-2 rounded-full ${isSelected || isMoving ? 'bg-white' : markerStatusDotClasses(normalizeMarkerStatus(marker.status))}`} />
-          {style === 'Arrow' ? (
-            <span className="text-sm leading-none">{markerArrowSymbol(direction)}</span>
-          ) : (
-            <MapPin size={13} />
-          )}
+        <span
+          className="block rounded-full border-2 shadow"
+          style={{
+            width: `${sizeConfig.pinDiameter}px`,
+            height: `${sizeConfig.pinDiameter}px`,
+            borderColor: isSelected || isMoving ? '#1d4ed8' : accentColor,
+            backgroundColor: isSelected || isMoving ? '#1d4ed8' : markerStatusFill(status),
+          }}
+        />
+        <span
+          className="absolute left-1/2 top-full mt-1 -translate-x-1/2 rounded-md border px-2 py-1 font-bold shadow-sm"
+          style={showLabel ? labelStyle : { ...labelStyle, opacity: 0, pointerEvents: 'none' }}
+        >
           {marker.label}
-          {markerDocuments.length > 1 ? <span className="rounded-full bg-blue-100 px-1 text-[10px] text-blue-700">{markerDocuments.length}</span> : null}
+          {countBadge}
         </span>
       </button>
     );
@@ -1127,7 +1324,7 @@ export const Documents: React.FC = () => {
                     </button>
                   )}
                   <span className="text-xs text-gray-500">
-                    Use Markup tools to place and move map callouts. Arrow, box, and cloud upgrades can live here next.
+                    Use Markup tools to place and move callouts. Arrow, Pin, Box, Cloud, and Text markers are supported. Arrow markers now use transparent engineering-style leader lines.
                   </span>
                 </div>
               )}
@@ -1158,7 +1355,7 @@ export const Documents: React.FC = () => {
                   <button className="rounded border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs font-semibold text-gray-500" disabled>
                     Zoom/pan coming soon
                   </button>
-                  <span className="text-xs text-gray-500">Status colors and marker labels are currently always visible.</span>
+                  <span className="text-xs text-gray-500">Markers can now use Always or Hover only label display. Zoom, pan, and filters can be added next.</span>
                 </div>
               )}
 
@@ -1221,7 +1418,7 @@ export const Documents: React.FC = () => {
                     >
                       <span className="inline-flex items-center gap-1">
                         <MapPin size={13} />
-                        New
+                        {markerStyle} marker
                       </span>
                     </div>
                   )}
@@ -1267,7 +1464,7 @@ export const Documents: React.FC = () => {
                     {selectedMarker.label}
                   </h4>
 
-                  <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
+                  <div className="mt-3 grid grid-cols-2 gap-2 text-xs md:grid-cols-5">
                     <div className="rounded bg-gray-50 p-2">
                       <div className="font-semibold text-gray-500">Style</div>
                       <div className="mt-1 font-bold text-gray-900">
@@ -1278,6 +1475,18 @@ export const Documents: React.FC = () => {
                       <div className="font-semibold text-gray-500">Direction</div>
                       <div className="mt-1 font-bold text-gray-900">
                         {normalizeMarkerDirection(selectedMarker.direction)}
+                      </div>
+                    </div>
+                    <div className="rounded bg-gray-50 p-2">
+                      <div className="font-semibold text-gray-500">Size</div>
+                      <div className="mt-1 font-bold text-gray-900">
+                        {normalizeMarkerSize(selectedMarker.size)}
+                      </div>
+                    </div>
+                    <div className="rounded bg-gray-50 p-2">
+                      <div className="font-semibold text-gray-500">Label</div>
+                      <div className="mt-1 font-bold text-gray-900">
+                        {normalizeMarkerLabelVisibility(selectedMarker.labelVisibility)}
                       </div>
                     </div>
                     <div className={`rounded border p-2 ${markerStatusClasses(normalizeMarkerStatus(selectedMarker.status))}`}>
@@ -1376,7 +1585,17 @@ export const Documents: React.FC = () => {
                         >
                           <div className="flex items-center justify-between gap-2">
                             <div className="flex items-center gap-2 font-bold">
-                              {normalizeMarkerStyle(marker.style) === 'Arrow' ? markerArrowSymbol(normalizeMarkerDirection(marker.direction)) : <MapPin size={13} />}
+                              <span className="inline-flex min-w-6 justify-center text-[11px] text-gray-500">
+                                {normalizeMarkerStyle(marker.style) === 'Arrow'
+                                  ? markerArrowSymbol(normalizeMarkerDirection(marker.direction))
+                                  : normalizeMarkerStyle(marker.style) === 'Box'
+                                    ? '▭'
+                                    : normalizeMarkerStyle(marker.style) === 'Cloud'
+                                      ? '☁'
+                                      : normalizeMarkerStyle(marker.style) === 'Text'
+                                        ? 'T'
+                                        : '●'}
+                              </span>
                               {marker.label}
                             </div>
                             <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${markerStatusClasses(normalizeMarkerStatus(marker.status))}`}>
@@ -1384,7 +1603,7 @@ export const Documents: React.FC = () => {
                             </span>
                           </div>
                           <div className="mt-1 truncate text-gray-500">
-                            {markerDocument?.name ?? 'Document not found'}{markerDocuments.length > 1 ? ` + ${markerDocuments.length - 1} more` : ''}
+                            {normalizeMarkerStyle(marker.style)} • {normalizeMarkerSize(marker.size)} • {markerDocument?.name ?? 'Document not found'}{markerDocuments.length > 1 ? ` + ${markerDocuments.length - 1} more` : ''}
                           </div>
                         </button>
                       );
@@ -1654,7 +1873,7 @@ export const Documents: React.FC = () => {
                 {markerStatusLabel(normalizeMarkerStatus(hoverVisualMarker.status))}
               </span>
               <span className="text-gray-400">
-                {normalizeMarkerStyle(hoverVisualMarker.style)} • {normalizeMarkerDirection(hoverVisualMarker.direction)}
+                {normalizeMarkerStyle(hoverVisualMarker.style)} • {normalizeMarkerDirection(hoverVisualMarker.direction)} • {normalizeMarkerSize(hoverVisualMarker.size)}
               </span>
             </div>
           </div>
