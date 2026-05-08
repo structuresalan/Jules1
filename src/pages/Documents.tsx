@@ -31,7 +31,7 @@ import {
 } from '../utils/projectDocuments';
 
 type DocumentsView = 'list' | 'visual';
-type VisualBoardTab = 'Markup' | 'Documents' | 'View' | 'Settings';
+type VisualBoardTab = 'Markup' | 'Documents' | 'Measure' | 'View' | 'Review' | 'Settings';
 type VisualBoardKind = 'Plan' | 'Elevation' | 'Site Photo' | 'Other';
 type VisualMarkerStyle = 'Pin' | 'Arrow' | 'Box' | 'Cloud' | 'Text';
 type VisualMarkerDirection = 'Up' | 'Down' | 'Left' | 'Right';
@@ -69,11 +69,27 @@ interface VisualMarker {
   updatedAt: string;
 }
 
+interface VisualMeasurement {
+  id: string;
+  projectId: string;
+  boardId: string;
+  label: string;
+  x1Percent: number;
+  y1Percent: number;
+  x2Percent: number;
+  y2Percent: number;
+  actualLengthFt?: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 const VISUAL_BOARDS_STORAGE_KEY = 'struccalc.visualBoards.v1';
 const VISUAL_MARKERS_STORAGE_KEY = 'struccalc.visualMarkers.v1';
+const VISUAL_MEASUREMENTS_STORAGE_KEY = 'struccalc.visualMeasurements.v1';
 
 const makeVisualBoardId = () => `visual_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 const makeVisualMarkerId = () => `marker_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+const makeVisualMeasurementId = () => `measure_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 
 const safeParse = <T,>(raw: string | null, fallback: T): T => {
   if (!raw) return fallback;
@@ -121,9 +137,30 @@ const deleteVisualMarker = (markerId: string) => {
   writeAllVisualMarkers(getAllVisualMarkers().filter((marker) => marker.id !== markerId));
 };
 
+const getAllVisualMeasurements = (): VisualMeasurement[] => {
+  if (typeof window === 'undefined') return [];
+  return safeParse<VisualMeasurement[]>(window.localStorage.getItem(VISUAL_MEASUREMENTS_STORAGE_KEY), []);
+};
+
+const writeAllVisualMeasurements = (measurements: VisualMeasurement[]) => {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(VISUAL_MEASUREMENTS_STORAGE_KEY, JSON.stringify(measurements));
+};
+
+const getProjectVisualMeasurements = (projectId: string) => {
+  return getAllVisualMeasurements()
+    .filter((measurement) => measurement.projectId === projectId)
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+};
+
+const deleteVisualMeasurement = (measurementId: string) => {
+  writeAllVisualMeasurements(getAllVisualMeasurements().filter((measurement) => measurement.id !== measurementId));
+};
+
 const deleteVisualBoard = (boardId: string) => {
   writeAllVisualBoards(getAllVisualBoards().filter((board) => board.id !== boardId));
   writeAllVisualMarkers(getAllVisualMarkers().filter((marker) => marker.boardId !== boardId));
+  writeAllVisualMeasurements(getAllVisualMeasurements().filter((measurement) => measurement.boardId !== boardId));
 };
 
 const getDefaultBoardName = (fileName: string) => {
@@ -225,6 +262,18 @@ const getBoardPrimaryStatus = (boardId: string, markers: VisualMarker[]): Visual
   if (counts.Draft > 0) return 'Draft';
   if (counts.Pass > 0) return 'Pass';
   return 'Unknown';
+};
+
+const distanceBetweenPercentPoints = (measurement: Pick<VisualMeasurement, 'x1Percent' | 'y1Percent' | 'x2Percent' | 'y2Percent'>) => {
+  const dx = measurement.x2Percent - measurement.x1Percent;
+  const dy = measurement.y2Percent - measurement.y1Percent;
+  return Math.sqrt(dx * dx + dy * dy);
+};
+
+const escapeCsvCell = (value: string | number | null | undefined) => {
+  const text = value === null || value === undefined ? '' : String(value);
+  if (/[",\n]/.test(text)) return `"${text.replace(/"/g, '""')}"`;
+  return text;
 };
 
 const getBeamDetails = (document: ProjectDocument) => {
@@ -432,6 +481,9 @@ export const Documents: React.FC = () => {
   const [visualMarkers, setVisualMarkers] = useState<VisualMarker[]>(() =>
     activeProject ? getProjectVisualMarkers(activeProject.id) : [],
   );
+  const [visualMeasurements, setVisualMeasurements] = useState<VisualMeasurement[]>(() =>
+    activeProject ? getProjectVisualMeasurements(activeProject.id) : [],
+  );
   const [isAddingMarker, setIsAddingMarker] = useState(false);
   const [pendingMarkerPoint, setPendingMarkerPoint] = useState<{ xPercent: number; yPercent: number } | null>(null);
   const [markerLabel, setMarkerLabel] = useState('');
@@ -447,6 +499,19 @@ export const Documents: React.FC = () => {
   const [movingMarkerId, setMovingMarkerId] = useState<string | null>(null);
   const [draggingMarkerId, setDraggingMarkerId] = useState<string | null>(null);
   const [hoverVisualMarker, setHoverVisualMarker] = useState<VisualMarker | null>(null);
+  const [isMeasuring, setIsMeasuring] = useState(false);
+  const [pendingMeasurePoint, setPendingMeasurePoint] = useState<{ xPercent: number; yPercent: number } | null>(null);
+  const [measurementActualLength, setMeasurementActualLength] = useState('');
+  const [visibleStatuses, setVisibleStatuses] = useState<Record<VisualMarkerStatus, boolean>>({
+    Pass: true,
+    Review: true,
+    Fail: true,
+    Draft: true,
+    Unknown: true,
+  });
+  const [labelDisplayOverride, setLabelDisplayOverride] = useState<'Normal' | 'Show all' | 'Hide all'>('Normal');
+  const [boardZoom, setBoardZoom] = useState(1);
+  const [boardNotesDraft, setBoardNotesDraft] = useState('');
   const [newBoardName, setNewBoardName] = useState('');
   const boardCanvasRef = useRef<HTMLDivElement | null>(null);
   const latestVisualMarkersRef = useRef<VisualMarker[]>([]);
@@ -460,6 +525,14 @@ export const Documents: React.FC = () => {
   const selectedBoardMarkers = useMemo(
     () => (selectedBoard ? visualMarkers.filter((marker) => marker.boardId === selectedBoard.id) : []),
     [selectedBoard, visualMarkers],
+  );
+  const visibleBoardMarkers = useMemo(
+    () => selectedBoardMarkers.filter((marker) => visibleStatuses[normalizeMarkerStatus(marker.status)]),
+    [selectedBoardMarkers, visibleStatuses],
+  );
+  const selectedBoardMeasurements = useMemo(
+    () => (selectedBoard ? visualMeasurements.filter((measurement) => measurement.boardId === selectedBoard.id) : []),
+    [selectedBoard, visualMeasurements],
   );
   const selectedMarker = useMemo(
     () => selectedBoardMarkers.find((marker) => marker.id === selectedMarkerId) ?? null,
@@ -506,6 +579,19 @@ export const Documents: React.FC = () => {
     setVisualMarkers(getProjectVisualMarkers(activeProject.id));
   };
 
+  const refreshVisualMeasurements = () => {
+    if (!activeProject) {
+      setVisualMeasurements([]);
+      return;
+    }
+
+    setVisualMeasurements(getProjectVisualMeasurements(activeProject.id));
+  };
+
+  useEffect(() => {
+    setBoardNotesDraft((selectedBoard as (VisualBoard & { notes?: string }) | null)?.notes ?? '');
+  }, [selectedBoard]);
+
   const filteredDocuments = useMemo(() => {
     const query = searchText.trim().toLowerCase();
     if (!query) return documents;
@@ -540,6 +626,28 @@ export const Documents: React.FC = () => {
       window.removeEventListener('afterprint', afterPrint);
     };
   }, [printDocument]);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        cancelPendingMarker();
+        cancelMeasurement();
+        return;
+      }
+
+      if ((event.key === 'Delete' || event.key === 'Backspace') && selectedMarkerId && !editingMarkerId) {
+        const target = event.target as HTMLElement | null;
+        const tagName = target?.tagName?.toLowerCase();
+        if (tagName === 'input' || tagName === 'textarea' || tagName === 'select') return;
+
+        event.preventDefault();
+        handleDeleteVisualMarker(selectedMarkerId);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedMarkerId, editingMarkerId]);
 
   const startRename = (document: ProjectDocument) => {
     setRenamingId(document.id);
@@ -615,7 +723,8 @@ export const Documents: React.FC = () => {
         imageDataUrl,
         createdAt: now,
         updatedAt: now,
-      };
+        notes: '',
+      } as VisualBoard & { notes?: string };
 
       writeAllVisualBoards([board, ...getAllVisualBoards()]);
       setNewBoardName('');
@@ -734,7 +843,7 @@ export const Documents: React.FC = () => {
     }
 
     setPendingMarkerPoint({ xPercent, yPercent });
-    setMarkerLabel(`M${selectedBoardMarkers.length + 1}`);
+    setMarkerLabel((current) => current || `M${selectedBoardMarkers.length + 1}`);
     setMarkerDocumentIds(documents[0]?.id ? [documents[0].id] : []);
     setMarkerNotes('');
     setMarkerStyle('Arrow');
@@ -747,6 +856,94 @@ export const Documents: React.FC = () => {
     setIsAddingMarker(false);
   };
 
+  const handleBoardMeasureClick = (clientX: number, clientY: number) => {
+    if (!activeProject || !selectedBoard || !isMeasuring) return;
+
+    const point = getBoardCanvasPercentFromClientPoint(clientX, clientY);
+    if (!point) return;
+
+    if (!pendingMeasurePoint) {
+      setPendingMeasurePoint(point);
+      return;
+    }
+
+    const actualLength = Number(measurementActualLength);
+    const now = new Date().toISOString();
+    const measurement: VisualMeasurement = {
+      id: makeVisualMeasurementId(),
+      projectId: activeProject.id,
+      boardId: selectedBoard.id,
+      label: `M-${selectedBoardMeasurements.length + 1}`,
+      x1Percent: pendingMeasurePoint.xPercent,
+      y1Percent: pendingMeasurePoint.yPercent,
+      x2Percent: point.xPercent,
+      y2Percent: point.yPercent,
+      actualLengthFt: Number.isFinite(actualLength) && actualLength > 0 ? actualLength : undefined,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    writeAllVisualMeasurements([measurement, ...getAllVisualMeasurements()]);
+    setPendingMeasurePoint(null);
+    setIsMeasuring(false);
+    setMeasurementActualLength('');
+    refreshVisualMeasurements();
+  };
+
+  const cancelMeasurement = () => {
+    setIsMeasuring(false);
+    setPendingMeasurePoint(null);
+    setMeasurementActualLength('');
+  };
+
+  const handleDeleteMeasurement = (measurementId: string) => {
+    deleteVisualMeasurement(measurementId);
+    refreshVisualMeasurements();
+  };
+
+  const saveBoardNotes = () => {
+    if (!selectedBoard) return;
+
+    const now = new Date().toISOString();
+    writeAllVisualBoards(
+      getAllVisualBoards().map((board) =>
+        board.id === selectedBoard.id
+          ? {
+              ...board,
+              notes: boardNotesDraft,
+              updatedAt: now,
+            }
+          : board,
+      ),
+    );
+    refreshVisualBoards();
+  };
+
+  const exportMarkerScheduleCsv = () => {
+    if (!selectedBoard) return;
+
+    const rows = [
+      ['Marker', 'Status', 'Style', 'Size', 'Linked Documents', 'Notes'],
+      ...selectedBoardMarkers.map((marker) => [
+        marker.label,
+        normalizeMarkerStatus(marker.status),
+        normalizeMarkerStyle(marker.style),
+        normalizeMarkerSize(marker.size),
+        getMarkerDocuments(marker, documents).map((document) => document.name).join('; '),
+        marker.notes,
+      ]),
+    ];
+
+    const csv = rows.map((row) => row.map((cell) => escapeCsvCell(cell)).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const anchorElement = document.createElement('a');
+    anchorElement.href = url;
+    anchorElement.download = `${selectedBoard.name.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '') || 'visual-map'}-marker-schedule.csv`;
+    anchorElement.click();
+    URL.revokeObjectURL(url);
+  };
+
   const cancelPendingMarker = () => {
     setPendingMarkerPoint(null);
     resetMarkerForm();
@@ -754,6 +951,7 @@ export const Documents: React.FC = () => {
     setEditingMarkerId(null);
     setMovingMarkerId(null);
     setDraggingMarkerId(null);
+    cancelMeasurement();
   };
 
   const savePendingMarker = () => {
@@ -863,6 +1061,7 @@ export const Documents: React.FC = () => {
     setHoverVisualMarker(null);
     refreshVisualBoards();
     refreshVisualMarkers();
+    refreshVisualMeasurements();
   };
 
   if (!activeProject) {
@@ -1133,7 +1332,7 @@ export const Documents: React.FC = () => {
     const isSelected = selectedMarkerId === marker.id;
     const isMoving = movingMarkerId === marker.id;
     const isHovered = hoverVisualMarker?.id === marker.id;
-    const showLabel = labelVisibility === 'Always' || isSelected || isMoving || isHovered;
+    const showLabel = labelDisplayOverride === 'Show all' || (labelDisplayOverride !== 'Hide all' && (labelVisibility === 'Always' || isSelected || isMoving || isHovered));
     const accentColor = markerStatusColor(status);
     const labelStyle: React.CSSProperties = {
       borderColor: isSelected || isMoving ? '#1d4ed8' : accentColor,
@@ -1162,6 +1361,10 @@ export const Documents: React.FC = () => {
         setSelectedMarkerId(marker.id);
         setPendingMarkerPoint(null);
         setIsAddingMarker(false);
+      },
+      onDoubleClick: (event: React.MouseEvent<HTMLButtonElement>) => {
+        event.stopPropagation();
+        startEditMarker(marker);
       },
       onMouseEnter: (event: React.MouseEvent<HTMLButtonElement>) => {
         setHoverVisualMarker(marker);
@@ -1338,7 +1541,7 @@ export const Documents: React.FC = () => {
                 {getBoardPrimaryStatus(selectedBoard.id, visualMarkers)}
               </span>
               <span className="rounded-full border border-gray-200 bg-gray-50 px-3 py-1 font-semibold text-gray-600">
-                {selectedBoardMarkers.length} marker{selectedBoardMarkers.length === 1 ? '' : 's'}
+                {visibleBoardMarkers.length} visible / {selectedBoardMarkers.length} marker{selectedBoardMarkers.length === 1 ? '' : 's'}
               </span>
               <span className="rounded-full border border-gray-200 bg-gray-50 px-3 py-1 font-semibold text-gray-600">
                 {getBoardDocumentCount(selectedBoard.id, visualMarkers)} linked doc{getBoardDocumentCount(selectedBoard.id, visualMarkers) === 1 ? '' : 's'}
@@ -1348,7 +1551,7 @@ export const Documents: React.FC = () => {
 
           <div className="border-b border-gray-200 bg-slate-50">
             <div className="flex min-w-max gap-1 overflow-x-auto px-3 pt-3">
-              {(['Markup', 'Documents', 'View', 'Settings'] as VisualBoardTab[]).map((tab) => (
+              {(['Markup', 'Documents', 'Measure', 'View', 'Review', 'Settings'] as VisualBoardTab[]).map((tab) => (
                 <button
                   key={tab}
                   onClick={() => setActiveVisualBoardTab(tab)}
@@ -1383,8 +1586,42 @@ export const Documents: React.FC = () => {
                     <MapPin size={16} />
                     {isAddingMarker ? 'Click plan/photo to place marker' : 'Add Marker'}
                   </button>
+                  {(['Arrow', 'Pin', 'Box', 'Cloud', 'Text'] as VisualMarkerStyle[]).map((style) => (
+                    <button
+                      key={style}
+                      onClick={() => {
+                        setMarkerStyle(style);
+                        setIsAddingMarker(true);
+                        setPendingMarkerPoint(null);
+                        setSelectedMarkerId(null);
+                        setEditingMarkerId(null);
+                        setMovingMarkerId(null);
+                      }}
+                      className="rounded-md border border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+                    >
+                      {style}
+                    </button>
+                  ))}
+                  {(['PASS', 'REVIEW', 'FAIL', 'FIELD VERIFY', 'TYP.', 'SEE CALC', 'REVISED', 'VOID'] as string[]).map((stamp) => (
+                    <button
+                      key={stamp}
+                      onClick={() => {
+                        setMarkerStyle('Text');
+                        setMarkerLabel(stamp);
+                        setMarkerStatus(stamp === 'PASS' ? 'Pass' : stamp === 'FAIL' ? 'Fail' : stamp === 'REVIEW' || stamp === 'FIELD VERIFY' ? 'Review' : 'Draft');
+                        setIsAddingMarker(true);
+                        setPendingMarkerPoint(null);
+                        setSelectedMarkerId(null);
+                        setEditingMarkerId(null);
+                        setMovingMarkerId(null);
+                      }}
+                      className="rounded-md border border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+                    >
+                      {stamp}
+                    </button>
+                  ))}
                   <span className="rounded-md border border-blue-100 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700">
-                    Drag any marker directly with your mouse to reposition it.
+                    Drag markers directly with your mouse to reposition them.
                   </span>
                   {(isAddingMarker || pendingMarkerPoint || movingMarkerId) && (
                     <button
@@ -1416,17 +1653,84 @@ export const Documents: React.FC = () => {
                 </div>
               )}
 
+              {activeVisualBoardTab === 'Measure' && (
+                <div className="flex flex-wrap items-center gap-2 text-sm text-gray-600">
+                  <button
+                    onClick={() => {
+                      setIsMeasuring(true);
+                      setPendingMeasurePoint(null);
+                      setIsAddingMarker(false);
+                      setMovingMarkerId(null);
+                    }}
+                    className={`inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold ${
+                      isMeasuring ? 'bg-amber-500 text-white hover:bg-amber-600' : 'bg-blue-600 text-white hover:bg-blue-700'
+                    }`}
+                  >
+                    <MousePointer2 size={16} />
+                    {isMeasuring ? 'Click two points on the board' : 'Measure Length'}
+                  </button>
+                  <input
+                    value={measurementActualLength}
+                    onChange={(event) => setMeasurementActualLength(event.target.value)}
+                    className="w-36 rounded border border-gray-300 px-3 py-2 text-sm"
+                    placeholder="Actual ft optional"
+                  />
+                  {(isMeasuring || pendingMeasurePoint) && (
+                    <button
+                      onClick={cancelMeasurement}
+                      className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+                    >
+                      Cancel measure
+                    </button>
+                  )}
+                  <span className="text-xs text-gray-500">
+                    Click point 1, then point 2. Enter a known actual length if you want the measurement labeled in feet.
+                  </span>
+                </div>
+              )}
+
               {activeVisualBoardTab === 'View' && (
                 <div className="flex flex-wrap items-center gap-2 text-sm text-gray-600">
                   <Maximize2 size={16} className="text-blue-600" />
                   <span className="font-semibold text-gray-900">View tools:</span>
-                  <button className="rounded border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs font-semibold text-gray-500" disabled>
-                    Fit to screen coming soon
+                  <button onClick={() => setBoardZoom((value) => Math.min(2.5, Number((value + 0.1).toFixed(2))))} className="rounded border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50">
+                    Zoom in
                   </button>
-                  <button className="rounded border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs font-semibold text-gray-500" disabled>
-                    Zoom/pan coming soon
+                  <button onClick={() => setBoardZoom((value) => Math.max(0.5, Number((value - 0.1).toFixed(2))))} className="rounded border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50">
+                    Zoom out
                   </button>
-                  <span className="text-xs text-gray-500">Markers can now use Always or Hover only label display. Zoom, pan, and filters can be added next.</span>
+                  <button onClick={() => setBoardZoom(1)} className="rounded border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50">
+                    Reset {Math.round(boardZoom * 100)}%
+                  </button>
+                  <select value={labelDisplayOverride} onChange={(event) => setLabelDisplayOverride(event.target.value as 'Normal' | 'Show all' | 'Hide all')} className="rounded border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700">
+                    <option>Normal</option>
+                    <option>Show all</option>
+                    <option>Hide all</option>
+                  </select>
+                  {(['Pass', 'Review', 'Fail', 'Draft', 'Unknown'] as VisualMarkerStatus[]).map((status) => (
+                    <label key={status} className={`flex items-center gap-1 rounded-full border px-2 py-1 text-xs font-bold ${markerStatusClasses(status)}`}>
+                      <input
+                        type="checkbox"
+                        checked={visibleStatuses[status]}
+                        onChange={(event) => setVisibleStatuses((prev) => ({ ...prev, [status]: event.target.checked }))}
+                      />
+                      {status}
+                    </label>
+                  ))}
+                </div>
+              )}
+
+              {activeVisualBoardTab === 'Review' && (
+                <div className="flex flex-wrap items-center gap-2 text-sm text-gray-600">
+                  <span className="font-semibold text-gray-900">Review schedule:</span>
+                  <span>{selectedBoardMarkers.length} marker{selectedBoardMarkers.length === 1 ? '' : 's'}</span>
+                  <button
+                    onClick={exportMarkerScheduleCsv}
+                    className="rounded border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100"
+                  >
+                    Export marker schedule CSV
+                  </button>
+                  <span className="text-xs text-gray-500">Use this as a calculation index tied to the visual board.</span>
                 </div>
               )}
 
@@ -1436,6 +1740,18 @@ export const Documents: React.FC = () => {
                   <span>{selectedBoard.kind}</span>
                   <span>•</span>
                   <span>{selectedBoard.imageName}</span>
+                  <textarea
+                    value={boardNotesDraft}
+                    onChange={(event) => setBoardNotesDraft(event.target.value)}
+                    className="min-h-9 w-64 rounded border border-gray-300 px-2 py-1 text-xs"
+                    placeholder="Board notes..."
+                  />
+                  <button
+                    onClick={saveBoardNotes}
+                    className="rounded border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100"
+                  >
+                    Save notes
+                  </button>
                   <button
                     onClick={() => handleDeleteVisualBoard(selectedBoard.id)}
                     className="inline-flex items-center gap-1 rounded border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100"
@@ -1469,16 +1785,62 @@ export const Documents: React.FC = () => {
           <div className="grid grid-cols-1 gap-0 lg:grid-cols-[minmax(0,1fr)_320px]">
             <div className="max-h-[72vh] overflow-auto bg-slate-100 p-4">
               <div className="mx-auto w-fit rounded-lg border border-gray-300 bg-white p-2 shadow-sm">
-                <div ref={boardCanvasRef} className="relative inline-block">
+                <div ref={boardCanvasRef} className="relative inline-block origin-top-left" style={{ transform: `scale(${boardZoom})`, transformOrigin: "top left" }}>
                   <img
                     src={selectedBoard.imageDataUrl}
                     alt={selectedBoard.name}
-                    onClick={handleBoardImageClick}
+                    onClick={(event) => {
+                      if (isMeasuring) {
+                        handleBoardMeasureClick(event.clientX, event.clientY);
+                        return;
+                      }
+                      handleBoardImageClick(event);
+                    }}
                     draggable={false}
-                    className={`max-h-[68vh] max-w-full object-contain ${isAddingMarker || movingMarkerId ? 'cursor-crosshair' : draggingMarkerId ? 'cursor-grabbing' : ''}`}
+                    className={`max-h-[68vh] max-w-full object-contain ${isAddingMarker || movingMarkerId || isMeasuring ? 'cursor-crosshair' : draggingMarkerId ? 'cursor-grabbing' : ''}`}
                   />
 
-                  {selectedBoardMarkers.map((marker) => renderVisualMarkerButton(marker))}
+                  {visibleBoardMarkers.map((marker) => renderVisualMarkerButton(marker))}
+
+                  {selectedBoardMeasurements.map((measurement) => {
+                    const lengthPercent = distanceBetweenPercentPoints(measurement);
+                    return (
+                      <button
+                        key={measurement.id}
+                        type="button"
+                        onClick={() => handleDeleteMeasurement(measurement.id)}
+                        className="absolute z-10 bg-transparent p-0"
+                        style={{ left: 0, top: 0, width: '100%', height: '100%', pointerEvents: 'none' }}
+                        title="Click measurement in list to delete"
+                      >
+                        <svg className="absolute inset-0 h-full w-full overflow-visible" style={{ pointerEvents: 'none' }}>
+                          <line
+                            x1={`${measurement.x1Percent}%`}
+                            y1={`${measurement.y1Percent}%`}
+                            x2={`${measurement.x2Percent}%`}
+                            y2={`${measurement.y2Percent}%`}
+                            stroke="#7c3aed"
+                            strokeWidth="2"
+                            strokeDasharray="5 4"
+                          />
+                          <circle cx={`${measurement.x1Percent}%`} cy={`${measurement.y1Percent}%`} r="4" fill="#7c3aed" />
+                          <circle cx={`${measurement.x2Percent}%`} cy={`${measurement.y2Percent}%`} r="4" fill="#7c3aed" />
+                          <text
+                            x={`${(measurement.x1Percent + measurement.x2Percent) / 2}%`}
+                            y={`${(measurement.y1Percent + measurement.y2Percent) / 2}%`}
+                            fill="#5b21b6"
+                            fontSize="12"
+                            fontWeight="700"
+                            paintOrder="stroke"
+                            stroke="white"
+                            strokeWidth="3"
+                          >
+                            {measurement.actualLengthFt ? `${measurement.actualLengthFt.toFixed(2)} ft` : `${lengthPercent.toFixed(1)}%`}
+                          </text>
+                        </svg>
+                      </button>
+                    );
+                  })}
 
                   {pendingMarkerPoint && (
                     <div
@@ -1524,6 +1886,58 @@ export const Documents: React.FC = () => {
                   })}
                 </div>
               </div>
+
+              {activeVisualBoardTab === 'Measure' && (
+                <div className="mt-4 rounded-lg border border-gray-200 bg-white p-3">
+                  <h4 className="text-xs font-bold uppercase tracking-wide text-gray-500">Measurements</h4>
+                  {selectedBoardMeasurements.length === 0 ? (
+                    <p className="mt-2 text-sm text-gray-500">No measurements yet. Use Measure Length, then click two points.</p>
+                  ) : (
+                    <div className="mt-2 space-y-2">
+                      {selectedBoardMeasurements.map((measurement) => (
+                        <div key={measurement.id} className="rounded border border-gray-200 bg-gray-50 p-2 text-xs">
+                          <div className="font-bold text-gray-900">{measurement.label}</div>
+                          <div className="mt-1 text-gray-500">
+                            {measurement.actualLengthFt ? `${measurement.actualLengthFt.toFixed(2)} ft` : `${distanceBetweenPercentPoints(measurement).toFixed(1)}% board distance`}
+                          </div>
+                          <button
+                            onClick={() => handleDeleteMeasurement(measurement.id)}
+                            className="mt-2 rounded border border-red-200 bg-red-50 px-2 py-1 text-[11px] font-semibold text-red-700 hover:bg-red-100"
+                          >
+                            Delete measurement
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {activeVisualBoardTab === 'Review' && (
+                <div className="mt-4 rounded-lg border border-gray-200 bg-white p-3">
+                  <h4 className="text-xs font-bold uppercase tracking-wide text-gray-500">Marker Schedule</h4>
+                  <div className="mt-2 max-h-72 overflow-auto">
+                    <table className="w-full text-left text-[11px]">
+                      <thead className="text-gray-500">
+                        <tr>
+                          <th className="py-1">Marker</th>
+                          <th className="py-1">Status</th>
+                          <th className="py-1">Docs</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {selectedBoardMarkers.map((marker) => (
+                          <tr key={marker.id} className="border-t border-gray-100">
+                            <td className="py-1 font-semibold">{marker.label}</td>
+                            <td className="py-1">{normalizeMarkerStatus(marker.status)}</td>
+                            <td className="py-1">{getMarkerDocuments(marker, documents).length}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
 
               {pendingMarkerPoint && renderMarkerForm('new')}
 
