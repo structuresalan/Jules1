@@ -277,6 +277,8 @@ export const VisualWorkspace: React.FC = () => {
   const [selectedItemId, setSelectedItemId] = useState('');
   const [selectedAnnotationId, setSelectedAnnotationId] = useState('');
   const [hoveredAnnotationId, setHoveredAnnotationId] = useState('');
+  const [draggingAnnotationId, setDraggingAnnotationId] = useState('');
+  const annotationDragOffsetRef = useRef<VisualPoint>({ x: 0, y: 0 });
 
   const [boardName, setBoardName] = useState('');
   const [boardKind, setBoardKind] = useState<BoardKind>('Plan');
@@ -731,6 +733,67 @@ export const VisualWorkspace: React.FC = () => {
     if (selectedAnnotationId === annotationId) setSelectedAnnotationId('');
   };
 
+  const updateAnnotationPosition = (annotationId: string, nextX: number, nextY: number) => {
+    setAnnotations((current) =>
+      current.map((annotation) => {
+        if (annotation.id !== annotationId) return annotation;
+
+        const dx = nextX - annotation.x;
+        const dy = nextY - annotation.y;
+        const nextPoints = annotation.points?.map((point) => ({ x: point.x + dx, y: point.y + dy }));
+
+        return {
+          ...annotation,
+          x: Math.min(100, Math.max(0, nextX)),
+          y: Math.min(100, Math.max(0, nextY)),
+          x2: annotation.x2 !== undefined ? Math.min(100, Math.max(0, annotation.x2 + dx)) : annotation.x2,
+          y2: annotation.y2 !== undefined ? Math.min(100, Math.max(0, annotation.y2 + dy)) : annotation.y2,
+          points: nextPoints,
+          updatedAt: new Date().toISOString(),
+        };
+      }),
+    );
+  };
+
+  const startAnnotationDrag = (annotation: VisualAnnotation, event: React.MouseEvent) => {
+    if (tool !== 'Select') return;
+
+    const point = getPoint(event as React.MouseEvent<HTMLElement>, boardSurfaceRef.current);
+    if (!point) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    annotationDragOffsetRef.current = {
+      x: point.x - annotation.x,
+      y: point.y - annotation.y,
+    };
+
+    setSelectedAnnotationId(annotation.id);
+    setSelectedItemId(annotation.itemId ?? '');
+    setDraggingAnnotationId(annotation.id);
+  };
+
+  const handleAnnotationDragMove = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (!draggingAnnotationId) return;
+
+    const point = getPoint(event, boardSurfaceRef.current);
+    if (!point) return;
+
+    updateAnnotationPosition(
+      draggingAnnotationId,
+      point.x - annotationDragOffsetRef.current.x,
+      point.y - annotationDragOffsetRef.current.y,
+    );
+  };
+
+  const stopAnnotationDrag = () => {
+    if (!draggingAnnotationId) return;
+
+    setDraggingAnnotationId('');
+    annotationDragOffsetRef.current = { x: 0, y: 0 };
+  };
+
   const updateAnnotationItem = (annotationId: string, itemId: string) => {
     setAnnotations((current) =>
       current.map((annotation) =>
@@ -846,6 +909,7 @@ export const VisualWorkspace: React.FC = () => {
       : {
           onMouseEnter: () => setHoveredAnnotationId(annotation.id),
           onMouseLeave: () => setHoveredAnnotationId(''),
+          onMouseDown: (event: React.MouseEvent) => startAnnotationDrag(annotation, event),
           onClick: (event: React.MouseEvent) => {
             event.stopPropagation();
             setSelectedAnnotationId(annotation.id);
@@ -877,7 +941,7 @@ export const VisualWorkspace: React.FC = () => {
             <foreignObject x={`${Math.min(annotation.x, x2)}%`} y={`${Math.min(annotation.y, y2)}%`} width="160" height="44">
               <button
                 {...commonEvents}
-                className="pointer-events-auto rounded border border-white/80 bg-white/90 px-2 py-1 text-xs font-bold shadow"
+                className="pointer-events-auto cursor-move rounded border border-white/80 bg-white/90 px-2 py-1 text-xs font-bold shadow"
                 style={{ color }}
               >
                 {annotation.label}
@@ -912,7 +976,7 @@ export const VisualWorkspace: React.FC = () => {
             <circle key={`${annotation.id}-${index}`} cx={`${point.x}%`} cy={`${point.y}%`} r="4" fill={annotation.measurementKind === 'Reference' ? '#f59e0b' : '#7c3aed'} />
           ))}
           <foreignObject x={`${pointCentroid.x}%`} y={`${pointCentroid.y}%`} width="220" height="50">
-            <button {...commonEvents} className="pointer-events-auto rounded border border-white bg-white/95 px-2 py-1 text-xs font-bold text-purple-800 shadow">
+            <button {...commonEvents} className="pointer-events-auto cursor-move rounded border border-white bg-white/95 px-2 py-1 text-xs font-bold text-purple-800 shadow">
               {annotation.measurementKind}: {value}
             </button>
           </foreignObject>
@@ -935,7 +999,7 @@ export const VisualWorkspace: React.FC = () => {
         <button
           key={annotation.id}
           {...commonEvents}
-          className={`absolute z-20 rounded text-left text-xs font-bold shadow-sm ${preview ? 'pointer-events-none opacity-80' : ''} ${
+          className={`absolute z-20 cursor-move rounded text-left text-xs font-bold shadow-sm ${preview ? 'pointer-events-none opacity-80' : ''} ${
             annotation.type === 'Cloud'
               ? 'border-2 border-dashed bg-white/30'
               : annotation.type === 'Highlight'
@@ -962,7 +1026,7 @@ export const VisualWorkspace: React.FC = () => {
       <button
         key={annotation.id}
         {...commonEvents}
-        className={`absolute z-20 rounded border bg-white/95 px-2 py-1 text-xs font-bold shadow ${preview ? 'pointer-events-none opacity-80' : ''} ${selected ? 'ring-2 ring-blue-500' : ''}`}
+        className={`absolute z-20 cursor-move rounded border bg-white/95 px-2 py-1 text-xs font-bold shadow ${preview ? 'pointer-events-none opacity-80' : ''} ${selected ? 'ring-2 ring-blue-500' : ''}`}
         style={{
           left: `${annotation.x}%`,
           top: `${annotation.y}%`,
@@ -993,7 +1057,7 @@ export const VisualWorkspace: React.FC = () => {
         </div>
 
         <div className="space-y-2">
-          {boards.length === 0 && <p className={`rounded-xl border p-3 text-sm ${isDesktopStyle ? 'border-white/10 text-slate-300' : 'border-gray-200 text-gray-500'}`}>Upload a plan, elevation, site photo, or PDF to start annotating.</p>}
+          {boards.length === 0 && <p className={`rounded-xl border p-3 text-sm ${isDesktopStyle ? 'border-white/10 text-slate-300' : 'border-gray-200 text-gray-500'}`}>Upload a plan, elevation, site photo, or PDF to start annotating. Use Select to move existing marks by dragging them.</p>}
           {boards.map((board) => (
             <button
               key={board.id}
@@ -1066,8 +1130,14 @@ export const VisualWorkspace: React.FC = () => {
             <div
               ref={boardSurfaceRef}
               onMouseDown={handleBoardMouseDown}
-              onMouseMove={handleBoardMouseMove}
-              onMouseUp={handleBoardMouseUp}
+              onMouseMove={(event) => {
+                handleAnnotationDragMove(event);
+                handleBoardMouseMove(event);
+              }}
+              onMouseUp={() => {
+                stopAnnotationDrag();
+                handleBoardMouseUp();
+              }}
               className="relative mx-auto min-h-[680px] w-full max-w-6xl overflow-hidden rounded-2xl border border-slate-300 bg-white shadow"
             >
               {selectedBoard.fileType === 'application/pdf' ? (
@@ -1150,7 +1220,7 @@ export const VisualWorkspace: React.FC = () => {
             <Download size={14} /> Export annotations CSV
           </button>
           <div className={isDesktopStyle ? 'text-xs text-slate-400' : 'text-xs text-gray-500'}>
-            PDF replacement tools: arrows, clouds, boxes, text, stamps, count, reference scale, length, perimeter, area, linked photos, and annotation schedules.
+            PDF replacement tools: arrows, clouds, boxes, text, stamps, count, reference scale, length, perimeter, area, linked photos, annotation schedules, and drag-to-move annotations with Select.
           </div>
         </div>
       </aside>
@@ -1471,6 +1541,22 @@ export const VisualWorkspace: React.FC = () => {
           </div>
         </div>
       </header>
+
+
+      <section className={`grid grid-cols-1 gap-3 md:grid-cols-4 ${isDesktopStyle ? 'text-slate-200' : 'text-gray-700'}`}>
+        {[
+          ['1', 'Create Items', 'Add Beam B12, Column C4, Repair Area R1, etc. Items are the real project objects.'],
+          ['2', 'Upload Boards', 'Add plans, elevations, PDFs, or site photos in Boards. These replace the old Visual Map.'],
+          ['3', 'Markup + Measure', 'Use the tool dropdown for arrows, clouds, stamps, reference scale, length, perimeter, and area.'],
+          ['4', 'Link Everything', 'Link annotations, photos, and cost lines to Items. The Graph updates from those links.'],
+        ].map(([step, title, body]) => (
+          <div key={step} className={`rounded-2xl border p-4 ${isDesktopStyle ? 'border-white/10 bg-white/5' : 'border-gray-200 bg-white shadow-sm'}`}>
+            <div className="mb-2 flex h-8 w-8 items-center justify-center rounded-full bg-blue-600 text-sm font-bold text-white">{step}</div>
+            <div className={`font-bold ${isDesktopStyle ? 'text-white' : 'text-gray-900'}`}>{title}</div>
+            <p className="mt-1 text-xs opacity-80">{body}</p>
+          </div>
+        ))}
+      </section>
 
       <nav className={`flex flex-wrap gap-2 rounded-3xl border p-2 ${isDesktopStyle ? 'ss-glass' : 'border-gray-200 bg-white shadow-sm'}`}>
         {(['Boards', 'Items', 'Photos', 'Graph', 'Schedule', 'Costs'] as WorkspaceTab[]).map((tab) => (
