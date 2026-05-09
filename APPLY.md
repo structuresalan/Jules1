@@ -1,31 +1,37 @@
-# Visual Workspace Mockup Fullscreen
+# Exact Mockup Visual Workspace
 
 Replace/add these files:
 - src/pages/VisualWorkspace.tsx
 - src/layouts/MainLayout.tsx
-- src/pages/Documents.tsx
 
 Commit message:
-Make Visual Workspace match CAD inspection mockup
+Rebuild Visual Workspace to match inspection mockup
 
 What changed:
-- Visual Workspace / Boards now opens as a full-screen CAD/PDF workspace instead of a normal webpage card.
-- Removes the normal project header/max-width wrapper for /visual-workspace so the canvas can use the full browser area.
-- Adds a dark top application bar and command ribbon similar to the mockup:
-  - Workspace / Review / Report / Export
-  - Select, Pan, Zoom
-  - Arrow, Cloud, Text, Box, Dimension, Measure
-  - Note, Photo, File, Link
-  - Layers, Scale, Grid, Snap
-  - Undo, Redo
-- Adds dark left sidebar:
-  - Boards tree
-  - Layers list
-  - Scale readout
-- Adds central drawing canvas with tab header and zoom controls.
-- Adds right Site Photos panel.
-- Adds right Inspector panel with selected item details, linked photos/costs/documents/markups, and notes.
-- Adds bottom Items / Markup Schedule.
-- Adds bottom Relationship Map showing selected item connected to marker, photos, and cost.
-- Keeps Load Demo Workspace so you can instantly populate the interface.
-- Documents stays cleaned up with the old Visual Map removed.
+- Replaces the previous basic Visual Workspace UI with a dense full-screen CAD/PDF inspection workspace.
+- All primary information is visible on one page, not hidden behind tabs:
+  - dark SimplifyStruct top chrome
+  - premium command ribbon
+  - left project/boards tree
+  - left layers panel
+  - central structural framing plan
+  - colored structural issue markups
+  - right Site Photos panel
+  - right Inspector panel
+  - bottom Items / Markup Schedule
+  - bottom Relationship Map
+  - bottom status bar
+- Includes realistic fake structural plan data:
+  - Beam B12
+  - Beam B18
+  - Beam B31
+  - Column C16
+  - Beam B7
+- Includes fake deteriorated structural steel photo cards generated as inline SVGs:
+  - corrosion at seat connection
+  - rust scale / peeling paint
+  - section loss
+- Inspector now uses clean aligned rows, status chips, linked counts, linked photos, notes, and issue details.
+- Relationship Map is clearly visible at bottom right.
+- Schedule is styled to match the mockup more closely.
+- This version prioritizes matching the generated mockup exactly over preserving the previous tabbed workflow.
