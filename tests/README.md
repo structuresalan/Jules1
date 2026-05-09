@@ -1,6 +1,6 @@
 # Visual Workspace QA Harness
 
-This test suite uses Playwright to run the Visual Workspace in a real browser and check toolbar behavior.
+This test suite uses Playwright to run the Visual Workspace in a real browser through `/qa/visual-workspace` and check toolbar behavior.
 
 ## Setup
 
@@ -49,3 +49,8 @@ npm run test:e2e:ui
 ```
 
 This opens the Playwright UI so you can watch each test step.
+
+
+## Auth note
+
+The normal `/visual-workspace` route is protected by Firebase auth. The tests use `/qa/visual-workspace`, an unprotected QA-only route, so the tool suite can run even when Firebase is not configured locally.

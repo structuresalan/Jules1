@@ -1,8 +1,7 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 
 async function openWorkspace(page: Page) {
-  await page.goto('/visual-workspace');
-  await expect(page.getByText('SimplifyStruct')).toBeVisible();
+  await page.goto('/qa/visual-workspace');
   await expect(page.getByTestId('plan-canvas')).toBeVisible();
 }
 
@@ -138,14 +137,14 @@ test.describe('Visual Workspace toolbar behavior', () => {
   test('Photo, File, and Note tools open their panels', async ({ page }) => {
     await page.getByTestId('tool-photo').click();
     await expect(page.getByTestId('active-panel-title')).toContainText('Add or choose site photo');
-    await page.keyboard.press('Escape').catch(() => {});
-
-    await page.locator('button').filter({ hasText: 'Close' }).click().catch(async () => {
-      await page.getByRole('button').filter({ hasText: /^$/ }).last().click().catch(() => {});
-    });
+    await page.getByTestId('close-active-panel').click();
 
     await page.getByTestId('tool-file').click();
     await expect(page.getByTestId('active-panel-title')).toContainText('Attach document');
+    await page.getByTestId('close-active-panel').click();
+
+    await page.getByTestId('tool-note').click();
+    await expect(page.getByTestId('active-panel-title')).toContainText('Add note');
   });
 
   test('View all photos opens photo library', async ({ page }) => {

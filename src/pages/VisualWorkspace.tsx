@@ -1791,7 +1791,7 @@ export const VisualWorkspace: React.FC = () => {
                 <div className="text-xs font-black uppercase tracking-wide text-slate-400">Photo Library</div>
                 <h2 data-testid="photo-library-title" className="mt-1 text-xl font-black text-white">All Site Photos</h2>
               </div>
-              <button onClick={() => setShowAllPhotos(false)} className="rounded-md p-2 text-slate-400 hover:bg-slate-900 hover:text-white"><X size={18} /></button>
+              <button data-testid="close-photo-library" onClick={() => setShowAllPhotos(false)} className="rounded-md p-2 text-slate-400 hover:bg-slate-900 hover:text-white"><X size={18} /></button>
             </div>
             <div className="grid max-h-[70vh] grid-cols-1 gap-4 overflow-auto p-5 md:grid-cols-3">
               {photos.map((photo) => (
@@ -1832,7 +1832,7 @@ export const VisualWorkspace: React.FC = () => {
                   {activePanel === 'report' ? 'Generate structural inspection report' : activePanel === 'export' ? 'Export project deliverables' : activePanel === 'color' ? 'Choose markup color' : activePanel === 'photoPicker' ? 'Add or choose site photo' : activePanel === 'note' ? 'Add note to selected item' : activePanel === 'file' ? 'Attach document to selected item' : 'Workspace settings'}
                 </h2>
               </div>
-              <button onClick={() => setActivePanel('none')} className="rounded-md p-2 text-slate-400 hover:bg-slate-900 hover:text-white"><X size={18} /></button>
+              <button data-testid="close-active-panel" onClick={() => setActivePanel('none')} className="rounded-md p-2 text-slate-400 hover:bg-slate-900 hover:text-white"><X size={18} /></button>
             </div>
 
             <div className="p-5">

@@ -1,30 +1,21 @@
-# Add Visual Workspace QA Harness
+# Fix Visual Workspace QA Auth Bypass
 
 Replace/add these files:
+- src/App.tsx
 - src/pages/VisualWorkspace.tsx
-- playwright.config.ts
 - tests/visual-workspace-tools.spec.ts
+- playwright.config.ts
 - tests/README.md
 - package-json-additions.md
 
 Commit message:
-Add Visual Workspace Playwright QA harness
+Fix Visual Workspace QA route for Playwright
 
 What changed:
-- Adds stable data-testid hooks to VisualWorkspace.
-- Adds Playwright browser tests for toolbar and board interactions.
-- Adds tests for:
-  - Select
-  - Cloud
-  - Text
-  - Eraser
-  - Escape cancel
-  - Pan
-  - Fit
-  - Zoom wheel
-  - Color palette
-  - Photo/File panels
-  - View all photos
-  - Distance blocked before scale
-- Adds Playwright config.
-- Adds setup instructions because this patch zip does not include the root package.json.
+- The uploaded report showed every test was blocked at the login screen.
+- Adds an unprotected QA route:
+  - /qa/visual-workspace
+- Updates Playwright tests to use /qa/visual-workspace instead of /visual-workspace.
+- This lets tests check the Visual Workspace component even when Firebase auth is not configured.
+- Adds close-panel test IDs to make modal tests more reliable.
+- Keeps the real /visual-workspace route protected for normal users.

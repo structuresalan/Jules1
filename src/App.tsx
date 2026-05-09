@@ -39,6 +39,7 @@ const AppContent = () => {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
+      <Route path="/qa/visual-workspace" element={<VisualWorkspace />} />
 
       <Route
         path="/"
