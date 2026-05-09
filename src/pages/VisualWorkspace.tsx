@@ -367,6 +367,7 @@ const FramingPlan: React.FC<{
 
   return (
     <svg
+      data-testid="plan-canvas"
       viewBox="0 0 980 640"
       className={`h-full w-full select-none bg-white ${activeTool !== 'Select' ? 'cursor-crosshair' : ''}`}
       style={{ userSelect: 'none', WebkitUserSelect: 'none', touchAction: 'none' }}
@@ -460,6 +461,9 @@ const FramingPlan: React.FC<{
           return (
             <g
               key={item.id}
+              data-testid={`annotation-${item.id}`}
+              data-selected={isSelected ? 'true' : 'false'}
+              data-tool-type={item.toolType ?? 'Cloud'}
               onPointerDown={(event) => {
                 event.stopPropagation();
                 onSelect(item.id);
@@ -478,6 +482,9 @@ const FramingPlan: React.FC<{
           return (
             <g
               key={item.id}
+              data-testid={`annotation-${item.id}`}
+              data-selected={isSelected ? 'true' : 'false'}
+              data-tool-type={item.toolType ?? 'Cloud'}
               onPointerDown={(event) => {
                 event.stopPropagation();
                 onSelect(item.id);
@@ -497,6 +504,9 @@ const FramingPlan: React.FC<{
           return (
             <g
               key={item.id}
+              data-testid={`annotation-${item.id}`}
+              data-selected={isSelected ? 'true' : 'false'}
+              data-tool-type={item.toolType ?? 'Cloud'}
               onPointerDown={(event) => {
                 event.stopPropagation();
                 onSelect(item.id);
@@ -519,6 +529,9 @@ const FramingPlan: React.FC<{
           return (
             <g
               key={item.id}
+              data-testid={`annotation-${item.id}`}
+              data-selected={isSelected ? 'true' : 'false'}
+              data-tool-type={item.toolType ?? 'Cloud'}
               onPointerDown={(event) => {
                 event.stopPropagation();
                 if (activeTool === 'Eraser') {
@@ -544,6 +557,9 @@ const FramingPlan: React.FC<{
           return (
             <g
               key={item.id}
+              data-testid={`annotation-${item.id}`}
+              data-selected={isSelected ? 'true' : 'false'}
+              data-tool-type={item.toolType ?? 'Cloud'}
               onPointerDown={(event) => {
                 event.stopPropagation();
                 onSelect(item.id);
@@ -563,6 +579,9 @@ const FramingPlan: React.FC<{
         return (
           <g
               key={item.id}
+              data-testid={`annotation-${item.id}`}
+              data-selected={isSelected ? 'true' : 'false'}
+              data-tool-type={item.toolType ?? 'Cloud'}
               onPointerDown={(event) => {
                 event.stopPropagation();
                 onSelect(item.id);
@@ -1275,6 +1294,7 @@ export const VisualWorkspace: React.FC = () => {
                 {group.tools.map(([label, Icon]) => (
                   <button
                     key={label}
+                    data-testid={`tool-${label.toLowerCase().replace(/\s+/g, '-')}`}
                     onClick={() => handleToolClick(label)}
                     className={`flex min-w-[52px] flex-col items-center gap-1 rounded-md px-2 py-2 text-[11px] font-semibold transition ${
                       activeTool === label ? 'bg-blue-600/60 text-white ring-1 ring-blue-400/50' : 'text-slate-300 hover:bg-slate-800 hover:text-white'
@@ -1387,9 +1407,13 @@ export const VisualWorkspace: React.FC = () => {
             <button onClick={() => setActivePanel('settings')} className="ml-2 text-slate-400 hover:text-white"><Plus size={17} /></button>
           </div>
 
-          <section className="min-h-0 overflow-hidden bg-slate-200 p-2">
-            <div className="relative mx-auto h-full overflow-auto rounded-md border border-slate-500 bg-white shadow-2xl">
+          <section data-testid="plan-section" className="min-h-0 overflow-hidden bg-slate-200 p-2">
+            <div data-testid="plan-viewport" className="relative mx-auto h-full overflow-auto rounded-md border border-slate-500 bg-white shadow-2xl">
               <div
+                data-testid="plan-transform"
+                data-plan-zoom={planZoom}
+                data-plan-pan-x={planPan.x}
+                data-plan-pan-y={planPan.y}
                 style={{ transform: `translate(${planPan.x}px, ${planPan.y}px) scale(${planZoom})`, transformOrigin: 'top center' }}
                 onWheel={(event) => {
                   if (activeTool !== 'Zoom' && activeTool !== 'Zoom Area') return;
@@ -1435,7 +1459,7 @@ export const VisualWorkspace: React.FC = () => {
                   </thead>
                   <tbody>
                     {markups.map((row) => (
-                      <tr key={row.id} onClick={() => selectMarkup(row.id)} className={`cursor-pointer border-b border-slate-800/70 hover:bg-slate-800/80 ${selectedId === row.id ? 'bg-blue-950/50' : ''}`}>
+                      <tr key={row.id} data-testid={`schedule-row-${row.id}`} onClick={() => selectMarkup(row.id)} className={`cursor-pointer border-b border-slate-800/70 hover:bg-slate-800/80 ${selectedId === row.id ? 'bg-blue-950/50' : ''}`}>
                         <td className="px-3 py-2">
                           <span className="mr-2 inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: row.color }} />
                           {row.id}
@@ -1573,6 +1597,7 @@ export const VisualWorkspace: React.FC = () => {
                 setSelectedRelationshipNode('photos');
                 setShowAllPhotos(true);
               }}
+              data-testid="view-all-photos"
               className="mt-1 w-full rounded-md border border-slate-700 bg-slate-900 px-4 py-3 text-sm font-bold text-slate-200 hover:bg-slate-800"
             >
               View all photos ({photos.length})
@@ -1592,7 +1617,7 @@ export const VisualWorkspace: React.FC = () => {
                 <div className="flex items-center gap-3">
                   <span className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-white text-sm font-black text-white shadow" style={{ backgroundColor: selected.color }}>{selected.id}</span>
                   <div>
-                    <h2 className="text-lg font-black text-white">{selected.type} {selected.itemName}</h2>
+                    <h2 data-testid="inspector-title" className="text-lg font-black text-white">{selected.type} {selected.itemName}</h2>
                   </div>
                 </div>
                 <button
@@ -1764,7 +1789,7 @@ export const VisualWorkspace: React.FC = () => {
             <div className="flex items-center justify-between border-b border-slate-800 px-5 py-4">
               <div>
                 <div className="text-xs font-black uppercase tracking-wide text-slate-400">Photo Library</div>
-                <h2 className="mt-1 text-xl font-black text-white">All Site Photos</h2>
+                <h2 data-testid="photo-library-title" className="mt-1 text-xl font-black text-white">All Site Photos</h2>
               </div>
               <button onClick={() => setShowAllPhotos(false)} className="rounded-md p-2 text-slate-400 hover:bg-slate-900 hover:text-white"><X size={18} /></button>
             </div>
@@ -1803,7 +1828,7 @@ export const VisualWorkspace: React.FC = () => {
                 <div className="text-xs font-black uppercase tracking-wide text-slate-400">
                   {activePanel === 'report' ? 'Report Builder' : activePanel === 'export' ? 'Export Package' : activePanel === 'color' ? 'Color Palette' : activePanel === 'photoPicker' ? 'Add Photo' : activePanel === 'note' ? 'Add Note' : activePanel === 'file' ? 'Attach File' : 'Workspace Settings'}
                 </div>
-                <h2 className="mt-1 text-xl font-black text-white">
+                <h2 data-testid="active-panel-title" className="mt-1 text-xl font-black text-white">
                   {activePanel === 'report' ? 'Generate structural inspection report' : activePanel === 'export' ? 'Export project deliverables' : activePanel === 'color' ? 'Choose markup color' : activePanel === 'photoPicker' ? 'Add or choose site photo' : activePanel === 'note' ? 'Add note to selected item' : activePanel === 'file' ? 'Attach document to selected item' : 'Workspace settings'}
                 </h2>
               </div>
@@ -1951,7 +1976,7 @@ export const VisualWorkspace: React.FC = () => {
       )}
 
       <footer className="flex h-8 shrink-0 items-center justify-between border-t border-slate-800 bg-[#0b1520] px-4 text-xs text-slate-400">
-        <span>{statusMessage}</span>
+        <span data-testid="status-message" data-active-tool={activeTool}>{statusMessage}</span>
         <span className="hidden lg:inline">X: 152&apos;-3 1/2&quot; &nbsp;&nbsp; Y: 47&apos;-6 3/4&quot; &nbsp;&nbsp; | &nbsp;&nbsp; Plan: {Math.round(planZoom * 100)}% / Map: {zoomLevel}% &nbsp;&nbsp; | &nbsp;&nbsp; Grid: 1&apos;-0&quot; &nbsp;&nbsp; <span className="text-green-400">● Online</span></span>
       </footer>
     </div>

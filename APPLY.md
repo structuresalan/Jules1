@@ -1,28 +1,30 @@
-# Fix Tool Modes
+# Add Visual Workspace QA Harness
 
-Replace this file:
+Replace/add these files:
 - src/pages/VisualWorkspace.tsx
+- playwright.config.ts
+- tests/visual-workspace-tools.spec.ts
+- tests/README.md
+- package-json-additions.md
 
 Commit message:
-Fix eraser select pan and zoom tool modes
+Add Visual Workspace Playwright QA harness
 
 What changed:
-- Eraser is now a mode:
-  - click Eraser
-  - click the annotation to erase
-  - Esc cancels back to Select
-- Eraser no longer instantly deletes the selected annotation.
-- Prevents the app from going blank by blocking deletion of the final remaining prototype item.
-- Select now only selects and shows properties.
-- Select no longer moves annotations.
-- Pan is now a mode:
-  - click Pan
-  - hold left mouse and drag the plan view
-  - Esc cancels back to Select
-- Zoom is now a mode:
-  - click Zoom / Zoom Area
-  - use mouse wheel over the plan to zoom in/out
-  - Esc cancels back to Select
-- Fit resets both plan zoom and pan.
-- Escape cancels active drawing, moving, resizing, panning, scaling, erasing, and zooming back to normal Select.
-- Background plan text remains non-selectable.
+- Adds stable data-testid hooks to VisualWorkspace.
+- Adds Playwright browser tests for toolbar and board interactions.
+- Adds tests for:
+  - Select
+  - Cloud
+  - Text
+  - Eraser
+  - Escape cancel
+  - Pan
+  - Fit
+  - Zoom wheel
+  - Color palette
+  - Photo/File panels
+  - View all photos
+  - Distance blocked before scale
+- Adds Playwright config.
+- Adds setup instructions because this patch zip does not include the root package.json.
