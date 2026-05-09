@@ -11,18 +11,49 @@ async function annotationCount(page: Page) {
   return page.locator('[data-testid^="annotation-"][data-tool-type]').count();
 }
 
-async function dragOnCanvas(page: Page, start: { x: number; y: number }, end: { x: number; y: number }) {
-  const layer = page.getByTestId('plan-event-layer');
+async function canvasBox(page: Page) {
   const canvas = page.getByTestId('plan-canvas');
-  const target = (await layer.count()) ? layer : canvas;
-  const box = await target.boundingBox();
+  const box = await canvas.boundingBox();
   if (!box) throw new Error('plan canvas not visible');
+  return { canvas, box };
+}
 
-  await page.mouse.move(box.x + start.x, box.y + start.y);
-  await page.mouse.down();
-  await page.mouse.move(box.x + end.x, box.y + end.y, { steps: 12 });
-  await page.mouse.up();
+async function dispatchPointerOnCanvas(page: Page, type: string, x: number, y: number) {
+  const { canvas, box } = await canvasBox(page);
+  await canvas.dispatchEvent(type, {
+    bubbles: true,
+    cancelable: true,
+    clientX: box.x + x,
+    clientY: box.y + y,
+    pointerId: 1,
+    pointerType: 'mouse',
+    isPrimary: true,
+    buttons: type === 'pointerup' ? 0 : 1,
+    button: 0,
+  });
+}
+
+async function dragOnCanvas(page: Page, start: { x: number; y: number }, end: { x: number; y: number }) {
+  await dispatchPointerOnCanvas(page, 'pointerdown', start.x, start.y);
+  for (let i = 1; i <= 8; i += 1) {
+    const x = start.x + ((end.x - start.x) * i) / 8;
+    const y = start.y + ((end.y - start.y) * i) / 8;
+    await dispatchPointerOnCanvas(page, 'pointermove', x, y);
+  }
+  await dispatchPointerOnCanvas(page, 'pointerup', end.x, end.y);
   await page.waitForTimeout(250);
+}
+
+async function wheelCanvas(page: Page, deltaY: number) {
+  const { canvas, box } = await canvasBox(page);
+  await canvas.dispatchEvent('wheel', {
+    bubbles: true,
+    cancelable: true,
+    clientX: box.x + 450,
+    clientY: box.y + 250,
+    deltaY,
+  });
+  await page.waitForTimeout(150);
 }
 
 async function clickAnnotation(page: Page, id: number) {
@@ -133,14 +164,8 @@ test.describe('Visual Workspace toolbar behavior', () => {
     await expect(transform).toHaveAttribute('data-plan-zoom', '1');
 
     await page.getByTestId('tool-zoom').click();
-    const layer = page.getByTestId('plan-event-layer');
-    const canvas = (await layer.count()) ? layer : page.getByTestId('plan-canvas');
-    const box = await canvas.boundingBox();
-    if (!box) throw new Error('plan canvas not visible');
-
-    await page.mouse.move(box.x + 450, box.y + 250);
-    await page.mouse.wheel(0, -400);
-    await page.mouse.wheel(0, -400);
+    await wheelCanvas(page, -400);
+    await wheelCanvas(page, -400);
 
     await expect(transform).not.toHaveAttribute('data-plan-zoom', '1');
 
@@ -150,7 +175,7 @@ test.describe('Visual Workspace toolbar behavior', () => {
 
   test('Color opens palette and changes selected annotation color', async ({ page }) => {
     await page.getByTestId('tool-select').click();
-    await page.getByTestId('annotation-hit-1').click();
+    await clickAnnotation(page, 1);
 
     await page.getByTestId('tool-color').click();
     await expect(page.getByTestId('active-panel-title')).toContainText('Choose markup color');
