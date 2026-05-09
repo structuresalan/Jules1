@@ -2,14 +2,12 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Box,
   Camera,
-  ChevronRight,
   CircleDollarSign,
   Download,
   FileText,
   Image as ImageIcon,
   Link as LinkIcon,
   Map as MapIcon,
-  MousePointer2,
   Network,
   Plus,
   Save,
@@ -17,7 +15,6 @@ import {
   Sparkles,
   Trash2,
   Upload,
-  X,
 } from 'lucide-react';
 import { useWebsiteStyleSettings } from '../utils/websiteStyle';
 
@@ -296,6 +293,9 @@ export const VisualWorkspace: React.FC = () => {
   const [referenceKnownFt, setReferenceKnownFt] = useState('');
   const [pendingMeasurePoints, setPendingMeasurePoints] = useState<VisualPoint[]>([]);
   const [draftAnnotation, setDraftAnnotation] = useState<VisualAnnotation | null>(null);
+  const [showBoardLibrary, setShowBoardLibrary] = useState(true);
+  const [showBoardInspector, setShowBoardInspector] = useState(true);
+  const [boardZoom, setBoardZoom] = useState(1);
 
   const [itemName, setItemName] = useState('');
   const [itemType, setItemType] = useState<WorkspaceItemType>('Beam');
@@ -322,6 +322,9 @@ export const VisualWorkspace: React.FC = () => {
   const [selectedGraphNodeId, setSelectedGraphNodeId] = useState('');
   const [draggingNodeId, setDraggingNodeId] = useState('');
   const [draggingNodeOffset, setDraggingNodeOffset] = useState({ x: 0, y: 0 });
+  const [showGraphLibrary, setShowGraphLibrary] = useState(false);
+  const [showGraphInspector, setShowGraphInspector] = useState(true);
+  const [graphZoom, setGraphZoom] = useState(1);
 
   const boardSurfaceRef = useRef<HTMLDivElement | null>(null);
   const graphRef = useRef<HTMLDivElement | null>(null);
@@ -558,6 +561,14 @@ export const VisualWorkspace: React.FC = () => {
     if (currentTool === 'Perimeter') return 'Perimeter: click each corner, then press Enter or Finish Perimeter.';
     return 'Area: click each corner, then press Enter or Finish Area.';
   };
+
+  const zoomInBoard = () => setBoardZoom((value) => Math.min(2.25, Number((value + 0.1).toFixed(2))));
+  const zoomOutBoard = () => setBoardZoom((value) => Math.max(0.5, Number((value - 0.1).toFixed(2))));
+  const resetBoardZoom = () => setBoardZoom(1);
+
+  const zoomInGraph = () => setGraphZoom((value) => Math.min(2.0, Number((value + 0.1).toFixed(2))));
+  const zoomOutGraph = () => setGraphZoom((value) => Math.max(0.5, Number((value - 0.1).toFixed(2))));
+  const resetGraphZoom = () => setGraphZoom(1);
 
   const getGraphNodePins = (node: GraphNode) => {
     if (node.type === 'Item') {
@@ -1420,142 +1431,138 @@ export const VisualWorkspace: React.FC = () => {
   const boardHoverPhoto = getFirstItemPhoto(boardHoverAnnotation?.itemId);
 
   const renderBoards = () => (
-    <div className="grid grid-cols-1 gap-4 xl:grid-cols-[300px_minmax(0,1fr)_330px]">
-      <aside className={`rounded-3xl border p-4 ${isDesktopStyle ? 'ss-glass' : 'border-gray-200 bg-white shadow-sm'}`}>
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className={`font-bold ${isDesktopStyle ? 'text-white' : 'text-gray-900'}`}>Boards</h2>
+    <div className="overflow-hidden rounded-3xl border border-slate-800 bg-slate-950 shadow-2xl">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 bg-slate-950 px-4 py-3 text-white">
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={() => setShowBoardLibrary((value) => !value)}
+            className={`rounded-xl border px-3 py-2 text-xs font-bold ${showBoardLibrary ? 'border-blue-400 bg-blue-500/20 text-blue-100' : 'border-slate-700 bg-slate-900 text-slate-300'}`}
+          >
+            Boards
+          </button>
+          <button
+            onClick={() => setShowBoardInspector((value) => !value)}
+            className={`rounded-xl border px-3 py-2 text-xs font-bold ${showBoardInspector ? 'border-blue-400 bg-blue-500/20 text-blue-100' : 'border-slate-700 bg-slate-900 text-slate-300'}`}
+          >
+            Inspector
+          </button>
           <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-blue-600 px-3 py-2 text-xs font-bold text-white hover:bg-blue-700">
             <Upload size={14} />
-            Upload
+            Upload Board
             <input type="file" accept="image/*,application/pdf" onChange={handleBoardUpload} className="hidden" />
           </label>
         </div>
 
-        <div className="space-y-2">
-          {boards.length === 0 && <p className={`rounded-xl border p-3 text-sm ${isDesktopStyle ? 'border-white/10 text-slate-300' : 'border-gray-200 text-gray-500'}`}>Upload a plan, elevation, site photo, or PDF to start annotating. Use Select to move existing marks by dragging them.</p>}
-          {boards.map((board) => (
-            <button
-              key={board.id}
-              onClick={() => setSelectedBoardId(board.id)}
-              className={`w-full rounded-2xl border p-3 text-left text-sm transition ${
-                selectedBoard?.id === board.id
-                  ? 'border-blue-400 bg-blue-500/15 text-blue-700'
-                  : isDesktopStyle
-                    ? 'border-white/10 bg-white/5 text-slate-200 hover:bg-white/10'
-                    : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
-              }`}
-            >
-              <div className="font-bold">{board.name}</div>
-              <div className={isDesktopStyle ? 'mt-1 text-xs text-slate-400' : 'mt-1 text-xs text-gray-500'}>{board.kind} • {board.fileName}</div>
-              {board.scaleFtPerPercent && <div className="mt-2 text-[11px] font-semibold text-green-600">Scale set</div>}
-            </button>
-          ))}
+        <div className="flex flex-wrap items-center gap-2">
+          <button onClick={zoomOutBoard} className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs font-bold text-slate-200">-</button>
+          <button onClick={resetBoardZoom} className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs font-bold text-slate-200">{Math.round(boardZoom * 100)}%</button>
+          <button onClick={zoomInBoard} className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs font-bold text-slate-200">+</button>
         </div>
-      </aside>
+      </div>
 
-      <section className={`overflow-hidden rounded-3xl border ${isDesktopStyle ? 'ss-glass-strong' : 'border-gray-200 bg-white shadow-sm'}`}>
-        <div className="border-b border-slate-800 bg-slate-950 px-4 py-3 text-white">
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <div className="text-xs font-bold uppercase tracking-[0.2em] text-slate-400">Board Ribbon</div>
-              <div className="mt-1 flex items-center gap-2 text-sm text-slate-200">
-                <MousePointer2 size={15} className="text-blue-300" />
-                <span className="font-bold text-white">{tool}</span>
-                <ChevronRight size={14} className="text-slate-500" />
-                <span>{getToolInstruction(tool)}</span>
-              </div>
-            </div>
-
-            {tool !== 'Select' || pendingMeasurePoints.length > 0 || draftAnnotation ? (
-              <button
-                onClick={cancelActiveAction}
-                className="inline-flex items-center gap-2 rounded-full border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs font-bold text-slate-200 hover:bg-slate-800"
-                title="Escape also cancels the active action"
-              >
-                <X size={14} />
-                Cancel
-              </button>
-            ) : null}
-          </div>
-
-          <div className="grid grid-cols-1 gap-3 xl:grid-cols-[1.4fr_1.1fr_1.1fr_1.2fr]">
-            <div className="rounded-2xl border border-slate-800 bg-slate-900 p-3">
-              <div className="mb-2 text-[10px] font-bold uppercase tracking-wide text-slate-500">Select + Markup</div>
-              <div className="flex flex-wrap gap-2">
-                {(['Select', 'Arrow', 'Line', 'Box', 'Cloud', 'Highlight', 'Text', 'Stamp', 'Count'] as AnnotationTool[]).map((option) => (
-                  <button
-                    key={option}
-                    onClick={() => selectTool(option)}
-                    className={`rounded-lg px-3 py-1.5 text-xs font-bold transition ${
-                      tool === option ? 'bg-blue-600 text-white shadow' : 'bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white'
-                    }`}
-                  >
-                    {option}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="rounded-2xl border border-slate-800 bg-slate-900 p-3">
-              <div className="mb-2 text-[10px] font-bold uppercase tracking-wide text-slate-500">Measure</div>
-              <div className="flex flex-wrap gap-2">
-                {(['Reference', 'Length', 'Perimeter', 'Area'] as AnnotationTool[]).map((option) => (
-                  <button
-                    key={option}
-                    onClick={() => selectTool(option)}
-                    className={`rounded-lg px-3 py-1.5 text-xs font-bold transition ${
-                      tool === option ? 'bg-purple-600 text-white shadow' : 'bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white'
-                    }`}
-                  >
-                    {option}
-                  </button>
-                ))}
-                {(tool === 'Perimeter' || tool === 'Area') && pendingMeasurePoints.length > 0 && (
-                  <button onClick={finishMeasurement} className="rounded-lg bg-green-600 px-3 py-1.5 text-xs font-bold text-white">
-                    Finish {tool}
-                  </button>
-                )}
-              </div>
-            </div>
-
-            <div className="rounded-2xl border border-slate-800 bg-slate-900 p-3">
-              <div className="mb-2 text-[10px] font-bold uppercase tracking-wide text-slate-500">Link + Status</div>
-              <div className="grid grid-cols-1 gap-2">
-                <select value={annotationStatus} onChange={(event) => setAnnotationStatus(event.target.value as WorkspaceStatus)} className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm font-bold text-white">
-                  {statusOptions.map((option) => <option key={option}>{option}</option>)}
-                </select>
-                <select value={selectedToolItemId} onChange={(event) => setSelectedToolItemId(event.target.value)} className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm font-bold text-white">
-                  <option value="">Link item...</option>
-                  {items.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-                </select>
-              </div>
-            </div>
-
-            <div className="rounded-2xl border border-slate-800 bg-slate-900 p-3">
-              <div className="mb-2 text-[10px] font-bold uppercase tracking-wide text-slate-500">Options</div>
-              <div className="grid grid-cols-1 gap-2">
-                {tool === 'Stamp' ? (
-                  <select value={stampPreset} onChange={(event) => setStampPreset(event.target.value)} className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm font-bold text-white">
-                    {stampOptions.map((stamp) => <option key={stamp}>{stamp}</option>)}
-                  </select>
-                ) : null}
-                {tool === 'Reference' ? (
-                  <input value={referenceKnownFt} onChange={(event) => setReferenceKnownFt(event.target.value)} placeholder="Known length ft" className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white" />
-                ) : null}
-                <input value={annotationLabel} onChange={(event) => setAnnotationLabel(event.target.value)} placeholder="Label / callout text" className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white" />
-                <input value={annotationNotes} onChange={(event) => setAnnotationNotes(event.target.value)} placeholder="Annotation note" className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white" />
-              </div>
+      <div className="border-b border-slate-800 bg-slate-950 px-4 py-3 text-white">
+        <div className="grid grid-cols-1 gap-3 xl:grid-cols-[1.4fr_1fr_1fr_1fr]">
+          <div className="rounded-2xl border border-slate-800 bg-slate-900 p-3">
+            <div className="mb-2 text-[10px] font-bold uppercase tracking-wide text-slate-500">Select + Markup</div>
+            <div className="flex flex-wrap gap-2">
+              {(['Select', 'Arrow', 'Line', 'Box', 'Cloud', 'Highlight', 'Text', 'Stamp', 'Count'] as AnnotationTool[]).map((option) => (
+                <button
+                  key={option}
+                  onClick={() => selectTool(option)}
+                  className={`rounded-lg px-3 py-1.5 text-xs font-bold transition ${
+                    tool === option ? 'bg-blue-600 text-white shadow' : 'bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white'
+                  }`}
+                >
+                  {option}
+                </button>
+              ))}
             </div>
           </div>
 
-          <div className="mt-3 rounded-xl border border-slate-800 bg-black/25 px-3 py-2 text-xs text-slate-400">
-            Shortcuts: Esc cancels, Enter finishes perimeter/area, Delete removes selected markup, right-click cancels current action.
+          <div className="rounded-2xl border border-slate-800 bg-slate-900 p-3">
+            <div className="mb-2 text-[10px] font-bold uppercase tracking-wide text-slate-500">Measure</div>
+            <div className="flex flex-wrap gap-2">
+              {(['Reference', 'Length', 'Perimeter', 'Area'] as AnnotationTool[]).map((option) => (
+                <button
+                  key={option}
+                  onClick={() => selectTool(option)}
+                  className={`rounded-lg px-3 py-1.5 text-xs font-bold transition ${
+                    tool === option ? 'bg-purple-600 text-white shadow' : 'bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white'
+                  }`}
+                >
+                  {option}
+                </button>
+              ))}
+              {(tool === 'Perimeter' || tool === 'Area') && pendingMeasurePoints.length > 0 && (
+                <button onClick={finishMeasurement} className="rounded-lg bg-green-600 px-3 py-1.5 text-xs font-bold text-white">
+                  Finish
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-slate-800 bg-slate-900 p-3">
+            <div className="mb-2 text-[10px] font-bold uppercase tracking-wide text-slate-500">Link + Status</div>
+            <div className="grid grid-cols-1 gap-2">
+              <select value={annotationStatus} onChange={(event) => setAnnotationStatus(event.target.value as WorkspaceStatus)} className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm font-bold text-white">
+                {statusOptions.map((option) => <option key={option}>{option}</option>)}
+              </select>
+              <select value={selectedToolItemId} onChange={(event) => setSelectedToolItemId(event.target.value)} className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm font-bold text-white">
+                <option value="">Link item...</option>
+                {items.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+              </select>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-slate-800 bg-slate-900 p-3">
+            <div className="mb-2 text-[10px] font-bold uppercase tracking-wide text-slate-500">Options</div>
+            <div className="grid grid-cols-1 gap-2">
+              {tool === 'Stamp' ? (
+                <select value={stampPreset} onChange={(event) => setStampPreset(event.target.value)} className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm font-bold text-white">
+                  {stampOptions.map((stamp) => <option key={stamp}>{stamp}</option>)}
+                </select>
+              ) : null}
+              {tool === 'Reference' ? (
+                <input value={referenceKnownFt} onChange={(event) => setReferenceKnownFt(event.target.value)} placeholder="Known length ft" className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white" />
+              ) : null}
+              <input value={annotationLabel} onChange={(event) => setAnnotationLabel(event.target.value)} placeholder="Label / callout text" className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white" />
+              <input value={annotationNotes} onChange={(event) => setAnnotationNotes(event.target.value)} placeholder="Annotation note" className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white" />
+            </div>
           </div>
         </div>
+      </div>
 
-        <div className="relative min-h-[720px] overflow-auto bg-slate-100 p-4">
+      <div className="grid min-h-[76vh] grid-cols-1 xl:grid-cols-[auto_minmax(0,1fr)_auto]">
+        {showBoardLibrary && (
+          <aside className="w-full border-b border-slate-800 bg-slate-950 p-4 xl:w-72 xl:border-b-0 xl:border-r">
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="font-bold text-white">Boards</h2>
+              <span className="rounded-full bg-white/10 px-2 py-1 text-[10px] font-bold text-slate-300">{boards.length}</span>
+            </div>
+            <div className="max-h-[64vh] space-y-2 overflow-auto pr-1">
+              {boards.length === 0 && <p className="rounded-xl border border-slate-800 bg-white/5 p-3 text-sm text-slate-300">Upload a plan, elevation, site photo, or PDF to start. Use Select to move existing marks by dragging them.</p>}
+              {boards.map((board) => (
+                <button
+                  key={board.id}
+                  onClick={() => setSelectedBoardId(board.id)}
+                  className={`w-full rounded-2xl border p-3 text-left text-sm transition ${
+                    selectedBoard?.id === board.id
+                      ? 'border-blue-400 bg-blue-500/15 text-blue-100'
+                      : 'border-slate-800 bg-white/5 text-slate-200 hover:bg-white/10'
+                  }`}
+                >
+                  <div className="font-bold">{board.name}</div>
+                  <div className="mt-1 text-xs text-slate-400">{board.kind} • {board.fileName}</div>
+                  {board.scaleFtPerPercent && <div className="mt-2 text-[11px] font-semibold text-green-400">Scale set</div>}
+                </button>
+              ))}
+            </div>
+          </aside>
+        )}
+
+        <main className="relative overflow-auto bg-slate-100 p-4">
           {!selectedBoard && (
-            <div className="flex min-h-[500px] items-center justify-center rounded-3xl border border-dashed border-slate-300 bg-white text-center text-slate-500">
+            <div className="flex min-h-[62vh] items-center justify-center rounded-3xl border border-dashed border-slate-300 bg-white text-center text-slate-500">
               <div>
                 <ImageIcon className="mx-auto mb-3" size={34} />
                 <p className="font-bold">Upload a board to start</p>
@@ -1583,12 +1590,13 @@ export const VisualWorkspace: React.FC = () => {
                 stopAnnotationDrag();
                 handleBoardMouseUp();
               }}
-              className="relative mx-auto min-h-[680px] w-full max-w-6xl overflow-hidden rounded-2xl border border-slate-300 bg-white shadow"
+              className="relative mx-auto min-h-[68vh] w-fit min-w-[900px] overflow-hidden rounded-2xl border border-slate-300 bg-white shadow"
+              style={{ transform: `scale(${boardZoom})`, transformOrigin: 'top center' }}
             >
               {selectedBoard.fileType === 'application/pdf' ? (
-                <iframe title={selectedBoard.name} src={selectedBoard.dataUrl} className="h-[680px] w-full border-0" />
+                <iframe title={selectedBoard.name} src={selectedBoard.dataUrl} className="h-[68vh] w-[1100px] border-0" />
               ) : (
-                <img src={selectedBoard.dataUrl} alt={selectedBoard.name} draggable={false} className="mx-auto max-h-[680px] w-auto max-w-full select-none object-contain" />
+                <img src={selectedBoard.dataUrl} alt={selectedBoard.name} draggable={false} className="mx-auto max-h-[68vh] w-auto max-w-[1200px] select-none object-contain" />
               )}
 
               <div className="absolute inset-0">
@@ -1618,57 +1626,63 @@ export const VisualWorkspace: React.FC = () => {
               )}
             </div>
           )}
-        </div>
-      </section>
+        </main>
 
-      <aside className={`rounded-3xl border p-4 ${isDesktopStyle ? 'ss-glass' : 'border-gray-200 bg-white shadow-sm'}`}>
-        <h2 className={`font-bold ${isDesktopStyle ? 'text-white' : 'text-gray-900'}`}>Inspector</h2>
-        {selectedBoard && (
-          <div className="mt-3 space-y-3">
-            <label className={`block text-xs font-bold ${isDesktopStyle ? 'text-slate-300' : 'text-gray-600'}`}>
-              Board name
-              <input value={boardName} onChange={(event) => setBoardName(event.target.value)} className="mt-1 w-full rounded-lg border px-3 py-2 text-sm" />
-            </label>
-            <label className={`block text-xs font-bold ${isDesktopStyle ? 'text-slate-300' : 'text-gray-600'}`}>
-              Board kind
-              <select value={boardKind} onChange={(event) => setBoardKind(event.target.value as BoardKind)} className="mt-1 w-full rounded-lg border px-3 py-2 text-sm">
-                {['Plan', 'Elevation', 'Site Photo', 'PDF', 'Other'].map((kind) => <option key={kind}>{kind}</option>)}
-              </select>
-            </label>
-            <label className={`block text-xs font-bold ${isDesktopStyle ? 'text-slate-300' : 'text-gray-600'}`}>
-              Board notes
-              <textarea value={boardNotes} onChange={(event) => setBoardNotes(event.target.value)} className="mt-1 min-h-20 w-full rounded-lg border px-3 py-2 text-sm" />
-            </label>
-            <div className="flex gap-2">
-              <button onClick={saveBoard} className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white"><Save size={14} />Save</button>
-              <button onClick={() => deleteBoard(selectedBoard.id)} className="inline-flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold text-red-700"><Trash2 size={14} />Delete</button>
+        {showBoardInspector && (
+          <aside className="w-full border-t border-slate-800 bg-slate-950 p-4 xl:w-80 xl:border-l xl:border-t-0">
+            <h2 className="font-bold text-white">Inspector</h2>
+            {selectedBoard && (
+              <div className="mt-3 space-y-3">
+                <label className="block text-xs font-bold text-slate-300">
+                  Board name
+                  <input value={boardName} onChange={(event) => setBoardName(event.target.value)} className="mt-1 w-full rounded-lg border px-3 py-2 text-sm" />
+                </label>
+                <label className="block text-xs font-bold text-slate-300">
+                  Board kind
+                  <select value={boardKind} onChange={(event) => setBoardKind(event.target.value as BoardKind)} className="mt-1 w-full rounded-lg border px-3 py-2 text-sm">
+                    {['Plan', 'Elevation', 'Site Photo', 'PDF', 'Other'].map((kind) => <option key={kind}>{kind}</option>)}
+                  </select>
+                </label>
+                <label className="block text-xs font-bold text-slate-300">
+                  Board notes
+                  <textarea value={boardNotes} onChange={(event) => setBoardNotes(event.target.value)} className="mt-1 min-h-20 w-full rounded-lg border px-3 py-2 text-sm" />
+                </label>
+                <div className="flex gap-2">
+                  <button onClick={saveBoard} className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white"><Save size={14} />Save</button>
+                  <button onClick={() => deleteBoard(selectedBoard.id)} className="inline-flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold text-red-700"><Trash2 size={14} />Delete</button>
+                </div>
+              </div>
+            )}
+
+            {selectedAnnotation && (
+              <div className="mt-5 rounded-2xl border border-white/10 bg-white/5 p-3">
+                <div className="text-xs font-bold uppercase tracking-wide text-slate-400">Selected annotation</div>
+                <div className="mt-2 font-bold text-white">{selectedAnnotation.label}</div>
+                <select value={selectedAnnotation.itemId ?? ''} onChange={(event) => updateAnnotationItem(selectedAnnotation.id, event.target.value)} className="mt-2 w-full rounded-lg border px-3 py-2 text-sm">
+                  <option value="">No linked item</option>
+                  {items.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+                </select>
+                <button onClick={() => deleteAnnotation(selectedAnnotation.id)} className="mt-2 inline-flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold text-red-700">
+                  <Trash2 size={14} /> Delete annotation
+                </button>
+              </div>
+            )}
+
+            <div className="mt-5 space-y-2">
+              <button onClick={exportAnnotations} className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700">
+                <Download size={14} /> Export annotations CSV
+              </button>
+              <div className="text-xs text-slate-400">
+                Status: {getToolInstruction(tool)}
+              </div>
             </div>
-          </div>
+          </aside>
         )}
+      </div>
 
-        {selectedAnnotation && (
-          <div className={`mt-5 rounded-2xl border p-3 ${isDesktopStyle ? 'border-white/10 bg-white/5' : 'border-gray-200 bg-gray-50'}`}>
-            <div className={`text-xs font-bold uppercase tracking-wide ${isDesktopStyle ? 'text-slate-400' : 'text-gray-500'}`}>Selected annotation</div>
-            <div className={`mt-2 font-bold ${isDesktopStyle ? 'text-white' : 'text-gray-900'}`}>{selectedAnnotation.label}</div>
-            <select value={selectedAnnotation.itemId ?? ''} onChange={(event) => updateAnnotationItem(selectedAnnotation.id, event.target.value)} className="mt-2 w-full rounded-lg border px-3 py-2 text-sm">
-              <option value="">No linked item</option>
-              {items.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-            </select>
-            <button onClick={() => deleteAnnotation(selectedAnnotation.id)} className="mt-2 inline-flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold text-red-700">
-              <Trash2 size={14} /> Delete annotation
-            </button>
-          </div>
-        )}
-
-        <div className="mt-5 space-y-2">
-          <button onClick={exportAnnotations} className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700">
-            <Download size={14} /> Export annotations CSV
-          </button>
-          <div className={isDesktopStyle ? 'text-xs text-slate-400' : 'text-xs text-gray-500'}>
-            PDF replacement tools: arrows, clouds, boxes, text, stamps, count, reference scale, length, perimeter, area, linked photos, annotation schedules, and drag-to-move annotations with Select.
-          </div>
-        </div>
-      </aside>
+      <div className="border-t border-slate-800 bg-slate-950 px-4 py-2 text-xs text-slate-400">
+        Active tool: <span className="font-bold text-white">{tool}</span>. Esc or right-click cancels. Enter/double-click finishes perimeter or area. Delete removes selected markup.
+      </div>
     </div>
   );
 
@@ -1779,232 +1793,261 @@ export const VisualWorkspace: React.FC = () => {
     const selectedRows = getNodeInspectorRows(selectedGraphNode);
 
     return (
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[300px_minmax(0,1fr)_340px]">
-        <aside className={`rounded-3xl border p-4 ${isDesktopStyle ? 'ss-glass' : 'border-gray-200 bg-white shadow-sm'}`}>
-          <div className="mb-3 flex items-center justify-between gap-2">
-            <h2 className={`font-bold ${isDesktopStyle ? 'text-white' : 'text-gray-900'}`}>Node Library</h2>
-            <span className={`rounded-full px-2 py-1 text-[10px] font-bold ${isDesktopStyle ? 'bg-white/10 text-slate-300' : 'bg-gray-100 text-gray-500'}`}>{graphNodes.length} nodes</span>
-          </div>
-
-          <div className="space-y-2">
-            {(['Item', 'Board', 'Annotation', 'Photo', 'Cost'] as GraphNodeType[]).map((type) => {
-              const nodes = graphNodes.filter((node) => node.type === type);
-              if (nodes.length === 0) return null;
-
-              return (
-                <div key={type}>
-                  <div className={`mb-1 px-2 text-[10px] font-bold uppercase tracking-wide ${isDesktopStyle ? 'text-slate-400' : 'text-gray-500'}`}>{type}s</div>
-                  {nodes.map((node) => (
-                    <button
-                      key={node.id}
-                      onClick={() => setSelectedGraphNodeId(node.id)}
-                      className={`mb-1 w-full rounded-xl border px-3 py-2 text-left text-xs transition ${
-                        selectedGraphNodeId === node.id
-                          ? 'border-blue-400 bg-blue-500/15 text-blue-700'
-                          : isDesktopStyle
-                            ? 'border-white/10 bg-white/5 text-slate-200 hover:bg-white/10'
-                            : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
-                      }`}
-                    >
-                      <div className="font-bold">{node.title}</div>
-                      <div className="mt-0.5 opacity-70">{node.subtitle}</div>
-                    </button>
-                  ))}
-                </div>
-              );
-            })}
-          </div>
-        </aside>
-
-        <section ref={graphRef} className="relative min-h-[760px] overflow-auto rounded-3xl border border-slate-800 bg-slate-950 shadow-2xl">
-          <div className="sticky top-0 z-30 flex flex-wrap items-center gap-2 border-b border-slate-800 bg-slate-950/95 px-4 py-3 backdrop-blur">
-            <div className="mr-2 flex items-center gap-2 text-sm font-bold text-white">
+      <div className="overflow-hidden rounded-3xl border border-slate-800 bg-slate-950 shadow-2xl">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 bg-slate-950 px-4 py-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={() => setShowGraphLibrary((value) => !value)}
+              className={`rounded-xl border px-3 py-2 text-xs font-bold ${showGraphLibrary ? 'border-blue-400 bg-blue-500/20 text-blue-100' : 'border-slate-700 bg-slate-900 text-slate-300'}`}
+            >
+              Node Library
+            </button>
+            <button
+              onClick={() => setShowGraphInspector((value) => !value)}
+              className={`rounded-xl border px-3 py-2 text-xs font-bold ${showGraphInspector ? 'border-blue-400 bg-blue-500/20 text-blue-100' : 'border-slate-700 bg-slate-900 text-slate-300'}`}
+            >
+              Inspector
+            </button>
+            <div className="ml-2 flex items-center gap-2 text-sm font-bold text-white">
               <Network size={17} className="text-blue-300" />
               Blueprint Graph
             </div>
-            <select value={edgeSource} onChange={(event) => setEdgeSource(event.target.value)} className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs font-semibold text-white">
-              <option value="">Source node...</option>
-              {graphNodes.map((node) => <option key={node.id} value={node.id}>{node.type}: {node.title}</option>)}
-            </select>
-            <input value={edgeRelation} onChange={(event) => setEdgeRelation(event.target.value)} className="w-32 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-white" placeholder="relation" />
-            <select value={edgeTarget} onChange={(event) => setEdgeTarget(event.target.value)} className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs font-semibold text-white">
-              <option value="">Target node...</option>
-              {graphNodes.map((node) => <option key={node.id} value={node.id}>{node.type}: {node.title}</option>)}
-            </select>
-            <button onClick={addManualEdge} className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white">
-              <LinkIcon size={14} /> Add Link
-            </button>
           </div>
 
-          <div className="absolute inset-0 opacity-40" style={{ backgroundImage: 'linear-gradient(#1e293b 1px, transparent 1px), linear-gradient(90deg, #1e293b 1px, transparent 1px)', backgroundSize: '32px 32px' }} />
-          <svg className="pointer-events-none absolute left-0 top-0 h-[1200px] w-[1600px]">
-            <defs>
-              <marker id="graph-arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
-                <path d="M0,0 L0,6 L9,3 z" fill="#38bdf8" />
-              </marker>
-            </defs>
-            {graphEdges.map((edge) => {
-              const source = nodeMap.get(edge.sourceId);
-              const target = nodeMap.get(edge.targetId);
-              if (!source || !target) return null;
-              const startX = source.position.x + 240;
-              const startY = source.position.y + 98;
-              const endX = target.position.x;
-              const endY = target.position.y + 98;
-              const midX = (startX + endX) / 2;
+          <div className="flex flex-wrap items-center gap-2">
+            <button onClick={zoomOutGraph} className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs font-bold text-slate-200">-</button>
+            <button onClick={resetGraphZoom} className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs font-bold text-slate-200">{Math.round(graphZoom * 100)}%</button>
+            <button onClick={zoomInGraph} className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs font-bold text-slate-200">+</button>
+          </div>
+        </div>
 
-              return (
-                <g key={edge.id}>
-                  <path
-                    d={`M ${startX} ${startY} C ${midX} ${startY}, ${midX} ${endY}, ${endX} ${endY}`}
-                    fill="none"
-                    stroke="#38bdf8"
-                    strokeWidth="2"
-                    strokeOpacity="0.75"
-                    markerEnd="url(#graph-arrow)"
-                  />
-                  <text x={midX - 28} y={(startY + endY) / 2 - 8} fill="#bae6fd" fontSize="11" fontWeight="700">{edge.relation}</text>
-                </g>
-              );
-            })}
-          </svg>
+        <div className="flex flex-wrap items-center gap-2 border-b border-slate-800 bg-slate-950 px-4 py-3">
+          <select value={edgeSource} onChange={(event) => setEdgeSource(event.target.value)} className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs font-semibold text-white">
+            <option value="">Source node...</option>
+            {graphNodes.map((node) => <option key={node.id} value={node.id}>{node.type}: {node.title}</option>)}
+          </select>
+          <input value={edgeRelation} onChange={(event) => setEdgeRelation(event.target.value)} className="w-36 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-white" placeholder="relation" />
+          <select value={edgeTarget} onChange={(event) => setEdgeTarget(event.target.value)} className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs font-semibold text-white">
+            <option value="">Target node...</option>
+            {graphNodes.map((node) => <option key={node.id} value={node.id}>{node.type}: {node.title}</option>)}
+          </select>
+          <button onClick={addManualEdge} className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white">
+            <LinkIcon size={14} /> Add Link
+          </button>
+        </div>
 
-          {graphNodes.map((node, index) => {
-            const position = graphPositionForNode(node.id, index);
-            const pins = getGraphNodePins(node);
-            const isSelected = selectedGraphNodeId === node.id;
+        <div className="grid min-h-[78vh] grid-cols-1 xl:grid-cols-[auto_minmax(0,1fr)_auto]">
+          {showGraphLibrary && (
+            <aside className="w-full border-b border-slate-800 bg-slate-950 p-4 xl:w-72 xl:border-b-0 xl:border-r">
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <h2 className="font-bold text-white">Node Library</h2>
+                <span className="rounded-full bg-white/10 px-2 py-1 text-[10px] font-bold text-slate-300">{graphNodes.length}</span>
+              </div>
 
-            return (
-              <div
-                key={node.id}
-                onMouseDown={(event) => {
-                  const rect = (event.currentTarget as HTMLDivElement).getBoundingClientRect();
-                  setSelectedGraphNodeId(node.id);
-                  setDraggingNodeId(node.id);
-                  setDraggingNodeOffset({ x: event.clientX - rect.left, y: event.clientY - rect.top });
-                }}
-                className={`absolute z-10 w-64 cursor-grab rounded-2xl border bg-slate-900 shadow-2xl active:cursor-grabbing ${
-                  isSelected ? 'border-blue-300 ring-2 ring-blue-500/40' : 'border-slate-700'
-                }`}
-                style={{ left: position.x, top: position.y }}
-              >
-                <div className="rounded-t-2xl bg-gradient-to-r from-blue-600 to-cyan-500 px-3 py-2 text-xs font-bold uppercase tracking-wide text-white">
-                  {node.type}
-                </div>
-                <div className="p-3">
-                  <div className="font-bold text-white">{node.title}</div>
-                  <div className="mt-1 text-xs text-slate-400">{node.subtitle}</div>
-                  {node.status && <span className={`mt-3 inline-flex rounded-full border px-2 py-1 text-[11px] font-bold ${statusClasses(node.status)}`}>{node.status}</span>}
+              <div className="max-h-[66vh] space-y-2 overflow-auto pr-1">
+                {(['Item', 'Board', 'Annotation', 'Photo', 'Cost'] as GraphNodeType[]).map((type) => {
+                  const nodes = graphNodes.filter((node) => node.type === type);
+                  if (nodes.length === 0) return null;
 
-                  <div className="mt-3 space-y-1 border-t border-slate-700 pt-3">
-                    {pins.map((pin) => (
-                      <div key={pin.label} className="flex items-center justify-between gap-2 text-xs">
-                        <div className="flex items-center gap-2 text-slate-300">
-                          <span className="h-2.5 w-2.5 rounded-full border border-cyan-300 bg-slate-950 shadow-[0_0_10px_rgba(34,211,238,0.8)]" />
-                          {pin.label}
-                        </div>
-                        <span className="rounded-full bg-slate-800 px-2 py-0.5 font-bold text-slate-200">{pin.count}</span>
+                  return (
+                    <div key={type}>
+                      <div className="mb-1 px-2 text-[10px] font-bold uppercase tracking-wide text-slate-400">{type}s</div>
+                      {nodes.map((node) => (
+                        <button
+                          key={node.id}
+                          onClick={() => setSelectedGraphNodeId(node.id)}
+                          className={`mb-1 w-full rounded-xl border px-3 py-2 text-left text-xs transition ${
+                            selectedGraphNodeId === node.id
+                              ? 'border-blue-400 bg-blue-500/15 text-blue-100'
+                              : 'border-slate-800 bg-white/5 text-slate-200 hover:bg-white/10'
+                          }`}
+                        >
+                          <div className="font-bold">{node.title}</div>
+                          <div className="mt-0.5 opacity-70">{node.subtitle}</div>
+                        </button>
+                      ))}
+                    </div>
+                  );
+                })}
+              </div>
+            </aside>
+          )}
+
+          <section ref={graphRef} className="relative min-h-[78vh] overflow-auto bg-slate-950">
+            <div className="absolute inset-0 opacity-40" style={{ backgroundImage: 'linear-gradient(#1e293b 1px, transparent 1px), linear-gradient(90deg, #1e293b 1px, transparent 1px)', backgroundSize: '32px 32px' }} />
+            <div className="relative h-[1400px] w-[1800px]" style={{ transform: `scale(${graphZoom})`, transformOrigin: 'top left' }}>
+              <svg className="pointer-events-none absolute inset-0 h-full w-full">
+                <defs>
+                  <marker id="graph-arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+                    <path d="M0,0 L0,6 L9,3 z" fill="#38bdf8" />
+                  </marker>
+                </defs>
+                {graphEdges.map((edge) => {
+                  const source = nodeMap.get(edge.sourceId);
+                  const target = nodeMap.get(edge.targetId);
+                  if (!source || !target) return null;
+                  const startX = source.position.x + 240;
+                  const startY = source.position.y + 98;
+                  const endX = target.position.x;
+                  const endY = target.position.y + 98;
+                  const midX = (startX + endX) / 2;
+
+                  return (
+                    <g key={edge.id}>
+                      <path
+                        d={`M ${startX} ${startY} C ${midX} ${startY}, ${midX} ${endY}, ${endX} ${endY}`}
+                        fill="none"
+                        stroke="#38bdf8"
+                        strokeWidth="2"
+                        strokeOpacity="0.75"
+                        markerEnd="url(#graph-arrow)"
+                      />
+                      <text x={midX - 28} y={(startY + endY) / 2 - 8} fill="#bae6fd" fontSize="11" fontWeight="700">{edge.relation}</text>
+                    </g>
+                  );
+                })}
+              </svg>
+
+              {graphNodes.map((node, index) => {
+                const position = graphPositionForNode(node.id, index);
+                const pins = getGraphNodePins(node);
+                const isSelected = selectedGraphNodeId === node.id;
+
+                return (
+                  <div
+                    key={node.id}
+                    onMouseDown={(event) => {
+                      const rect = (event.currentTarget as HTMLDivElement).getBoundingClientRect();
+                      setSelectedGraphNodeId(node.id);
+                      setDraggingNodeId(node.id);
+                      setDraggingNodeOffset({ x: event.clientX - rect.left, y: event.clientY - rect.top });
+                    }}
+                    className={`absolute z-10 w-64 cursor-grab rounded-2xl border bg-slate-900 shadow-2xl active:cursor-grabbing ${
+                      isSelected ? 'border-blue-300 ring-2 ring-blue-500/40' : 'border-slate-700'
+                    }`}
+                    style={{ left: position.x, top: position.y }}
+                  >
+                    <div className="rounded-t-2xl bg-gradient-to-r from-blue-600 to-cyan-500 px-3 py-2 text-xs font-bold uppercase tracking-wide text-white">
+                      {node.type}
+                    </div>
+                    <div className="p-3">
+                      <div className="font-bold text-white">{node.title}</div>
+                      <div className="mt-1 text-xs text-slate-400">{node.subtitle}</div>
+                      {node.status && <span className={`mt-3 inline-flex rounded-full border px-2 py-1 text-[11px] font-bold ${statusClasses(node.status)}`}>{node.status}</span>}
+
+                      <div className="mt-3 space-y-1 border-t border-slate-700 pt-3">
+                        {pins.map((pin) => (
+                          <div key={pin.label} className="flex items-center justify-between gap-2 text-xs">
+                            <div className="flex items-center gap-2 text-slate-300">
+                              <span className="h-2.5 w-2.5 rounded-full border border-cyan-300 bg-slate-950 shadow-[0_0_10px_rgba(34,211,238,0.8)]" />
+                              {pin.label}
+                            </div>
+                            <span className="rounded-full bg-slate-800 px-2 py-0.5 font-bold text-slate-200">{pin.count}</span>
+                          </div>
+                        ))}
                       </div>
-                    ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+
+          {showGraphInspector && (
+            <aside className="w-full border-t border-slate-800 bg-slate-950 p-4 xl:w-80 xl:border-l xl:border-t-0">
+              <div className="mb-3 flex items-center gap-2">
+                <Network size={18} className="text-blue-400" />
+                <h2 className="font-bold text-white">Node Inspector</h2>
+              </div>
+
+              {!selectedGraphNode ? (
+                <p className="text-sm text-slate-400">Select a node to inspect its attachments.</p>
+              ) : (
+                <div className="space-y-4">
+                  <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                    <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">{selectedGraphNode.type}</div>
+                    <div className="mt-1 text-lg font-bold text-white">{selectedGraphNode.title}</div>
+                    <div className="mt-1 text-xs text-slate-400">{selectedGraphNode.subtitle}</div>
+                  </div>
+
+                  <div>
+                    <div className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-400">Attachment Pins</div>
+                    <div className="space-y-2">
+                      {selectedPins.map((pin) => (
+                        <div key={pin.label} className="flex items-center justify-between rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-200">
+                          <span>{pin.label}</span>
+                          <span className="rounded-full bg-blue-600 px-2 py-0.5 text-xs font-bold text-white">{pin.count}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-400">Details</div>
+                    <div className="space-y-2">
+                      {selectedRows.map(([label, value]) => (
+                        <div key={label} className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-200">
+                          <div className="text-[10px] font-bold uppercase tracking-wide opacity-60">{label}</div>
+                          <div className="mt-0.5 font-semibold">{value}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-2">
+                    {selectedGraphNode.type === 'Board' && (
+                      <button
+                        onClick={() => {
+                          setSelectedBoardId(selectedGraphNode.sourceId);
+                          setActiveTab('Boards');
+                        }}
+                        className="rounded-xl bg-blue-600 px-3 py-2 text-sm font-bold text-white"
+                      >
+                        Open Board
+                      </button>
+                    )}
+                    {selectedGraphNode.type === 'Item' && (
+                      <button
+                        onClick={() => {
+                          setSelectedItemId(selectedGraphNode.sourceId);
+                          setActiveTab('Items');
+                        }}
+                        className="rounded-xl bg-blue-600 px-3 py-2 text-sm font-bold text-white"
+                      >
+                        Open Item
+                      </button>
+                    )}
+                    {selectedGraphNode.type === 'Photo' && (
+                      <button onClick={() => setActiveTab('Photos')} className="rounded-xl bg-blue-600 px-3 py-2 text-sm font-bold text-white">
+                        Open Photos
+                      </button>
+                    )}
+                    {selectedGraphNode.type === 'Cost' && (
+                      <button onClick={() => setActiveTab('Costs')} className="rounded-xl bg-blue-600 px-3 py-2 text-sm font-bold text-white">
+                        Open Costs
+                      </button>
+                    )}
+                    {selectedGraphNode.type === 'Annotation' && (
+                      <button
+                        onClick={() => {
+                          const annotation = annotations.find((candidate) => candidate.id === selectedGraphNode.sourceId);
+                          if (annotation) {
+                            setSelectedAnnotationId(annotation.id);
+                            setSelectedBoardId(annotation.boardId);
+                            setActiveTab('Boards');
+                          }
+                        }}
+                        className="rounded-xl bg-blue-600 px-3 py-2 text-sm font-bold text-white"
+                      >
+                        Open Board Markup
+                      </button>
+                    )}
                   </div>
                 </div>
-              </div>
-            );
-          })}
-        </section>
-
-        <aside className={`rounded-3xl border p-4 ${isDesktopStyle ? 'ss-glass' : 'border-gray-200 bg-white shadow-sm'}`}>
-          <div className="mb-3 flex items-center gap-2">
-            <Network size={18} className="text-blue-500" />
-            <h2 className={`font-bold ${isDesktopStyle ? 'text-white' : 'text-gray-900'}`}>Node Inspector</h2>
-          </div>
-
-          {!selectedGraphNode ? (
-            <p className={isDesktopStyle ? 'text-sm text-slate-400' : 'text-sm text-gray-500'}>Select a node to inspect its attachments.</p>
-          ) : (
-            <div className="space-y-4">
-              <div className={`rounded-2xl border p-4 ${isDesktopStyle ? 'border-white/10 bg-white/5' : 'border-gray-200 bg-gray-50'}`}>
-                <div className={`text-[10px] font-bold uppercase tracking-wide ${isDesktopStyle ? 'text-slate-400' : 'text-gray-500'}`}>{selectedGraphNode.type}</div>
-                <div className={`mt-1 text-lg font-bold ${isDesktopStyle ? 'text-white' : 'text-gray-900'}`}>{selectedGraphNode.title}</div>
-                <div className={`mt-1 text-xs ${isDesktopStyle ? 'text-slate-400' : 'text-gray-500'}`}>{selectedGraphNode.subtitle}</div>
-              </div>
-
-              <div>
-                <div className={`mb-2 text-xs font-bold uppercase tracking-wide ${isDesktopStyle ? 'text-slate-400' : 'text-gray-500'}`}>Attachment Pins</div>
-                <div className="space-y-2">
-                  {selectedPins.map((pin) => (
-                    <div key={pin.label} className={`flex items-center justify-between rounded-xl border px-3 py-2 text-sm ${isDesktopStyle ? 'border-white/10 bg-white/5 text-slate-200' : 'border-gray-200 bg-white text-gray-700'}`}>
-                      <span>{pin.label}</span>
-                      <span className="rounded-full bg-blue-600 px-2 py-0.5 text-xs font-bold text-white">{pin.count}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <div className={`mb-2 text-xs font-bold uppercase tracking-wide ${isDesktopStyle ? 'text-slate-400' : 'text-gray-500'}`}>Details</div>
-                <div className="space-y-2">
-                  {selectedRows.map(([label, value]) => (
-                    <div key={label} className={`rounded-xl border px-3 py-2 text-sm ${isDesktopStyle ? 'border-white/10 bg-white/5 text-slate-200' : 'border-gray-200 bg-white text-gray-700'}`}>
-                      <div className="text-[10px] font-bold uppercase tracking-wide opacity-60">{label}</div>
-                      <div className="mt-0.5 font-semibold">{value}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 gap-2">
-                {selectedGraphNode.type === 'Board' && (
-                  <button
-                    onClick={() => {
-                      setSelectedBoardId(selectedGraphNode.sourceId);
-                      setActiveTab('Boards');
-                    }}
-                    className="rounded-xl bg-blue-600 px-3 py-2 text-sm font-bold text-white"
-                  >
-                    Open Board
-                  </button>
-                )}
-                {selectedGraphNode.type === 'Item' && (
-                  <button
-                    onClick={() => {
-                      setSelectedItemId(selectedGraphNode.sourceId);
-                      setActiveTab('Items');
-                    }}
-                    className="rounded-xl bg-blue-600 px-3 py-2 text-sm font-bold text-white"
-                  >
-                    Open Item
-                  </button>
-                )}
-                {selectedGraphNode.type === 'Photo' && (
-                  <button onClick={() => setActiveTab('Photos')} className="rounded-xl bg-blue-600 px-3 py-2 text-sm font-bold text-white">
-                    Open Photos
-                  </button>
-                )}
-                {selectedGraphNode.type === 'Cost' && (
-                  <button onClick={() => setActiveTab('Costs')} className="rounded-xl bg-blue-600 px-3 py-2 text-sm font-bold text-white">
-                    Open Costs
-                  </button>
-                )}
-                {selectedGraphNode.type === 'Annotation' && (
-                  <button
-                    onClick={() => {
-                      const annotation = annotations.find((candidate) => candidate.id === selectedGraphNode.sourceId);
-                      if (annotation) {
-                        setSelectedAnnotationId(annotation.id);
-                        setSelectedBoardId(annotation.boardId);
-                        setActiveTab('Boards');
-                      }
-                    }}
-                    className="rounded-xl bg-blue-600 px-3 py-2 text-sm font-bold text-white"
-                  >
-                    Open Board Markup
-                  </button>
-                )}
-              </div>
-            </div>
+              )}
+            </aside>
           )}
-        </aside>
+        </div>
       </div>
     );
   };
@@ -2171,20 +2214,23 @@ export const VisualWorkspace: React.FC = () => {
       </header>
 
 
-      <section className={`grid grid-cols-1 gap-3 md:grid-cols-4 ${isDesktopStyle ? 'text-slate-200' : 'text-gray-700'}`}>
-        {[
-          ['1', 'Create Items', 'Add Beam B12, Column C4, Repair Area R1, etc. Items are the real project objects.'],
-          ['2', 'Upload Boards', 'Add plans, elevations, PDFs, or site photos in Boards. These replace the old Visual Map.'],
-          ['3', 'Markup + Measure', 'Use the tool dropdown for arrows, clouds, stamps, reference scale, length, perimeter, and area.'],
-          ['4', 'Link Everything', 'Link annotations, photos, and cost lines to Items. The Graph updates from those links.'],
-        ].map(([step, title, body]) => (
-          <div key={step} className={`rounded-2xl border p-4 ${isDesktopStyle ? 'border-white/10 bg-white/5' : 'border-gray-200 bg-white shadow-sm'}`}>
-            <div className="mb-2 flex h-8 w-8 items-center justify-center rounded-full bg-blue-600 text-sm font-bold text-white">{step}</div>
-            <div className={`font-bold ${isDesktopStyle ? 'text-white' : 'text-gray-900'}`}>{title}</div>
-            <p className="mt-1 text-xs opacity-80">{body}</p>
-          </div>
-        ))}
-      </section>
+      <details className={`rounded-3xl border p-4 ${isDesktopStyle ? 'ss-glass text-slate-200' : 'border-gray-200 bg-white text-gray-700 shadow-sm'}`}>
+        <summary className="cursor-pointer text-sm font-bold">Getting started / how Visual Workspace works</summary>
+        <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-4">
+          {[
+            ['1', 'Create Items', 'Add Beam B12, Column C4, Repair Area R1, etc. Items are the real project objects.'],
+            ['2', 'Upload Boards', 'Add plans, elevations, PDFs, or site photos in Boards. These replace the old Visual Map.'],
+            ['3', 'Markup + Measure', 'Use the ribbon for arrows, clouds, stamps, reference scale, length, perimeter, and area.'],
+            ['4', 'Link Everything', 'Link annotations, photos, and cost lines to Items. The Graph updates from those links.'],
+          ].map(([step, title, body]) => (
+            <div key={step} className={`rounded-2xl border p-4 ${isDesktopStyle ? 'border-white/10 bg-white/5' : 'border-gray-200 bg-gray-50'}`}>
+              <div className="mb-2 flex h-8 w-8 items-center justify-center rounded-full bg-blue-600 text-sm font-bold text-white">{step}</div>
+              <div className={`font-bold ${isDesktopStyle ? 'text-white' : 'text-gray-900'}`}>{title}</div>
+              <p className="mt-1 text-xs opacity-80">{body}</p>
+            </div>
+          ))}
+        </div>
+      </details>
 
       <nav className={`flex flex-wrap gap-2 rounded-3xl border p-2 ${isDesktopStyle ? 'ss-glass' : 'border-gray-200 bg-white shadow-sm'}`}>
         {(['Boards', 'Items', 'Photos', 'Graph', 'Schedule', 'Costs'] as WorkspaceTab[]).map((tab) => (
