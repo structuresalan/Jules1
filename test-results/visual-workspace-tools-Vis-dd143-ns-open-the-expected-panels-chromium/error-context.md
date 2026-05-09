@@ -7,7 +7,7 @@
 # Test info
 
 - Name: visual-workspace-tools.spec.ts >> Visual Workspace pressable control coverage >> primary modal and panel buttons open the expected panels
-- Location: tests\visual-workspace-tools.spec.ts:309:3
+- Location: tests\visual-workspace-tools.spec.ts:241:3
 
 # Error details
 
@@ -643,125 +643,121 @@ Call log:
 # Test source
 
 ```ts
-  217 | 
-  218 | const toolbarButtons = [
-  219 |   ['tool-select', 'Select'],
-  220 |   ['tool-pan', 'Pan'],
-  221 |   ['tool-zoom', 'Zoom'],
-  222 |   ['tool-fit', 'Fit'],
-  223 |   ['tool-zoom-area', 'Zoom Area'],
-  224 |   ['tool-arrow', 'Arrow'],
-  225 |   ['tool-cloud', 'Cloud'],
-  226 |   ['tool-text', 'Text'],
-  227 |   ['tool-box', 'Box'],
-  228 |   ['tool-callout', 'Callout'],
-  229 |   ['tool-dimension', 'Dimension'],
-  230 |   ['tool-distance', 'Distance'],
-  231 |   ['tool-angle', 'Angle'],
-  232 |   ['tool-area', 'Area'],
-  233 |   ['tool-note', 'Note'],
-  234 |   ['tool-photo', 'Photo'],
-  235 |   ['tool-file', 'File'],
-  236 |   ['tool-link', 'Link'],
-  237 |   ['tool-highlighter', 'Highlighter'],
-  238 |   ['tool-pen', 'Pen'],
-  239 |   ['tool-eraser', 'Eraser'],
-  240 |   ['tool-color', 'Color'],
-  241 |   ['tool-layers', 'Layers'],
-  242 |   ['tool-scale', 'Scale'],
-  243 |   ['tool-grid', 'Grid'],
-  244 |   ['tool-snap', 'Snap'],
-  245 |   ['tool-undo', 'Undo'],
-  246 |   ['tool-redo', 'Redo'],
-  247 |   ['tool-more', 'More'],
-  248 | ] as const;
-  249 | 
-  250 | const namedWorkspaceButtons = [
-  251 |   'Workspace',
-  252 |   'Review',
-  253 |   'Report',
-  254 |   'Export',
-  255 |   'Add board',
-  256 |   'Reset active board',
-  257 |   'Filter linked photos',
-  258 |   'Collapse photos panel',
-  259 |   'View all photos (5)',
-  260 |   'Linked Photos 3',
-  261 |   'Linked Documents 2',
-  262 |   'Board Markups 1',
-  263 |   'Linked Costs 1',
-  264 |   'Edit note',
-  265 |   'Add Comment',
-  266 |   '01 - General',
-  267 |   '02 - Architectural',
-  268 |   '03 - Structural',
-  269 |   'Level 2 Framing Plan',
-  270 |   'Roof Framing Plan',
-  271 |   'South Elevation',
-  272 |   'East Elevation',
-  273 |   'Typical Sections',
-  274 |   '04 - MEP',
-  275 |   '05 - Site',
-  276 |   '06 - Inspections',
-  277 |   'Photos & Documents',
-  278 |   'Site Photo Set',
-  279 | ] as const;
-  280 | 
-  281 | test.describe('Visual Workspace pressable control coverage', () => {
-  282 |   for (const [testId, label] of toolbarButtons) {
-  283 |     test(`toolbar button ${label} is pressable without crashing`, async ({ page }) => {
-  284 |       await openWorkspace(page);
-  285 |       await expectNoPageErrors(page, async () => {
-  286 |         await page.getByTestId(testId).click({ force: true });
-  287 |       });
-  288 |       await expect(page.getByTestId('status-message')).toBeVisible();
-  289 |     });
-  290 |   }
-  291 | 
-  292 |   for (const label of namedWorkspaceButtons) {
-  293 |     test(`workspace button ${label} is pressable without crashing`, async ({ page }) => {
-  294 |       await openWorkspace(page);
-  295 |       await expectNoPageErrors(page, async () => {
-  296 |         await page.getByRole('button', { name: label }).first().click({ force: true });
-  297 |       });
-  298 |       await expect(page.locator('body')).toBeVisible();
-  299 |     });
-  300 |   }
-  301 | 
-  302 |   test('all visible toolbar buttons expose test ids so missing tools are obvious', async ({ page }) => {
-  303 |     await openWorkspace(page);
-  304 |     for (const [testId] of toolbarButtons) {
-  305 |       await expect(page.getByTestId(testId), `${testId} should exist`).toBeVisible();
-  306 |     }
-  307 |   });
-  308 | 
-  309 |   test('primary modal and panel buttons open the expected panels', async ({ page }) => {
-  310 |     await openWorkspace(page);
-  311 | 
-  312 |     await page.getByTestId('tool-color').click();
-  313 |     await expect(page.getByTestId('active-panel-title')).toContainText('Choose markup color');
-  314 |     await page.getByTestId('close-active-panel').click();
-  315 | 
-  316 |     await page.getByTestId('tool-scale').click();
-> 317 |     await expect(page.getByTestId('active-panel-title')).toContainText('Workspace settings');
+  147 |     await expect(transform).toHaveAttribute('data-plan-pan-y', '0');
+  148 |   });
+  149 | 
+  150 |   test('Zoom mode uses wheel and Escape cancels', async ({ page }) => {
+  151 |     const transform = page.getByTestId('plan-transform');
+  152 |     await expect(transform).toHaveAttribute('data-plan-zoom', '1');
+  153 |     await page.getByTestId('tool-zoom').click();
+  154 |     await wheelCanvas(page, -400);
+  155 |     await wheelCanvas(page, -400);
+  156 |     await expect(transform).not.toHaveAttribute('data-plan-zoom', '1');
+  157 |     await page.keyboard.press('Escape');
+  158 |     await expect(page.getByTestId('status-message')).toHaveAttribute('data-active-tool', 'Select');
+  159 |   });
+  160 | 
+  161 |   test('Color opens palette and changes selected annotation color', async ({ page }) => {
+  162 |     await page.getByTestId('tool-select').click();
+  163 |     await clickAnnotation(page, 1);
+  164 |     await page.getByTestId('tool-color').click();
+  165 |     await expect(page.getByTestId('active-panel-title')).toContainText('Choose markup color');
+  166 |   });
+  167 | 
+  168 |   test('Photo, File, and Note tools open their panels', async ({ page }) => {
+  169 |     await page.getByTestId('tool-photo').click();
+  170 |     await expect(page.getByTestId('active-panel-title')).toContainText('Add or choose site photo');
+  171 |     await page.getByTestId('close-active-panel').click();
+  172 |     await page.getByTestId('tool-file').click();
+  173 |     await expect(page.getByTestId('active-panel-title')).toContainText('Attach document');
+  174 |     await page.getByTestId('close-active-panel').click();
+  175 |     await page.getByTestId('tool-note').click();
+  176 |     await expect(page.getByTestId('active-panel-title')).toContainText('Add note');
+  177 |   });
+  178 | 
+  179 |   test('View all photos opens photo library', async ({ page }) => {
+  180 |     await page.getByTestId('view-all-photos').click();
+  181 |     await expect(page.getByTestId('photo-library-title')).toBeVisible();
+  182 |   });
+  183 | 
+  184 |   test('Distance requires scale first', async ({ page }) => {
+  185 |     const before = await annotationCount(page);
+  186 |     await page.getByTestId('tool-distance').click();
+  187 |     await dragOnCanvas(page, { x: 300, y: 200 }, { x: 470, y: 200 });
+  188 |     await expect.poll(() => annotationCount(page)).toBe(before);
+  189 |     await expect(page.getByTestId('status-message')).toHaveAttribute('data-active-tool', 'Distance');
+  190 |   });
+  191 | });
+  192 | 
+  193 | const toolbarButtons = [
+  194 |   ['tool-select', 'Select'], ['tool-pan', 'Pan'], ['tool-zoom', 'Zoom'], ['tool-fit', 'Fit'], ['tool-zoom-area', 'Zoom Area'],
+  195 |   ['tool-arrow', 'Arrow'], ['tool-cloud', 'Cloud'], ['tool-text', 'Text'], ['tool-box', 'Box'], ['tool-callout', 'Callout'], ['tool-dimension', 'Dimension'],
+  196 |   ['tool-distance', 'Distance'], ['tool-angle', 'Angle'], ['tool-area', 'Area'],
+  197 |   ['tool-note', 'Note'], ['tool-photo', 'Photo'], ['tool-file', 'File'], ['tool-link', 'Link'],
+  198 |   ['tool-highlighter', 'Highlighter'], ['tool-pen', 'Pen'], ['tool-eraser', 'Eraser'], ['tool-color', 'Color'],
+  199 |   ['tool-layers', 'Layers'], ['tool-scale', 'Scale'], ['tool-grid', 'Grid'], ['tool-snap', 'Snap'],
+  200 |   ['tool-undo', 'Undo'], ['tool-redo', 'Redo'], ['tool-more', 'More'],
+  201 | ] as const;
+  202 | 
+  203 | const namedWorkspaceButtons = [
+  204 |   'Workspace', 'Review', 'Report', 'Export', 'Add board', 'Reset active board',
+  205 |   'Filter linked photos', 'Collapse photos panel', 'View all photos (5)',
+  206 |   'Linked Photos 3', 'Linked Documents 2', 'Board Markups 1', 'Linked Costs 1', 'Edit note', 'Add Comment',
+  207 |   '01 - General', '02 - Architectural', '03 - Structural', 'Level 2 Framing Plan', 'Roof Framing Plan',
+  208 |   'South Elevation', 'East Elevation', 'Typical Sections', '04 - MEP', '05 - Site', '06 - Inspections',
+  209 |   'Photos & Documents', 'Site Photo Set',
+  210 | ] as const;
+  211 | 
+  212 | test.describe('Visual Workspace pressable control coverage', () => {
+  213 |   for (const [testId, label] of toolbarButtons) {
+  214 |     test(`toolbar button ${label} is pressable without crashing`, async ({ page }) => {
+  215 |       await openWorkspace(page);
+  216 |       await expectNoPageErrors(page, async () => {
+  217 |         await page.getByTestId(testId).click({ force: true });
+  218 |       });
+  219 |       await expect(page.getByTestId('status-message')).toBeVisible();
+  220 |     });
+  221 |   }
+  222 | 
+  223 |   for (const label of namedWorkspaceButtons) {
+  224 |     test(`workspace button ${label} is pressable without crashing`, async ({ page }) => {
+  225 |       await openWorkspace(page);
+  226 |       const button = page.getByRole('button', { name: label }).first();
+  227 |       await expect(button, `${label} button should exist`).toBeVisible();
+  228 |       await expectNoPageErrors(page, async () => {
+  229 |         await button.click({ force: true });
+  230 |       });
+  231 |     });
+  232 |   }
+  233 | 
+  234 |   test('all visible toolbar buttons expose test ids so missing tools are obvious', async ({ page }) => {
+  235 |     await openWorkspace(page);
+  236 |     for (const [testId] of toolbarButtons) {
+  237 |       await expect(page.getByTestId(testId), `${testId} should exist`).toBeVisible();
+  238 |     }
+  239 |   });
+  240 | 
+  241 |   test('primary modal and panel buttons open the expected panels', async ({ page }) => {
+  242 |     await openWorkspace(page);
+  243 |     await page.getByTestId('tool-color').click();
+  244 |     await expect(page.getByTestId('active-panel-title')).toContainText('Choose markup color');
+  245 |     await page.getByTestId('close-active-panel').click();
+  246 |     await page.getByTestId('tool-scale').click();
+> 247 |     await expect(page.getByTestId('active-panel-title')).toContainText('Workspace settings');
       |                                                          ^ Error: expect(locator).toContainText(expected) failed
-  318 |     await page.getByTestId('close-active-panel').click();
-  319 | 
-  320 |     await page.getByTestId('tool-note').click();
-  321 |     await expect(page.getByTestId('active-panel-title')).toContainText('Add note');
-  322 |     await page.getByTestId('close-active-panel').click();
-  323 | 
-  324 |     await page.getByTestId('tool-file').click();
-  325 |     await expect(page.getByTestId('active-panel-title')).toContainText('Attach document');
-  326 |     await page.getByTestId('close-active-panel').click();
-  327 | 
-  328 |     await page.getByRole('button', { name: 'Report' }).click();
-  329 |     await expect(page.getByTestId('active-panel-title')).toContainText('Generate structural inspection report');
-  330 |     await page.getByTestId('close-active-panel').click();
-  331 | 
-  332 |     await page.getByRole('button', { name: 'Export' }).click();
-  333 |     await expect(page.getByTestId('active-panel-title')).toContainText('Export project deliverables');
-  334 |   });
-  335 | });
-  336 | 
+  248 |     await page.getByTestId('close-active-panel').click();
+  249 |     await page.getByTestId('tool-note').click();
+  250 |     await expect(page.getByTestId('active-panel-title')).toContainText('Add note');
+  251 |     await page.getByTestId('close-active-panel').click();
+  252 |     await page.getByTestId('tool-file').click();
+  253 |     await expect(page.getByTestId('active-panel-title')).toContainText('Attach document');
+  254 |     await page.getByTestId('close-active-panel').click();
+  255 |     await page.getByRole('button', { name: 'Report' }).click();
+  256 |     await expect(page.getByTestId('active-panel-title')).toContainText('Generate structural inspection report');
+  257 |     await page.getByTestId('close-active-panel').click();
+  258 |     await page.getByRole('button', { name: 'Export' }).click();
+  259 |     await expect(page.getByTestId('active-panel-title')).toContainText('Export project deliverables');
+  260 |   });
+  261 | });
+  262 | 
 ```
