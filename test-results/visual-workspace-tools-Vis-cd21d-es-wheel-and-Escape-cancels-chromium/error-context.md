@@ -7,7 +7,7 @@
 # Test info
 
 - Name: visual-workspace-tools.spec.ts >> Visual Workspace toolbar behavior >> Zoom mode uses wheel and Escape cancels
-- Location: tests\visual-workspace-tools.spec.ts:111:3
+- Location: tests\visual-workspace-tools.spec.ts:114:3
 
 # Error details
 
@@ -22,7 +22,7 @@ Timeout:  5000ms
 Call log:
   - Expect "not toHaveAttribute" with timeout 5000ms
   - waiting for getByTestId('plan-transform')
-    9 × locator resolved to <div data-plan-zoom="1" data-plan-pan-x="0" data-plan-pan-y="0" class="h-full w-full " data-testid="plan-transform">…</div>
+    9 × locator resolved to <div data-plan-zoom="1" data-plan-pan-x="0" data-plan-pan-y="0" class="h-full w-full " data-active-tool="Zoom" data-testid="plan-transform">…</div>
       - unexpected value "1"
 
 ```
@@ -638,148 +638,148 @@ Call log:
 # Test source
 
 ```ts
-  23  | async function getBox(locator: Locator) {
-  24  |   const box = await locator.boundingBox();
-  25  |   if (!box) throw new Error('element has no bounding box');
-  26  |   return box;
-  27  | }
-  28  | 
-  29  | test.describe('Visual Workspace toolbar behavior', () => {
-  30  |   test.beforeEach(async ({ page }) => {
-  31  |     await openWorkspace(page);
-  32  |   });
-  33  | 
-  34  |   test('Select only selects an annotation and does not move it on click', async ({ page }) => {
-  35  |     await page.getByTestId('tool-select').click();
+  27  |   const box = await locator.boundingBox();
+  28  |   if (!box) throw new Error('element has no bounding box');
+  29  |   return box;
+  30  | }
+  31  | 
+  32  | test.describe('Visual Workspace toolbar behavior', () => {
+  33  |   test.beforeEach(async ({ page }) => {
+  34  |     await openWorkspace(page);
+  35  |   });
   36  | 
-  37  |     const annotation = page.getByTestId('annotation-1');
-  38  |     const before = await getBox(annotation);
+  37  |   test('Select only selects an annotation and does not move it on click', async ({ page }) => {
+  38  |     await page.getByTestId('tool-select').click();
   39  | 
-  40  |     await annotation.click({ position: { x: 10, y: 10 } });
-  41  |     await expect(page.getByTestId('inspector-title')).toContainText(/B12|N1|Text|Beam/);
+  40  |     const annotation = page.getByTestId('annotation-1');
+  41  |     const before = await getBox(annotation);
   42  | 
-  43  |     const after = await getBox(annotation);
-  44  |     expect(Math.abs(after.x - before.x)).toBeLessThan(2);
-  45  |     expect(Math.abs(after.y - before.y)).toBeLessThan(2);
-  46  |   });
-  47  | 
-  48  |   test('Cloud tool creates a new annotation from a drag', async ({ page }) => {
-  49  |     const before = await annotationCount(page);
+  43  |     await annotation.click({ position: { x: 10, y: 10 }, force: true });
+  44  |     await expect(page.getByTestId('inspector-title')).toContainText(/B12|N1|Text|Beam/);
+  45  | 
+  46  |     const after = await getBox(annotation);
+  47  |     expect(Math.abs(after.x - before.x)).toBeLessThan(2);
+  48  |     expect(Math.abs(after.y - before.y)).toBeLessThan(2);
+  49  |   });
   50  | 
-  51  |     await page.getByTestId('tool-cloud').click();
-  52  |     await expect(page.getByTestId('status-message')).toHaveAttribute('data-active-tool', 'Cloud');
+  51  |   test('Cloud tool creates a new annotation from a drag', async ({ page }) => {
+  52  |     const before = await annotationCount(page);
   53  | 
-  54  |     await dragOnCanvas(page, { x: 360, y: 180 }, { x: 560, y: 260 });
-  55  | 
-  56  |     await expect.poll(() => annotationCount(page)).toBeGreaterThan(before);
-  57  |     await expect(page.getByTestId('inspector-title')).toBeVisible();
-  58  |   });
-  59  | 
-  60  |   test('Text tool prompts for text and creates actual text annotation', async ({ page }) => {
-  61  |     const before = await annotationCount(page);
+  54  |     await page.getByTestId('tool-cloud').click();
+  55  |     await expect(page.getByTestId('status-message')).toHaveAttribute('data-active-tool', 'Cloud');
+  56  | 
+  57  |     await dragOnCanvas(page, { x: 360, y: 180 }, { x: 560, y: 260 });
+  58  | 
+  59  |     await expect.poll(() => annotationCount(page)).toBeGreaterThan(before);
+  60  |     await expect(page.getByTestId('inspector-title')).toBeVisible();
+  61  |   });
   62  | 
-  63  |     page.once('dialog', async (dialog) => {
-  64  |       expect(dialog.type()).toBe('prompt');
-  65  |       await dialog.accept('FIELD NOTE TEST');
-  66  |     });
-  67  | 
-  68  |     await page.getByTestId('tool-text').click();
-  69  |     await dragOnCanvas(page, { x: 420, y: 210 }, { x: 620, y: 260 });
+  63  |   test('Text tool prompts for text and creates actual text annotation', async ({ page }) => {
+  64  |     const before = await annotationCount(page);
+  65  | 
+  66  |     page.once('dialog', async (dialog) => {
+  67  |       expect(dialog.type()).toBe('prompt');
+  68  |       await dialog.accept('FIELD NOTE TEST');
+  69  |     });
   70  | 
-  71  |     await expect.poll(() => annotationCount(page)).toBeGreaterThan(before);
-  72  |     await expect(page.getByText('FIELD NOTE TEST')).toBeVisible();
-  73  |   });
-  74  | 
-  75  |   test('Eraser is a mode and erases the clicked annotation only', async ({ page }) => {
-  76  |     const before = await annotationCount(page);
+  71  |     await page.getByTestId('tool-text').click();
+  72  |     await dragOnCanvas(page, { x: 420, y: 210 }, { x: 620, y: 260 });
+  73  | 
+  74  |     await expect.poll(() => annotationCount(page)).toBeGreaterThan(before);
+  75  |     await expect(page.getByText('FIELD NOTE TEST')).toBeVisible();
+  76  |   });
   77  | 
-  78  |     await page.getByTestId('tool-eraser').click();
-  79  |     await expect(page.getByTestId('status-message')).toHaveAttribute('data-active-tool', 'Eraser');
+  78  |   test('Eraser is a mode and erases the clicked annotation only', async ({ page }) => {
+  79  |     const before = await annotationCount(page);
   80  | 
-  81  |     await page.getByTestId('annotation-1').click();
-  82  | 
-  83  |     await expect.poll(() => annotationCount(page)).toBe(before - 1);
-  84  |     await expect(page.getByTestId('plan-canvas')).toBeVisible();
-  85  |   });
-  86  | 
-  87  |   test('Escape cancels active tool back to Select', async ({ page }) => {
-  88  |     await page.getByTestId('tool-eraser').click();
-  89  |     await expect(page.getByTestId('status-message')).toHaveAttribute('data-active-tool', 'Eraser');
-  90  | 
-  91  |     await page.keyboard.press('Escape');
-  92  | 
-  93  |     await expect(page.getByTestId('status-message')).toHaveAttribute('data-active-tool', 'Select');
-  94  |   });
+  81  |     await page.getByTestId('tool-eraser').click();
+  82  |     await expect(page.getByTestId('status-message')).toHaveAttribute('data-active-tool', 'Eraser');
+  83  | 
+  84  |     await page.getByTestId('annotation-1').click({ force: true });
+  85  | 
+  86  |     await expect.poll(() => annotationCount(page)).toBe(before - 1);
+  87  |     await expect(page.getByTestId('plan-canvas')).toBeVisible();
+  88  |   });
+  89  | 
+  90  |   test('Escape cancels active tool back to Select', async ({ page }) => {
+  91  |     await page.getByTestId('tool-eraser').click();
+  92  |     await expect(page.getByTestId('status-message')).toHaveAttribute('data-active-tool', 'Eraser');
+  93  | 
+  94  |     await page.keyboard.press('Escape');
   95  | 
-  96  |   test('Pan moves the view and Fit resets it', async ({ page }) => {
-  97  |     const transform = page.getByTestId('plan-transform');
+  96  |     await expect(page.getByTestId('status-message')).toHaveAttribute('data-active-tool', 'Select');
+  97  |   });
   98  | 
-  99  |     await page.getByTestId('tool-pan').click();
-  100 |     await dragOnCanvas(page, { x: 360, y: 240 }, { x: 440, y: 300 });
+  99  |   test('Pan moves the view and Fit resets it', async ({ page }) => {
+  100 |     const transform = page.getByTestId('plan-transform');
   101 | 
-  102 |     await expect(transform).not.toHaveAttribute('data-plan-pan-x', '0');
-  103 | 
-  104 |     await page.getByTestId('tool-fit').click();
-  105 | 
-  106 |     await expect(transform).toHaveAttribute('data-plan-zoom', '1');
-  107 |     await expect(transform).toHaveAttribute('data-plan-pan-x', '0');
-  108 |     await expect(transform).toHaveAttribute('data-plan-pan-y', '0');
-  109 |   });
-  110 | 
-  111 |   test('Zoom mode uses wheel and Escape cancels', async ({ page }) => {
-  112 |     const transform = page.getByTestId('plan-transform');
-  113 |     await expect(transform).toHaveAttribute('data-plan-zoom', '1');
-  114 | 
-  115 |     await page.getByTestId('tool-zoom').click();
-  116 |     const canvas = page.getByTestId('plan-canvas');
-  117 |     const box = await canvas.boundingBox();
-  118 |     if (!box) throw new Error('plan canvas not visible');
-  119 | 
-  120 |     await page.mouse.move(box.x + 450, box.y + 250);
-  121 |     await page.mouse.wheel(0, -400);
+  102 |     await page.getByTestId('tool-pan').click();
+  103 |     await dragOnCanvas(page, { x: 360, y: 240 }, { x: 440, y: 300 });
+  104 | 
+  105 |     await expect(transform).not.toHaveAttribute('data-plan-pan-x', '0');
+  106 | 
+  107 |     await page.getByTestId('tool-fit').click();
+  108 | 
+  109 |     await expect(transform).toHaveAttribute('data-plan-zoom', '1');
+  110 |     await expect(transform).toHaveAttribute('data-plan-pan-x', '0');
+  111 |     await expect(transform).toHaveAttribute('data-plan-pan-y', '0');
+  112 |   });
+  113 | 
+  114 |   test('Zoom mode uses wheel and Escape cancels', async ({ page }) => {
+  115 |     const transform = page.getByTestId('plan-transform');
+  116 |     await expect(transform).toHaveAttribute('data-plan-zoom', '1');
+  117 | 
+  118 |     await page.getByTestId('tool-zoom').click();
+  119 |     const canvas = page.getByTestId('plan-canvas');
+  120 |     const box = await canvas.boundingBox();
+  121 |     if (!box) throw new Error('plan canvas not visible');
   122 | 
-> 123 |     await expect(transform).not.toHaveAttribute('data-plan-zoom', '1');
+  123 |     await page.mouse.move(box.x + 450, box.y + 250);
+  124 |     await page.mouse.wheel(0, -400);
+  125 |     await page.mouse.wheel(0, -400);
+  126 | 
+> 127 |     await expect(transform).not.toHaveAttribute('data-plan-zoom', '1');
       |                                 ^ Error: expect(locator).not.toHaveAttribute(expected) failed
-  124 | 
-  125 |     await page.keyboard.press('Escape');
-  126 |     await expect(page.getByTestId('status-message')).toHaveAttribute('data-active-tool', 'Select');
-  127 |   });
   128 | 
-  129 |   test('Color opens palette and changes selected annotation color', async ({ page }) => {
-  130 |     await page.getByTestId('tool-select').click();
-  131 |     await page.getByTestId('annotation-1').click();
+  129 |     await page.keyboard.press('Escape');
+  130 |     await expect(page.getByTestId('status-message')).toHaveAttribute('data-active-tool', 'Select');
+  131 |   });
   132 | 
-  133 |     await page.getByTestId('tool-color').click();
-  134 |     await expect(page.getByTestId('active-panel-title')).toContainText('Choose markup color');
-  135 |   });
+  133 |   test('Color opens palette and changes selected annotation color', async ({ page }) => {
+  134 |     await page.getByTestId('tool-select').click();
+  135 |     await page.getByTestId('annotation-1').click();
   136 | 
-  137 |   test('Photo, File, and Note tools open their panels', async ({ page }) => {
-  138 |     await page.getByTestId('tool-photo').click();
-  139 |     await expect(page.getByTestId('active-panel-title')).toContainText('Add or choose site photo');
-  140 |     await page.getByTestId('close-active-panel').click();
-  141 | 
-  142 |     await page.getByTestId('tool-file').click();
-  143 |     await expect(page.getByTestId('active-panel-title')).toContainText('Attach document');
+  137 |     await page.getByTestId('tool-color').click();
+  138 |     await expect(page.getByTestId('active-panel-title')).toContainText('Choose markup color');
+  139 |   });
+  140 | 
+  141 |   test('Photo, File, and Note tools open their panels', async ({ page }) => {
+  142 |     await page.getByTestId('tool-photo').click();
+  143 |     await expect(page.getByTestId('active-panel-title')).toContainText('Add or choose site photo');
   144 |     await page.getByTestId('close-active-panel').click();
   145 | 
-  146 |     await page.getByTestId('tool-note').click();
-  147 |     await expect(page.getByTestId('active-panel-title')).toContainText('Add note');
-  148 |   });
+  146 |     await page.getByTestId('tool-file').click();
+  147 |     await expect(page.getByTestId('active-panel-title')).toContainText('Attach document');
+  148 |     await page.getByTestId('close-active-panel').click();
   149 | 
-  150 |   test('View all photos opens photo library', async ({ page }) => {
-  151 |     await page.getByTestId('view-all-photos').click();
-  152 |     await expect(page.getByTestId('photo-library-title')).toBeVisible();
-  153 |   });
-  154 | 
-  155 |   test('Distance requires scale first', async ({ page }) => {
-  156 |     const before = await annotationCount(page);
-  157 | 
-  158 |     await page.getByTestId('tool-distance').click();
-  159 |     await dragOnCanvas(page, { x: 300, y: 200 }, { x: 470, y: 200 });
-  160 | 
-  161 |     await expect.poll(() => annotationCount(page)).toBe(before);
-  162 |     await expect(page.getByTestId('status-message')).toHaveAttribute('data-active-tool', 'Distance');
-  163 |   });
-  164 | });
-  165 | 
+  150 |     await page.getByTestId('tool-note').click();
+  151 |     await expect(page.getByTestId('active-panel-title')).toContainText('Add note');
+  152 |   });
+  153 | 
+  154 |   test('View all photos opens photo library', async ({ page }) => {
+  155 |     await page.getByTestId('view-all-photos').click();
+  156 |     await expect(page.getByTestId('photo-library-title')).toBeVisible();
+  157 |   });
+  158 | 
+  159 |   test('Distance requires scale first', async ({ page }) => {
+  160 |     const before = await annotationCount(page);
+  161 | 
+  162 |     await page.getByTestId('tool-distance').click();
+  163 |     await dragOnCanvas(page, { x: 300, y: 200 }, { x: 470, y: 200 });
+  164 | 
+  165 |     await expect.poll(() => annotationCount(page)).toBe(before);
+  166 |     await expect(page.getByTestId('status-message')).toHaveAttribute('data-active-tool', 'Distance');
+  167 |   });
+  168 | });
+  169 | 
 ```
