@@ -1,10 +1,18 @@
 import React, { useState } from 'react';
 import { AlertTriangle } from 'lucide-react';
 
+const DISCLAIMER_SESSION_KEY = 'simplifystruct.engineeringDisclaimerAcceptedThisVisit.v1';
+
+const hasAcceptedDisclaimerThisVisit = () => {
+  if (typeof window === 'undefined') return false;
+  return window.sessionStorage.getItem(DISCLAIMER_SESSION_KEY) === 'true';
+};
+
 export const DisclaimerModal: React.FC = () => {
-  const [isOpen, setIsOpen] = useState(true);
+  const [isOpen, setIsOpen] = useState(() => !hasAcceptedDisclaimerThisVisit());
 
   const handleAccept = () => {
+    window.sessionStorage.setItem(DISCLAIMER_SESSION_KEY, 'true');
     setIsOpen(false);
   };
 
@@ -19,22 +27,22 @@ export const DisclaimerModal: React.FC = () => {
           </div>
           <div>
             <h2 className="text-xl font-bold text-gray-900">Engineering Liability Disclaimer</h2>
-            <p className="text-sm text-gray-500 mt-1">Please read carefully before using StrucCalc.</p>
+            <p className="text-sm text-gray-500 mt-1">Please read carefully before using SimplifyStruct.</p>
           </div>
         </div>
-        
+
         <div className="p-6 bg-gray-50 text-sm text-gray-700 space-y-4 max-h-[60vh] overflow-y-auto">
           <p>
-            <strong>1. No Warranty:</strong> The StrucCalc application and its calculation modules are provided "as-is" without any warranty of any kind, either express or implied, including but not limited to the implied warranties of merchantability, fitness for a particular purpose, or non-infringement.
+            <strong>1. No Warranty:</strong> The SimplifyStruct application and its calculation modules are provided "as-is" without any warranty of any kind, either express or implied, including but not limited to the implied warranties of merchantability, fitness for a particular purpose, or non-infringement.
           </p>
           <p>
-            <strong>2. Not a Substitute for Professional Judgment:</strong> This software is a tool intended to assist qualified professionals. It is <strong>NOT</strong> a substitute for the professional judgment, independent verification, and expertise of a licensed structural or civil engineer. 
+            <strong>2. Not a Substitute for Professional Judgment:</strong> This software is a tool intended to assist qualified professionals. It is <strong>NOT</strong> a substitute for the professional judgment, independent verification, and expertise of a licensed structural or civil engineer.
           </p>
           <p>
-            <strong>3. Engineer of Record Responsibility:</strong> The user (the Engineer of Record) assumes all risk and liability associated with the use of this software. The user is entirely responsible for verifying the accuracy of all inputs, boundary conditions, mathematical formulas, load factors, material properties, and final output results before applying them to any real-world construction or engineering project.
+            <strong>3. Engineer of Record Responsibility:</strong> The user assumes all risk and liability associated with the use of this software. The user is entirely responsible for verifying the accuracy of all inputs, boundary conditions, mathematical formulas, load factors, material properties, and final output results before applying them to any real-world construction or engineering project.
           </p>
           <p>
-            <strong>4. Limitation of Liability:</strong> In no event shall the creators, developers, or distributors of StrucCalc be liable for any direct, indirect, incidental, special, exemplary, or consequential damages (including, but not limited to, procurement of substitute goods or services; loss of use, data, or profits; business interruption; or structural failure) however caused and on any theory of liability, arising in any way out of the use of this software.
+            <strong>4. Limitation of Liability:</strong> In no event shall the creators, developers, or distributors of SimplifyStruct be liable for any direct, indirect, incidental, special, exemplary, or consequential damages arising in any way out of the use of this software.
           </p>
         </div>
 
