@@ -83,7 +83,7 @@ async function expectNoPageErrors(page: Page, action: () => Promise<void>) {
   await action();
   await page.waitForTimeout(150);
   expect(errors).toEqual([]);
-  await expect(page.locator('body')).toBeVisible();
+  await expect(page.getByTestId('plan-canvas')).toBeVisible();
 }
 
 test.describe('Visual Workspace toolbar behavior', () => {
@@ -93,13 +93,10 @@ test.describe('Visual Workspace toolbar behavior', () => {
 
   test('Select only selects an annotation and does not move it on click', async ({ page }) => {
     await page.getByTestId('tool-select').click();
-
     const annotation = await annotationLocator(page, 1);
     const before = await getBox(annotation);
-
     await clickAnnotation(page, 1);
     await expect(page.getByTestId('inspector-title')).toContainText(/B12|N1|Text|Beam/);
-
     const after = await getBox(annotation);
     expect(Math.abs(after.x - before.x)).toBeLessThan(2);
     expect(Math.abs(after.y - before.y)).toBeLessThan(2);
@@ -107,22 +104,17 @@ test.describe('Visual Workspace toolbar behavior', () => {
 
   test('Cloud tool creates a new annotation from a drag', async ({ page }) => {
     const before = await annotationCount(page);
-
     await page.getByTestId('tool-cloud').click();
     await expect(page.getByTestId('status-message')).toHaveAttribute('data-active-tool', 'Cloud');
-
     await dragOnCanvas(page, { x: 360, y: 180 }, { x: 560, y: 260 });
-
     await expect.poll(() => annotationCount(page)).toBeGreaterThan(before);
     await expect(page.getByTestId('inspector-title')).toBeVisible();
   });
 
   test('Text tool creates actual text annotation', async ({ page }) => {
     const before = await annotationCount(page);
-
     await page.getByTestId('tool-text').click();
     await dragOnCanvas(page, { x: 420, y: 210 }, { x: 620, y: 260 });
-
     await expect.poll(() => annotationCount(page)).toBeGreaterThan(before);
     await expect(page.getByTestId('inspector-title')).toContainText(/Text N\d+/);
     await expect(page.getByText('TEXT NOTE').first()).toBeVisible();
@@ -130,12 +122,9 @@ test.describe('Visual Workspace toolbar behavior', () => {
 
   test('Eraser is a mode and erases the clicked annotation only', async ({ page }) => {
     const before = await annotationCount(page);
-
     await page.getByTestId('tool-eraser').click();
     await expect(page.getByTestId('status-message')).toHaveAttribute('data-active-tool', 'Eraser');
-
     await clickAnnotation(page, 1);
-
     await expect.poll(() => annotationCount(page)).toBe(before - 1);
     await expect(page.getByTestId('plan-canvas')).toBeVisible();
   });
@@ -143,22 +132,16 @@ test.describe('Visual Workspace toolbar behavior', () => {
   test('Escape cancels active tool back to Select', async ({ page }) => {
     await page.getByTestId('tool-eraser').click();
     await expect(page.getByTestId('status-message')).toHaveAttribute('data-active-tool', 'Eraser');
-
     await page.keyboard.press('Escape');
-
     await expect(page.getByTestId('status-message')).toHaveAttribute('data-active-tool', 'Select');
   });
 
   test('Pan moves the view and Fit resets it', async ({ page }) => {
     const transform = page.getByTestId('plan-transform');
-
     await page.getByTestId('tool-pan').click();
     await dragOnCanvas(page, { x: 360, y: 240 }, { x: 440, y: 300 });
-
     await expect(transform).not.toHaveAttribute('data-plan-pan-x', '0');
-
     await page.getByTestId('tool-fit').click();
-
     await expect(transform).toHaveAttribute('data-plan-zoom', '1');
     await expect(transform).toHaveAttribute('data-plan-pan-x', '0');
     await expect(transform).toHaveAttribute('data-plan-pan-y', '0');
@@ -167,13 +150,10 @@ test.describe('Visual Workspace toolbar behavior', () => {
   test('Zoom mode uses wheel and Escape cancels', async ({ page }) => {
     const transform = page.getByTestId('plan-transform');
     await expect(transform).toHaveAttribute('data-plan-zoom', '1');
-
     await page.getByTestId('tool-zoom').click();
     await wheelCanvas(page, -400);
     await wheelCanvas(page, -400);
-
     await expect(transform).not.toHaveAttribute('data-plan-zoom', '1');
-
     await page.keyboard.press('Escape');
     await expect(page.getByTestId('status-message')).toHaveAttribute('data-active-tool', 'Select');
   });
@@ -181,7 +161,6 @@ test.describe('Visual Workspace toolbar behavior', () => {
   test('Color opens palette and changes selected annotation color', async ({ page }) => {
     await page.getByTestId('tool-select').click();
     await clickAnnotation(page, 1);
-
     await page.getByTestId('tool-color').click();
     await expect(page.getByTestId('active-panel-title')).toContainText('Choose markup color');
   });
@@ -190,11 +169,9 @@ test.describe('Visual Workspace toolbar behavior', () => {
     await page.getByTestId('tool-photo').click();
     await expect(page.getByTestId('active-panel-title')).toContainText('Add or choose site photo');
     await page.getByTestId('close-active-panel').click();
-
     await page.getByTestId('tool-file').click();
     await expect(page.getByTestId('active-panel-title')).toContainText('Attach document');
     await page.getByTestId('close-active-panel').click();
-
     await page.getByTestId('tool-note').click();
     await expect(page.getByTestId('active-panel-title')).toContainText('Add note');
   });
@@ -206,76 +183,30 @@ test.describe('Visual Workspace toolbar behavior', () => {
 
   test('Distance requires scale first', async ({ page }) => {
     const before = await annotationCount(page);
-
     await page.getByTestId('tool-distance').click();
     await dragOnCanvas(page, { x: 300, y: 200 }, { x: 470, y: 200 });
-
     await expect.poll(() => annotationCount(page)).toBe(before);
     await expect(page.getByTestId('status-message')).toHaveAttribute('data-active-tool', 'Distance');
   });
 });
 
 const toolbarButtons = [
-  ['tool-select', 'Select'],
-  ['tool-pan', 'Pan'],
-  ['tool-zoom', 'Zoom'],
-  ['tool-fit', 'Fit'],
-  ['tool-zoom-area', 'Zoom Area'],
-  ['tool-arrow', 'Arrow'],
-  ['tool-cloud', 'Cloud'],
-  ['tool-text', 'Text'],
-  ['tool-box', 'Box'],
-  ['tool-callout', 'Callout'],
-  ['tool-dimension', 'Dimension'],
-  ['tool-distance', 'Distance'],
-  ['tool-angle', 'Angle'],
-  ['tool-area', 'Area'],
-  ['tool-note', 'Note'],
-  ['tool-photo', 'Photo'],
-  ['tool-file', 'File'],
-  ['tool-link', 'Link'],
-  ['tool-highlighter', 'Highlighter'],
-  ['tool-pen', 'Pen'],
-  ['tool-eraser', 'Eraser'],
-  ['tool-color', 'Color'],
-  ['tool-layers', 'Layers'],
-  ['tool-scale', 'Scale'],
-  ['tool-grid', 'Grid'],
-  ['tool-snap', 'Snap'],
-  ['tool-undo', 'Undo'],
-  ['tool-redo', 'Redo'],
-  ['tool-more', 'More'],
+  ['tool-select', 'Select'], ['tool-pan', 'Pan'], ['tool-zoom', 'Zoom'], ['tool-fit', 'Fit'], ['tool-zoom-area', 'Zoom Area'],
+  ['tool-arrow', 'Arrow'], ['tool-cloud', 'Cloud'], ['tool-text', 'Text'], ['tool-box', 'Box'], ['tool-callout', 'Callout'], ['tool-dimension', 'Dimension'],
+  ['tool-distance', 'Distance'], ['tool-angle', 'Angle'], ['tool-area', 'Area'],
+  ['tool-note', 'Note'], ['tool-photo', 'Photo'], ['tool-file', 'File'], ['tool-link', 'Link'],
+  ['tool-highlighter', 'Highlighter'], ['tool-pen', 'Pen'], ['tool-eraser', 'Eraser'], ['tool-color', 'Color'],
+  ['tool-layers', 'Layers'], ['tool-scale', 'Scale'], ['tool-grid', 'Grid'], ['tool-snap', 'Snap'],
+  ['tool-undo', 'Undo'], ['tool-redo', 'Redo'], ['tool-more', 'More'],
 ] as const;
 
 const namedWorkspaceButtons = [
-  'Workspace',
-  'Review',
-  'Report',
-  'Export',
-  'Add board',
-  'Reset active board',
-  'Filter linked photos',
-  'Collapse photos panel',
-  'View all photos (5)',
-  'Linked Photos 3',
-  'Linked Documents 2',
-  'Board Markups 1',
-  'Linked Costs 1',
-  'Edit note',
-  'Add Comment',
-  '01 - General',
-  '02 - Architectural',
-  '03 - Structural',
-  'Level 2 Framing Plan',
-  'Roof Framing Plan',
-  'South Elevation',
-  'East Elevation',
-  'Typical Sections',
-  '04 - MEP',
-  '05 - Site',
-  '06 - Inspections',
-  'Photos & Documents',
-  'Site Photo Set',
+  'Workspace', 'Review', 'Report', 'Export', 'Add board', 'Reset active board',
+  'Filter linked photos', 'Collapse photos panel', 'View all photos (5)',
+  'Linked Photos 3', 'Linked Documents 2', 'Board Markups 1', 'Linked Costs 1', 'Edit note', 'Add Comment',
+  '01 - General', '02 - Architectural', '03 - Structural', 'Level 2 Framing Plan', 'Roof Framing Plan',
+  'South Elevation', 'East Elevation', 'Typical Sections', '04 - MEP', '05 - Site', '06 - Inspections',
+  'Photos & Documents', 'Site Photo Set',
 ] as const;
 
 test.describe('Visual Workspace pressable control coverage', () => {
@@ -292,10 +223,11 @@ test.describe('Visual Workspace pressable control coverage', () => {
   for (const label of namedWorkspaceButtons) {
     test(`workspace button ${label} is pressable without crashing`, async ({ page }) => {
       await openWorkspace(page);
+      const button = page.getByRole('button', { name: label }).first();
+      await expect(button, `${label} button should exist`).toBeVisible();
       await expectNoPageErrors(page, async () => {
-        await page.getByRole('button', { name: label }).first().click({ force: true });
+        await button.click({ force: true });
       });
-      await expect(page.locator('body')).toBeVisible();
     });
   }
 
@@ -308,27 +240,21 @@ test.describe('Visual Workspace pressable control coverage', () => {
 
   test('primary modal and panel buttons open the expected panels', async ({ page }) => {
     await openWorkspace(page);
-
     await page.getByTestId('tool-color').click();
     await expect(page.getByTestId('active-panel-title')).toContainText('Choose markup color');
     await page.getByTestId('close-active-panel').click();
-
     await page.getByTestId('tool-scale').click();
     await expect(page.getByTestId('active-panel-title')).toContainText('Workspace settings');
     await page.getByTestId('close-active-panel').click();
-
     await page.getByTestId('tool-note').click();
     await expect(page.getByTestId('active-panel-title')).toContainText('Add note');
     await page.getByTestId('close-active-panel').click();
-
     await page.getByTestId('tool-file').click();
     await expect(page.getByTestId('active-panel-title')).toContainText('Attach document');
     await page.getByTestId('close-active-panel').click();
-
     await page.getByRole('button', { name: 'Report' }).click();
     await expect(page.getByTestId('active-panel-title')).toContainText('Generate structural inspection report');
     await page.getByTestId('close-active-panel').click();
-
     await page.getByRole('button', { name: 'Export' }).click();
     await expect(page.getByTestId('active-panel-title')).toContainText('Export project deliverables');
   });
