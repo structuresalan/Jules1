@@ -38,7 +38,7 @@ type MarkupStatus = 'Field Verify' | 'Monitor' | 'Complete';
 type Priority = 'High' | 'Medium' | 'Low';
 type UserRole = 'Engineer' | 'Client';
 type WorkspaceTab = 'Workspace' | 'Review' | 'Report' | 'Export';
-type PanelMode = 'none' | 'report' | 'export' | 'settings';
+type PanelMode = 'none' | 'report' | 'export' | 'settings' | 'color' | 'scale' | 'photoPicker' | 'note' | 'file';
 
 interface MarkupGeometry {
   x: number;
@@ -48,6 +48,8 @@ interface MarkupGeometry {
   x2?: number;
   y2?: number;
   points?: { x: number; y: number }[];
+  fontSize?: number;
+  fontFamily?: string;
 }
 
 interface MarkupItem {
@@ -309,7 +311,9 @@ const FramingPlan: React.FC<{
   onPointerDown: (event: React.PointerEvent<SVGSVGElement>) => void;
   onPointerMove: (event: React.PointerEvent<SVGSVGElement>) => void;
   onPointerUp: (event: React.PointerEvent<SVGSVGElement>) => void;
-}> = ({ onSelect, markups, selectedId, activeTool, draftGeometry, onPointerDown, onPointerMove, onPointerUp }) => {
+  onMoveStart: (id: number, point: { x: number; y: number }) => void;
+  showGrid: boolean;
+}> = ({ onSelect, markups, selectedId, activeTool, draftGeometry, onPointerDown, onPointerMove, onPointerUp, onMoveStart, showGrid }) => {
   const xs = [92, 214, 336, 458, 580, 702, 824];
   const ys = [76, 210, 344, 478];
 
@@ -342,6 +346,12 @@ const FramingPlan: React.FC<{
       </defs>
 
       <rect width="980" height="640" fill="url(#paper)" />
+      {showGrid && (
+        <g opacity="0.35">
+          {Array.from({ length: 49 }).map((_, index) => <line key={`vg-${index}`} x1={index * 20} y1="0" x2={index * 20} y2="640" stroke="#dbeafe" />)}
+          {Array.from({ length: 32 }).map((_, index) => <line key={`hg-${index}`} x1="0" y1={index * 20} x2="980" y2={index * 20} stroke="#dbeafe" />)}
+        </g>
+      )}
 
       {xs.map((x, index) => (
         <g key={`gx-${index}`}>
@@ -401,7 +411,16 @@ const FramingPlan: React.FC<{
 
         if (item.toolType === 'Pen' && geometry.points?.length) {
           return (
-            <g key={item.id} onClick={(event) => { event.stopPropagation(); onSelect(item.id); }} className="cursor-pointer">
+            <g
+              key={item.id}
+              onPointerDown={(event) => {
+                event.stopPropagation();
+                onSelect(item.id);
+                onMoveStart(item.id, { x: (event.clientX), y: (event.clientY) });
+              }}
+              onClick={(event) => { event.stopPropagation(); onSelect(item.id); }}
+              className={activeTool === 'Select' ? 'cursor-move' : 'cursor-pointer'}
+            >
               <polyline points={geometry.points.map((point) => `${(point.x / 100) * 980},${(point.y / 100) * 640}`).join(' ')} fill="none" stroke={color} strokeWidth={isSelected ? 4 : 2.5} strokeLinecap="round" strokeLinejoin="round" />
               <circle cx={(geometry.points[0].x / 100) * 980} cy={(geometry.points[0].y / 100) * 640} r="11" fill={color} />
               <text x={(geometry.points[0].x / 100) * 980} y={(geometry.points[0].y / 100) * 640 + 4} textAnchor="middle" fontSize="11" fontWeight="700" fill="white">{item.id}</text>
@@ -411,7 +430,16 @@ const FramingPlan: React.FC<{
 
         if (item.toolType === 'Highlighter') {
           return (
-            <g key={item.id} onClick={(event) => { event.stopPropagation(); onSelect(item.id); }} className="cursor-pointer">
+            <g
+              key={item.id}
+              onPointerDown={(event) => {
+                event.stopPropagation();
+                onSelect(item.id);
+                onMoveStart(item.id, { x: (event.clientX), y: (event.clientY) });
+              }}
+              onClick={(event) => { event.stopPropagation(); onSelect(item.id); }}
+              className={activeTool === 'Select' ? 'cursor-move' : 'cursor-pointer'}
+            >
               <rect x={x} y={y} width={Math.max(width, 25)} height={Math.max(height, 16)} fill={color} opacity="0.23" stroke={color} strokeWidth={isSelected ? 3 : 1.5} />
               <circle cx={x} cy={y} r="11" fill={color} opacity="0.95" />
               <text x={x} y={y + 4} textAnchor="middle" fontSize="11" fontWeight="700" fill="white">{item.id}</text>
@@ -421,7 +449,16 @@ const FramingPlan: React.FC<{
 
         if (item.toolType === 'Distance' || item.toolType === 'Dimension') {
           return (
-            <g key={item.id} onClick={(event) => { event.stopPropagation(); onSelect(item.id); }} className="cursor-pointer">
+            <g
+              key={item.id}
+              onPointerDown={(event) => {
+                event.stopPropagation();
+                onSelect(item.id);
+                onMoveStart(item.id, { x: (event.clientX), y: (event.clientY) });
+              }}
+              onClick={(event) => { event.stopPropagation(); onSelect(item.id); }}
+              className={activeTool === 'Select' ? 'cursor-move' : 'cursor-pointer'}
+            >
               <line x1={x} y1={y} x2={x2} y2={y2} stroke={color} strokeWidth={isSelected ? 3 : 2} />
               <circle cx={x} cy={y} r="5" fill={color} />
               <circle cx={x2} cy={y2} r="5" fill={color} />
@@ -433,9 +470,38 @@ const FramingPlan: React.FC<{
           );
         }
 
-        if (item.toolType === 'Box' || item.toolType === 'Text' || item.toolType === 'Callout') {
+        if (item.toolType === 'Text') {
           return (
-            <g key={item.id} onClick={(event) => { event.stopPropagation(); onSelect(item.id); }} className="cursor-pointer">
+            <g
+              key={item.id}
+              onPointerDown={(event) => {
+                event.stopPropagation();
+                onSelect(item.id);
+                onMoveStart(item.id, { x: event.clientX, y: event.clientY });
+              }}
+              onClick={(event) => { event.stopPropagation(); onSelect(item.id); }}
+              className={activeTool === 'Select' ? 'cursor-move' : 'cursor-pointer'}
+            >
+              {isSelected && <rect x={x - 8} y={y - 24} width={Math.max(width, 120)} height={Math.max(height, 44)} rx="4" fill="none" stroke={color} strokeWidth="2" strokeDasharray="4 3" />}
+              <circle cx={x - 12} cy={y - 10} r="12" fill={color} />
+              <text x={x - 12} y={y - 5} textAnchor="middle" fontSize="12" fontWeight="700" fill="white">{item.id}</text>
+              <text x={x + 8} y={y} fontSize={geometry.fontSize ?? 18} fontFamily={geometry.fontFamily ?? 'Arial'} fontWeight="800" fill={color}>{item.condition}</text>
+            </g>
+          );
+        }
+
+        if (item.toolType === 'Box' || item.toolType === 'Callout') {
+          return (
+            <g
+              key={item.id}
+              onPointerDown={(event) => {
+                event.stopPropagation();
+                onSelect(item.id);
+                onMoveStart(item.id, { x: (event.clientX), y: (event.clientY) });
+              }}
+              onClick={(event) => { event.stopPropagation(); onSelect(item.id); }}
+              className={activeTool === 'Select' ? 'cursor-move' : 'cursor-pointer'}
+            >
               <rect x={x} y={y} width={Math.max(width, 80)} height={Math.max(height, 36)} rx="4" fill="white" stroke={color} strokeWidth={isSelected ? 3 : 1.8} />
               <circle cx={x} cy={y} r="12" fill={color} />
               <text x={x} y={y + 5} textAnchor="middle" fontSize="12" fontWeight="700" fill="white">{item.id}</text>
@@ -445,7 +511,16 @@ const FramingPlan: React.FC<{
         }
 
         return (
-          <g key={item.id} onClick={(event) => { event.stopPropagation(); onSelect(item.id); }} className="cursor-pointer">
+          <g
+              key={item.id}
+              onPointerDown={(event) => {
+                event.stopPropagation();
+                onSelect(item.id);
+                onMoveStart(item.id, { x: (event.clientX), y: (event.clientY) });
+              }}
+              onClick={(event) => { event.stopPropagation(); onSelect(item.id); }}
+              className={activeTool === 'Select' ? 'cursor-move' : 'cursor-pointer'}
+            >
             <path d={`M${x} ${y}c${width * 0.3}-${height * 0.8} ${width * 1.1}-${height * 0.6} ${width * 1.25} ${height * 0.05}c${width * 0.2} ${height * 0.7}-${width * 0.2} ${height * 1.2}-${width * 0.85} ${height * 1.05}c-${width * 0.6} ${height * 0.55}-${width * 1.25}-${height * 0.1}-${width * 1.15}-${height * 0.7}c${width * 0.05}-${height * 0.35} ${width * 0.25}-${height * 0.55} ${width * 0.45}-${height * 0.4}z`} fill="none" stroke={color} strokeWidth={isSelected ? 3.5 : 2.5} strokeDasharray="5 4" />
             <circle cx={x + width * 0.52} cy={y + height + 18} r="12" fill={color} />
             <text x={x + width * 0.52} y={y + height + 23} textAnchor="middle" fontSize="12" fontWeight="700" fill="white">{item.id}</text>
@@ -506,6 +581,13 @@ export const VisualWorkspace: React.FC = () => {
   const [draftGeometry, setDraftGeometry] = useState<MarkupGeometry | null>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [showAllPhotos, setShowAllPhotos] = useState(false);
+  const [moveState, setMoveState] = useState<{ id: number; startClient: { x: number; y: number }; original: MarkupGeometry } | null>(null);
+  const [undoStack, setUndoStack] = useState<MarkupItem[][]>([]);
+  const [redoStack, setRedoStack] = useState<MarkupItem[][]>([]);
+  const [scaleReference, setScaleReference] = useState<{ points?: MarkupGeometry; feet?: number } | null>(null);
+  const [isSettingScale, setIsSettingScale] = useState(false);
+  const [snapEnabled, setSnapEnabled] = useState(false);
+  const [uploadedPhotoName, setUploadedPhotoName] = useState('');
 
   useEffect(() => writeLocal('simplifystruct.visual.markups.v3', markups), [markups]);
   useEffect(() => writeLocal('simplifystruct.visual.photos.v3', photos), [photos]);
@@ -570,9 +652,19 @@ export const VisualWorkspace: React.FC = () => {
     return false;
   };
 
+  const pushHistory = () => {
+    setUndoStack((current) => [...current.slice(-19), markups]);
+    setRedoStack([]);
+  };
+
+  const applyMarkups = (updater: (current: MarkupItem[]) => MarkupItem[]) => {
+    pushHistory();
+    setMarkups((current) => updater(current));
+  };
+
   const updateSelectedMarkup = (updates: Partial<MarkupItem>) => {
     if (!requireEngineer('edit this item')) return;
-    setMarkups((current) => current.map((item) => (item.id === selected.id ? { ...item, ...updates } : item)));
+    applyMarkups((current) => current.map((item) => (item.id === selected.id ? { ...item, ...updates } : item)));
     showToast('Item updated.');
   };
 
@@ -590,7 +682,7 @@ export const VisualWorkspace: React.FC = () => {
       itemId: selected.id,
     };
     setPhotos((current) => [newPhoto, ...current]);
-    setMarkups((current) => current.map((item) => (item.id === selected.id ? { ...item, photoIds: [...item.photoIds, nextPhotoId] } : item)));
+    applyMarkups((current) => current.map((item) => (item.id === selected.id ? { ...item, photoIds: [...item.photoIds, nextPhotoId] } : item)));
     setActivePhotoId(nextPhotoId);
     setSelectedRelationshipNode('photos');
     showToast('Photo attached to selected item.');
@@ -704,24 +796,51 @@ export const VisualWorkspace: React.FC = () => {
     if (['Arrow', 'Cloud', 'Text', 'Box', 'Callout', 'Dimension', 'Distance', 'Angle', 'Area', 'Highlighter', 'Pen'].includes(label)) {
       showToast(`${label} active. Click and drag on the plan.`);
     }
-    if (label === 'Photo') attachFakePhoto();
-    if (label === 'File') attachFakeDocument();
+    if (label === 'Photo') setActivePanel('photoPicker');
+    if (label === 'File') setActivePanel('file');
+    if (label === 'Note') setActivePanel('note');
     if (label === 'Link') setSelectedRelationshipNode('item');
     if (label === 'Fit') setPlanZoom(1);
-    if (label === 'Zoom' || label === 'Zoom Area') setPlanZoom((value) => Math.min(2, Number((value + 0.15).toFixed(2))));
-    if (label === 'Undo') showToast('Undo is tracked locally in this prototype.');
-    if (label === 'Redo') showToast('Redo is tracked locally in this prototype.');
-    if (label === 'More') setActivePanel('settings');
-    if (label === 'Scale' || label === 'Grid' || label === 'Snap' || label === 'Layers') showToast(`${label} toggled for this prototype.`);
-    if (label === 'Color') {
-      const colors = ['#ef4444', '#2563eb', '#16a34a', '#eab308', '#8b5cf6'];
-      const currentIndex = Math.max(0, colors.indexOf(selected.color));
-      updateSelectedMarkup({ color: colors[(currentIndex + 1) % colors.length] });
+    if (label === 'Zoom' || label === 'Zoom Area') setPlanZoom((value) => Math.min(2.5, Number((value + 0.15).toFixed(2))));
+    if (label === 'Undo') {
+      const previous = undoStack[undoStack.length - 1];
+      if (previous) {
+        setRedoStack((current) => [markups, ...current]);
+        setMarkups(previous);
+        setUndoStack((current) => current.slice(0, -1));
+        showToast('Undo.');
+      } else {
+        showToast('Nothing to undo.');
+      }
     }
+    if (label === 'Redo') {
+      const next = redoStack[0];
+      if (next) {
+        setUndoStack((current) => [...current, markups]);
+        setMarkups(next);
+        setRedoStack((current) => current.slice(1));
+        showToast('Redo.');
+      } else {
+        showToast('Nothing to redo.');
+      }
+    }
+    if (label === 'More') setActivePanel('settings');
+    if (label === 'Scale') {
+      setActiveTool('Scale');
+      setIsSettingScale(true);
+      showToast('Scale mode: drag a known reference distance, then enter its real feet.');
+    }
+    if (label === 'Grid') toggleLayer('Plan Grid');
+    if (label === 'Snap') {
+      setSnapEnabled((value) => !value);
+      showToast(`Snap ${snapEnabled ? 'off' : 'on'}.`);
+    }
+    if (label === 'Layers') showToast('Use the Layers list on the left to toggle layers.');
+    if (label === 'Color') setActivePanel('color');
     if (label === 'Eraser') {
       if (!requireEngineer('delete markups')) return;
       const fallback = markups.find((item) => item.id !== selected.id)?.id ?? 1;
-      setMarkups((current) => current.filter((item) => item.id !== selected.id));
+      applyMarkups((current) => current.filter((item) => item.id !== selected.id));
       setSelectedId(fallback);
       showToast('Selected markup removed.');
     }
@@ -737,7 +856,20 @@ export const VisualWorkspace: React.FC = () => {
   })();
 
   const pointFromPointer = (event: React.PointerEvent<SVGSVGElement>) => {
-    const rect = event.currentTarget.getBoundingClientRect();
+    const svg = event.currentTarget;
+    const ctm = svg.getScreenCTM();
+    if (ctm) {
+      const point = svg.createSVGPoint();
+      point.x = event.clientX;
+      point.y = event.clientY;
+      const svgPoint = point.matrixTransform(ctm.inverse());
+      return {
+        x: Math.max(0, Math.min(100, (svgPoint.x / 980) * 100)),
+        y: Math.max(0, Math.min(100, (svgPoint.y / 640) * 100)),
+      };
+    }
+
+    const rect = svg.getBoundingClientRect();
     return {
       x: Math.max(0, Math.min(100, ((event.clientX - rect.left) / rect.width) * 100)),
       y: Math.max(0, Math.min(100, ((event.clientY - rect.top) / rect.height) * 100)),
@@ -755,12 +887,35 @@ export const VisualWorkspace: React.FC = () => {
     const width = Math.abs((geometry.x2 ?? geometry.x) - geometry.x);
     const height = Math.abs((geometry.y2 ?? geometry.y) - geometry.y);
 
+    if (isSettingScale) {
+      const feetRaw = window.prompt('Enter the real-world distance between those two reference points in feet', '10');
+      const feet = Number(feetRaw);
+      if (Number.isFinite(feet) && feet > 0) {
+        setScaleReference({ points: geometry, feet });
+        showToast(`Scale set from reference: ${feet} ft.`);
+      }
+      setIsSettingScale(false);
+      setDraftGeometry(null);
+      setIsDrawing(false);
+      return;
+    }
+
     if (tool === 'Distance' || tool === 'Dimension') {
+      if (!scaleReference?.points || !scaleReference.feet) {
+        showToast('Set Scale first: click Scale, drag a known reference distance, then enter feet.');
+        setDraftGeometry(null);
+        setIsDrawing(false);
+        return;
+      }
       const dx = (geometry.x2 ?? geometry.x) - geometry.x;
       const dy = (geometry.y2 ?? geometry.y) - geometry.y;
-      const fakeFeet = Math.max(1, Math.round(Math.sqrt(dx * dx + dy * dy) * 1.8));
+      const refDx = (scaleReference.points.x2 ?? scaleReference.points.x) - scaleReference.points.x;
+      const refDy = (scaleReference.points.y2 ?? scaleReference.points.y) - scaleReference.points.y;
+      const refLength = Math.max(0.0001, Math.sqrt(refDx * refDx + refDy * refDy));
+      const drawnLength = Math.sqrt(dx * dx + dy * dy);
+      const fakeFeet = Math.max(0.1, Number(((drawnLength / refLength) * scaleReference.feet).toFixed(2)));
       const measurementGeometry: MarkupGeometry = { x: geometry.x, y: geometry.y, x2: geometry.x2, y2: geometry.y2 };
-      setMarkups((current) => [
+      applyMarkups((current) => [
         ...current,
         {
           id: nextId,
@@ -798,7 +953,7 @@ export const VisualWorkspace: React.FC = () => {
           height: height || geometry.height || 4,
         };
 
-    setMarkups((current) => [
+    applyMarkups((current) => [
       ...current,
       {
         id: nextId,
@@ -807,7 +962,7 @@ export const VisualWorkspace: React.FC = () => {
         itemName: `N${nextId}`,
         location: 'Marked on board',
         status: 'Field Verify',
-        condition: tool === 'Highlighter' ? 'Highlighted review area' : `${tool} markup`,
+        condition: tool === 'Text' ? (window.prompt('Enter text', 'TEXT NOTE') || 'TEXT NOTE') : tool === 'Highlighter' ? 'Highlighted review area' : `${tool} markup`,
         priority: 'Medium',
         discipline: 'Structural',
         dueDate: 'TBD',
@@ -827,7 +982,7 @@ export const VisualWorkspace: React.FC = () => {
 
   const handlePlanPointerDown = (event: React.PointerEvent<SVGSVGElement>) => {
     if (activeTool === 'Select') return;
-    if (['Photo', 'File', 'Link', 'Undo', 'Redo', 'More', 'Color', 'Eraser', 'Layers', 'Scale', 'Grid', 'Snap', 'Zoom', 'Fit', 'Zoom Area'].includes(activeTool)) return;
+    if (['Photo', 'File', 'Link', 'Undo', 'Redo', 'More', 'Color', 'Eraser', 'Layers', 'Grid', 'Snap', 'Zoom', 'Fit', 'Zoom Area'].includes(activeTool)) return;
     event.preventDefault();
     const point = pointFromPointer(event);
     setIsDrawing(true);
@@ -835,18 +990,44 @@ export const VisualWorkspace: React.FC = () => {
   };
 
   const handlePlanPointerMove = (event: React.PointerEvent<SVGSVGElement>) => {
+    if (moveState) {
+      const rect = event.currentTarget.getBoundingClientRect();
+      const dx = ((event.clientX - moveState.startClient.x) / rect.width) * 100 / planZoom;
+      const dy = ((event.clientY - moveState.startClient.y) / rect.height) * 100 / planZoom;
+      setMarkups((current) => current.map((item) => item.id === moveState.id ? { ...item, geometry: { ...moveState.original, x: moveState.original.x + dx, y: moveState.original.y + dy } } : item));
+      return;
+    }
+
     if (!isDrawing || !draftGeometry) return;
     const point = pointFromPointer(event);
     setDraftGeometry((current) => {
       if (!current) return current;
+      if (snapEnabled) {
+        point.x = Math.round(point.x);
+        point.y = Math.round(point.y);
+      }
       if (activeTool === 'Pen') return { ...current, points: [...(current.points ?? []), point] };
       return { ...current, x2: point.x, y2: point.y };
     });
   };
 
   const handlePlanPointerUp = () => {
+    if (moveState) {
+      pushHistory();
+      setMoveState(null);
+      showToast('Markup moved.');
+      return;
+    }
+
     if (!isDrawing || !draftGeometry) return;
     createMarkupFromGeometry(activeTool, draftGeometry);
+  };
+
+  const handleMoveStart = (id: number, clientPoint: { x: number; y: number }) => {
+    if (activeTool !== 'Select') return;
+    const item = markups.find((candidate) => candidate.id === id);
+    if (!item?.geometry) return;
+    setMoveState({ id, startClient: clientPoint, original: item.geometry });
   };
 
 
@@ -1037,6 +1218,8 @@ export const VisualWorkspace: React.FC = () => {
                   onPointerDown={handlePlanPointerDown}
                   onPointerMove={handlePlanPointerMove}
                   onPointerUp={handlePlanPointerUp}
+                  onMoveStart={handleMoveStart}
+                  showGrid={enabledLayers['Plan Grid']}
                 />
               </div>
             </div>
@@ -1298,7 +1481,7 @@ export const VisualWorkspace: React.FC = () => {
             <section className="border-b border-slate-800 p-4">
               <div className="mb-3 flex items-center justify-between">
                 <h3 className="text-xs font-black uppercase tracking-wide text-slate-300">Linked Photos ({linkedPhotos.length})</h3>
-                <button onClick={attachFakePhoto}><Plus size={15} /></button>
+                <button onClick={() => setActivePanel('photoPicker')}><Plus size={15} /></button>
               </div>
               <div className="space-y-2">
                 {linkedPhotos.slice(0, 2).map((photo) => (
@@ -1425,10 +1608,10 @@ export const VisualWorkspace: React.FC = () => {
             <div className="flex items-center justify-between border-b border-slate-800 px-5 py-4">
               <div>
                 <div className="text-xs font-black uppercase tracking-wide text-slate-400">
-                  {activePanel === 'report' ? 'Report Builder' : activePanel === 'export' ? 'Export Package' : 'Workspace Settings'}
+                  {activePanel === 'report' ? 'Report Builder' : activePanel === 'export' ? 'Export Package' : activePanel === 'color' ? 'Color Palette' : activePanel === 'photoPicker' ? 'Add Photo' : activePanel === 'note' ? 'Add Note' : activePanel === 'file' ? 'Attach File' : 'Workspace Settings'}
                 </div>
                 <h2 className="mt-1 text-xl font-black text-white">
-                  {activePanel === 'report' ? 'Generate structural inspection report' : activePanel === 'export' ? 'Export project deliverables' : 'Workspace settings'}
+                  {activePanel === 'report' ? 'Generate structural inspection report' : activePanel === 'export' ? 'Export project deliverables' : activePanel === 'color' ? 'Choose markup color' : activePanel === 'photoPicker' ? 'Add or choose site photo' : activePanel === 'note' ? 'Add note to selected item' : activePanel === 'file' ? 'Attach document to selected item' : 'Workspace settings'}
                 </h2>
               </div>
               <button onClick={() => setActivePanel('none')} className="rounded-md p-2 text-slate-400 hover:bg-slate-900 hover:text-white"><X size={18} /></button>
@@ -1451,6 +1634,97 @@ export const VisualWorkspace: React.FC = () => {
                   <button onClick={() => exportData('word')} className="rounded-lg border border-slate-700 bg-slate-900 px-4 py-3 text-left text-sm font-bold text-white">Editable Word Report</button>
                   <button onClick={() => exportData('csv')} className="rounded-lg border border-slate-700 bg-slate-900 px-4 py-3 text-left text-sm font-bold text-white">Issue Schedule CSV</button>
                   <button onClick={() => showToast('ZIP export queued for production backend.')} className="rounded-lg border border-slate-700 bg-slate-900 px-4 py-3 text-left text-sm font-bold text-white">Full Package ZIP</button>
+                </div>
+              )}
+
+              {activePanel === 'color' && (
+                <div className="grid grid-cols-5 gap-3">
+                  {['#ef4444', '#2563eb', '#16a34a', '#eab308', '#8b5cf6', '#0ea5e9', '#f97316', '#ec4899', '#111827', '#ffffff'].map((color) => (
+                    <button
+                      key={color}
+                      onClick={() => {
+                        updateSelectedMarkup({ color });
+                        setActivePanel('none');
+                      }}
+                      className="h-14 rounded-xl border border-slate-700 shadow"
+                      style={{ backgroundColor: color }}
+                      title={color}
+                    />
+                  ))}
+                </div>
+              )}
+
+              {activePanel === 'photoPicker' && (
+                <div className="space-y-4">
+                  <div className="rounded-lg border border-dashed border-slate-700 bg-slate-900 p-4 text-sm text-slate-300">
+                    <div className="font-bold text-white">Upload placeholder</div>
+                    <p className="mt-1">In the Supabase version this becomes a real upload into a site-visit folder. For now, enter a file name or choose an existing photo below.</p>
+                    <input
+                      value={uploadedPhotoName}
+                      onChange={(event) => setUploadedPhotoName(event.target.value)}
+                      placeholder="Example: FIELD_B18_CLOSEUP.jpg"
+                      className="mt-3 w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"
+                    />
+                    <button
+                      onClick={() => {
+                        if (uploadedPhotoName.trim()) {
+                          attachFakePhoto();
+                          setUploadedPhotoName('');
+                          setActivePanel('none');
+                        }
+                      }}
+                      className="mt-3 rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white"
+                    >
+                      Add Photo To Selected Item
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    {photos.map((photo) => (
+                      <button
+                        key={photo.id}
+                        onClick={() => {
+                          if (!requireEngineer('link photos')) return;
+                          applyMarkups((current) => current.map((item) => item.id === selected.id ? { ...item, photoIds: Array.from(new Set([...item.photoIds, photo.id])) } : item));
+                          setActivePhotoId(photo.id);
+                          setActivePanel('none');
+                          showToast('Existing photo linked.');
+                        }}
+                        className="overflow-hidden rounded-lg border border-slate-800 bg-slate-900 text-left"
+                      >
+                        <div className="h-24"><PhotoSvg photo={photo} /></div>
+                        <div className="p-2 text-xs text-slate-300">{photo.fileName}</div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {activePanel === 'note' && (
+                <div className="space-y-3">
+                  <textarea
+                    defaultValue={selected.notes}
+                    id="note-panel-textarea"
+                    className="min-h-32 w-full rounded-lg border border-slate-700 bg-slate-900 p-3 text-sm text-white"
+                  />
+                  <button
+                    onClick={() => {
+                      const value = (document.getElementById('note-panel-textarea') as HTMLTextAreaElement | null)?.value;
+                      if (value?.trim()) updateSelectedMarkup({ notes: value.trim() });
+                      setActivePanel('none');
+                    }}
+                    className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white"
+                  >
+                    Save Note
+                  </button>
+                </div>
+              )}
+
+              {activePanel === 'file' && (
+                <div className="space-y-3 text-sm text-slate-300">
+                  <p>Attach a document reference to the selected item. Real file upload will use Supabase Storage.</p>
+                  <button onClick={() => { attachFakeDocument(); setActivePanel('none'); }} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white">
+                    Attach Demo File
+                  </button>
                 </div>
               )}
 

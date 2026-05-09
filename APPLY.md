@@ -1,24 +1,29 @@
-# Make Visual Workspace Board Tools Work
+# Fix Visual Workspace Annotator Core
 
 Replace this file:
 - src/pages/VisualWorkspace.tsx
 
 Commit message:
-Make Visual Workspace board tools interactive
+Fix Visual Workspace annotator core interactions
 
 What changed:
-- Keeps the same UI.
-- Makes plan tools work directly on the board:
-  - Cloud: click-drag to draw a review cloud/note
-  - Arrow: click-drag to create a callout-style note
-  - Box: click-drag to create a boxed markup
-  - Text / Callout: click-drag to create a note box
-  - Highlighter: click-drag to highlight a region
-  - Pen: click-drag to sketch a freehand line
-  - Distance / Dimension: click-drag two points to create a measurement
-- New markups get numbered automatically.
-- Clicking a markup selects it and updates the Inspector, schedule, photos, and Relationship Map.
-- Zoom / Zoom Area zooms into the plan.
-- Fit resets plan zoom.
-- View all photos opens a photo library modal.
-- No new clutter or extra panels added.
+- Fixes drawing placement accuracy using SVG coordinates instead of screen rectangle guesses.
+- Stops creating preset-looking markups when drawing; the drawn size/location now controls the markup.
+- Cloud/Arrow/Box/Callout/Text/Highlighter/Pen/Distance/Dimension are drawn directly on the board.
+- Text now creates actual text, not a text box.
+- Selected markups are more defined and can be moved by selecting and dragging.
+- Eraser deletes the selected markup.
+- Undo and Redo now restore previous markup states.
+- Color opens a color palette and applies selected color.
+- Scale now starts reference-scale mode:
+  - click Scale
+  - drag a known reference distance
+  - enter the real distance in feet
+  - then Distance/Dimension uses that scale
+- Grid toggles the plan grid.
+- Snap toggles snap mode.
+- Note opens a note editor.
+- File opens an attach-file panel.
+- Photo and linked photo plus open a photo picker/upload placeholder.
+- View all photos opens the photo library.
+- Same UI; no extra Quick Edit section or clutter.
