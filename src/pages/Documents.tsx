@@ -65,12 +65,9 @@ interface VisualMarker {
   status?: VisualMarkerStatus;
   size?: VisualMarkerSize;
   labelVisibility?: VisualMarkerLabelVisibility;
-<<<<<<< HEAD
   arrowLength?: number;
   markerWidth?: number;
   markerHeight?: number;
-=======
->>>>>>> c174f6990a60bedccf5cdf150c02b2425172e477
   createdAt: string;
   updatedAt: string;
 }
@@ -216,7 +213,6 @@ const getMarkerSizeConfig = (size: VisualMarkerSize) => {
   return { arrowLength: 82, boxWidth: 104, boxHeight: 56, cloudWidth: 118, cloudHeight: 60, pinDiameter: 16, textSize: 12 };
 };
 
-<<<<<<< HEAD
 const clampVisualDimension = (value: number, min: number, max: number) => {
   if (!Number.isFinite(value)) return min;
   return Math.min(max, Math.max(min, Math.round(value)));
@@ -234,8 +230,6 @@ const getDefaultMarkerHeight = (style: VisualMarkerStyle, sizeConfig: ReturnType
   return sizeConfig.boxHeight;
 };
 
-=======
->>>>>>> c174f6990a60bedccf5cdf150c02b2425172e477
 const markerStatusColor = (status: VisualMarkerStatus) => {
   if (status === 'Pass') return '#16a34a';
   if (status === 'Review') return '#d97706';
@@ -520,13 +514,10 @@ export const Documents: React.FC = () => {
   const [markerStatus, setMarkerStatus] = useState<VisualMarkerStatus>('Unknown');
   const [markerSize, setMarkerSize] = useState<VisualMarkerSize>('Medium');
   const [markerLabelVisibility, setMarkerLabelVisibility] = useState<VisualMarkerLabelVisibility>('Always');
-<<<<<<< HEAD
   const [markerArrowLength, setMarkerArrowLength] = useState(82);
   const [markerWidth, setMarkerWidth] = useState(104);
   const [markerHeight, setMarkerHeight] = useState(56);
   const [selectedStampPreset, setSelectedStampPreset] = useState('');
-=======
->>>>>>> c174f6990a60bedccf5cdf150c02b2425172e477
   const [selectedMarkerId, setSelectedMarkerId] = useState<string | null>(null);
   const [editingMarkerId, setEditingMarkerId] = useState<string | null>(null);
   const [movingMarkerId, setMovingMarkerId] = useState<string | null>(null);
@@ -625,7 +616,6 @@ export const Documents: React.FC = () => {
     setBoardNotesDraft((selectedBoard as (VisualBoard & { notes?: string }) | null)?.notes ?? '');
   }, [selectedBoard]);
 
-<<<<<<< HEAD
   useEffect(() => {
     const sizeConfig = getMarkerSizeConfig(markerSize);
     if (!editingMarkerId && !pendingMarkerPoint) {
@@ -635,8 +625,6 @@ export const Documents: React.FC = () => {
     }
   }, [editingMarkerId, markerSize, markerStyle, pendingMarkerPoint]);
 
-=======
->>>>>>> c174f6990a60bedccf5cdf150c02b2425172e477
   const filteredDocuments = useMemo(() => {
     const query = searchText.trim().toLowerCase();
     if (!query) return documents;
@@ -795,13 +783,10 @@ export const Documents: React.FC = () => {
     setMarkerStatus('Unknown');
     setMarkerSize('Medium');
     setMarkerLabelVisibility('Always');
-<<<<<<< HEAD
     setMarkerArrowLength(82);
     setMarkerWidth(104);
     setMarkerHeight(56);
     setSelectedStampPreset('');
-=======
->>>>>>> c174f6990a60bedccf5cdf150c02b2425172e477
   };
 
   const updateVisualMarker = (markerId: string, patch: Partial<VisualMarker>) => {
@@ -903,12 +888,9 @@ export const Documents: React.FC = () => {
     setMarkerStatus('Unknown');
     setMarkerSize('Medium');
     setMarkerLabelVisibility('Always');
-<<<<<<< HEAD
     setMarkerArrowLength(82);
     setMarkerWidth(104);
     setMarkerHeight(56);
-=======
->>>>>>> c174f6990a60bedccf5cdf150c02b2425172e477
     setSelectedMarkerId(null);
     setEditingMarkerId(null);
     setIsAddingMarker(false);
@@ -1031,12 +1013,9 @@ export const Documents: React.FC = () => {
       status: markerStatus,
       size: markerSize,
       labelVisibility: markerLabelVisibility,
-<<<<<<< HEAD
       arrowLength: markerArrowLength,
       markerWidth,
       markerHeight,
-=======
->>>>>>> c174f6990a60bedccf5cdf150c02b2425172e477
       createdAt: now,
       updatedAt: now,
     };
@@ -1056,7 +1035,6 @@ export const Documents: React.FC = () => {
     setMarkerStyle(normalizeMarkerStyle(marker.style));
     setMarkerDirection(normalizeMarkerDirection(marker.direction));
     setMarkerStatus(normalizeMarkerStatus(marker.status));
-<<<<<<< HEAD
     const sizeConfig = getMarkerSizeConfig(normalizeMarkerSize(marker.size));
     const style = normalizeMarkerStyle(marker.style);
     setMarkerSize(normalizeMarkerSize(marker.size));
@@ -1064,10 +1042,6 @@ export const Documents: React.FC = () => {
     setMarkerArrowLength(marker.arrowLength ?? sizeConfig.arrowLength);
     setMarkerWidth(marker.markerWidth ?? getDefaultMarkerWidth(style, sizeConfig));
     setMarkerHeight(marker.markerHeight ?? getDefaultMarkerHeight(style, sizeConfig));
-=======
-    setMarkerSize(normalizeMarkerSize(marker.size));
-    setMarkerLabelVisibility(normalizeMarkerLabelVisibility(marker.labelVisibility));
->>>>>>> c174f6990a60bedccf5cdf150c02b2425172e477
     setPendingMarkerPoint(null);
     setIsAddingMarker(false);
     setMovingMarkerId(null);
@@ -1091,12 +1065,9 @@ export const Documents: React.FC = () => {
       status: markerStatus,
       size: markerSize,
       labelVisibility: markerLabelVisibility,
-<<<<<<< HEAD
       arrowLength: markerArrowLength,
       markerWidth,
       markerHeight,
-=======
->>>>>>> c174f6990a60bedccf5cdf150c02b2425172e477
     });
     setEditingMarkerId(null);
     resetMarkerForm();
@@ -1365,7 +1336,6 @@ export const Documents: React.FC = () => {
         <span className="font-semibold text-gray-800">Marker types:</span> Arrow callout, Pin, Box region, Cloud review, and Text-only labels.
       </div>
 
-<<<<<<< HEAD
       <div className="mt-3 rounded-lg border border-gray-200 bg-white p-3">
         <div className="text-xs font-bold uppercase tracking-wide text-gray-500">Adjust marker shape</div>
         {markerStyle === 'Arrow' ? (
@@ -1410,8 +1380,6 @@ export const Documents: React.FC = () => {
         )}
       </div>
 
-=======
->>>>>>> c174f6990a60bedccf5cdf150c02b2425172e477
       <label className="mt-3 block text-xs font-semibold text-gray-600">
         Notes
         <textarea
@@ -1511,11 +1479,7 @@ export const Documents: React.FC = () => {
     ) : null;
 
     if (style === 'Arrow') {
-<<<<<<< HEAD
       const line = clampVisualDimension(marker.arrowLength ?? sizeConfig.arrowLength, 40, 180);
-=======
-      const line = sizeConfig.arrowLength;
->>>>>>> c174f6990a60bedccf5cdf150c02b2425172e477
       const arrowHead = size === 'Large' ? 12 : size === 'Small' ? 8 : 10;
       const cross = size === 'Large' ? 26 : size === 'Small' ? 18 : 22;
       const tipOffset = 4;
@@ -1566,13 +1530,8 @@ export const Documents: React.FC = () => {
     }
 
     if (style === 'Box' || style === 'Cloud') {
-<<<<<<< HEAD
       const width = clampVisualDimension(marker.markerWidth ?? getDefaultMarkerWidth(style, sizeConfig), style === 'Text' ? 60 : 50, 240);
       const height = clampVisualDimension(marker.markerHeight ?? getDefaultMarkerHeight(style, sizeConfig), style === 'Text' ? 24 : 30, 160);
-=======
-      const width = style === 'Cloud' ? sizeConfig.cloudWidth : sizeConfig.boxWidth;
-      const height = style === 'Cloud' ? sizeConfig.cloudHeight : sizeConfig.boxHeight;
->>>>>>> c174f6990a60bedccf5cdf150c02b2425172e477
       const wrapperStyle: React.CSSProperties = {
         left: `calc(${marker.xPercent}% - ${width / 2}px)`,
         top: `calc(${marker.yPercent}% - ${height / 2}px)`,
@@ -1610,7 +1569,6 @@ export const Documents: React.FC = () => {
         <button
           {...commonProps}
           className="absolute z-10 overflow-visible bg-transparent p-0 cursor-grab active:cursor-grabbing"
-<<<<<<< HEAD
           style={{
             left: `${marker.xPercent}%`,
             top: `${marker.yPercent}%`,
@@ -1620,11 +1578,6 @@ export const Documents: React.FC = () => {
           }}
         >
           <span className="flex h-full w-full items-center justify-center rounded-md border px-2 py-1 text-center font-bold shadow-sm" style={labelStyle}>
-=======
-          style={{ left: `${marker.xPercent}%`, top: `${marker.yPercent}%`, transform: 'translate(-50%, -50%)' }}
-        >
-          <span className="whitespace-nowrap rounded-md border px-2 py-1 font-bold shadow-sm" style={labelStyle}>
->>>>>>> c174f6990a60bedccf5cdf150c02b2425172e477
             {marker.label}
             {countBadge}
           </span>
@@ -1734,7 +1687,6 @@ export const Documents: React.FC = () => {
                     <MapPin size={16} />
                     {isAddingMarker ? 'Click plan/photo to place marker' : 'Add Marker'}
                   </button>
-<<<<<<< HEAD
                   <select
                     value={markerStyle}
                     onChange={(event) => setMarkerStyle(event.target.value as VisualMarkerStyle)}
@@ -1789,44 +1741,6 @@ export const Documents: React.FC = () => {
                   </select>
                   <span className="rounded-md border border-blue-100 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700">
                     Drag markers directly. Use Edit to stretch arrows or resize box/cloud/text markers.
-=======
-                  {(['Arrow', 'Pin', 'Box', 'Cloud', 'Text'] as VisualMarkerStyle[]).map((style) => (
-                    <button
-                      key={style}
-                      onClick={() => {
-                        setMarkerStyle(style);
-                        setIsAddingMarker(true);
-                        setPendingMarkerPoint(null);
-                        setSelectedMarkerId(null);
-                        setEditingMarkerId(null);
-                        setMovingMarkerId(null);
-                      }}
-                      className="rounded-md border border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50"
-                    >
-                      {style}
-                    </button>
-                  ))}
-                  {(['PASS', 'REVIEW', 'FAIL', 'FIELD VERIFY', 'TYP.', 'SEE CALC', 'REVISED', 'VOID'] as string[]).map((stamp) => (
-                    <button
-                      key={stamp}
-                      onClick={() => {
-                        setMarkerStyle('Text');
-                        setMarkerLabel(stamp);
-                        setMarkerStatus(stamp === 'PASS' ? 'Pass' : stamp === 'FAIL' ? 'Fail' : stamp === 'REVIEW' || stamp === 'FIELD VERIFY' ? 'Review' : 'Draft');
-                        setIsAddingMarker(true);
-                        setPendingMarkerPoint(null);
-                        setSelectedMarkerId(null);
-                        setEditingMarkerId(null);
-                        setMovingMarkerId(null);
-                      }}
-                      className="rounded-md border border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50"
-                    >
-                      {stamp}
-                    </button>
-                  ))}
-                  <span className="rounded-md border border-blue-100 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700">
-                    Drag markers directly with your mouse to reposition them.
->>>>>>> c174f6990a60bedccf5cdf150c02b2425172e477
                   </span>
                   {(isAddingMarker || pendingMarkerPoint || movingMarkerId) && (
                     <button
@@ -1837,11 +1751,7 @@ export const Documents: React.FC = () => {
                     </button>
                   )}
                   <span className="text-xs text-gray-500">
-<<<<<<< HEAD
                     Use Markup tools to place callouts. You can now drag markers directly with your mouse like a PDF annotation tool. Arrow, Pin, Box, Cloud, and Text markers are supported. Arrows stretch by length; boxes/clouds/text stretch by width and height.
-=======
-                    Use Markup tools to place callouts. You can now drag markers directly with your mouse like a PDF annotation tool. Arrow, Pin, Box, Cloud, and Text markers are supported.
->>>>>>> c174f6990a60bedccf5cdf150c02b2425172e477
                   </span>
                 </div>
               )}
@@ -2184,7 +2094,6 @@ export const Documents: React.FC = () => {
                         {normalizeMarkerLabelVisibility(selectedMarker.labelVisibility)}
                       </div>
                     </div>
-<<<<<<< HEAD
                     <div className="rounded bg-gray-50 p-2">
                       <div className="font-semibold text-gray-500">Shape</div>
                       <div className="mt-1 font-bold text-gray-900">
@@ -2195,8 +2104,6 @@ export const Documents: React.FC = () => {
                             : `${selectedMarker.markerWidth ?? getDefaultMarkerWidth(normalizeMarkerStyle(selectedMarker.style), getMarkerSizeConfig(normalizeMarkerSize(selectedMarker.size)))} × ${selectedMarker.markerHeight ?? getDefaultMarkerHeight(normalizeMarkerStyle(selectedMarker.style), getMarkerSizeConfig(normalizeMarkerSize(selectedMarker.size)))}px`}
                       </div>
                     </div>
-=======
->>>>>>> c174f6990a60bedccf5cdf150c02b2425172e477
                     <div className={`rounded border p-2 ${markerStatusClasses(normalizeMarkerStatus(selectedMarker.status))}`}>
                       <div className="font-semibold opacity-80">Status</div>
                       <div className="mt-1 font-bold">

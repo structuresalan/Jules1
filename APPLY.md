@@ -1,53 +1,34 @@
-<<<<<<< HEAD
-# Visual Marker Dropdown and Stretch Controls
+# Clean Documents.tsx Conflict Fix
 
-Replace this file:
+Replace this entire file:
 - src/pages/Documents.tsx
 
-Commit message:
-Add visual marker dropdown and stretch controls
+Do NOT copy/paste pieces into the existing file.
+Delete/overwrite the whole conflicted file with this clean file.
 
-What changed:
-- Markup tab marker tools are now simplified into a dropdown instead of many marker buttons.
-- Stamp presets are now a dropdown instead of separate buttons.
-- Arrow markers now have an adjustable length slider.
-- Box, Cloud, and Text markers now have adjustable width and height sliders.
-- Saved markers now preserve custom arrow length / marker width / marker height.
-- Selected marker inspector shows the current marker dimensions.
-- Existing markers still work and fall back to their default size.
+Commit message:
+Fix Documents merge conflict markers
+
+Why:
+Your build failed because src/pages/Documents.tsx contains Git conflict markers:
+<<<<<<<
 =======
-# Desktop Glass Website Style
+>>>>>>>
 
-Replace/add these files:
+Those markers are not valid TypeScript. This package contains a clean full replacement version of Documents.tsx with the latest Visual Map changes.
 
-- src/App.tsx
-- src/layouts/MainLayout.tsx
-- src/pages/Login.tsx
-- src/pages/Dashboard.tsx
-- src/pages/SettingsPage.tsx
-- src/utils/websiteStyle.ts
-- src/styles/websiteTheme.css
-- src/pages/Documents.tsx
+Recommended terminal steps:
+1. Replace src/pages/Documents.tsx with the file in this package.
+2. Run:
+   npm run build
+3. If build passes:
+   git add src/pages/Documents.tsx
+   git commit -m "Fix Documents merge conflict markers"
+   git push origin main
 
-Commit message:
-Add desktop glass website style
+If Git says you are still in a merge/rebase conflict, run:
+   git status
 
-What changed:
-- Adds a website style system saved in localStorage.
-- Default style is Desktop Dark + Glass.
-- Settings page now has Website Style options:
-  - Classic
-  - Desktop Dark
-  - Desktop Dark + Glass
-- Adds Accent Color and Density options.
-- Adds Fireflies-inspired dark glass styling:
-  - dark background
-  - blurred glow gradients
-  - glass sidebar and panels
-  - rounded desktop-window feel
-- Updates login page to the desktop dark/glass style.
-- Updates main app shell/sidebar to the desktop dark/glass style.
-- Updates dashboard cards to the desktop dark/glass style.
-- Keeps Classic style available if you want the original light interface.
-- Includes the latest Visual Map PDF-style tools file.
->>>>>>> c174f6990a60bedccf5cdf150c02b2425172e477
+Then mark this file resolved with:
+   git add src/pages/Documents.tsx
+   git commit
