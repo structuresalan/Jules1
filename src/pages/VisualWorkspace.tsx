@@ -410,6 +410,28 @@ const FramingPlan: React.FC<{ onSelect: (id: number) => void }> = ({ onSelect })
 export const VisualWorkspace: React.FC = () => {
   const [selectedId, setSelectedId] = useState(1);
   const [selectedRelationshipNode, setSelectedRelationshipNode] = useState('item');
+  const [activeWorkspaceTab, setActiveWorkspaceTab] = useState<'Workspace' | 'Review' | 'Report' | 'Export'>('Workspace');
+  const [activeTool, setActiveTool] = useState('Select');
+  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
+    '03 - Structural': true,
+    'Photos & Documents': true,
+  });
+  const [activeBoard, setActiveBoard] = useState('Level 2 Framing Plan');
+  const [boardSearch, setBoardSearch] = useState('');
+  const [showPhotosPanel, setShowPhotosPanel] = useState(true);
+  const [showInspectorPanel, setShowInspectorPanel] = useState(true);
+  const [activePhotoId, setActivePhotoId] = useState<number | null>(null);
+  const [enabledLayers, setEnabledLayers] = useState<Record<string, boolean>>({
+    'Plan Grid': true,
+    'Structural - Beams': true,
+    'Structural - Columns': true,
+    Dimensions: true,
+    Markups: true,
+    Notes: true,
+    Photos: true,
+    Reference: false,
+  });
+  const [zoomLevel, setZoomLevel] = useState(100);
   const selected = useMemo(() => markups.find((item) => item.id === selectedId) ?? markups[0], [selectedId]);
   const linkedPhotos = photos.filter((photo) => selected.photoIds.includes(photo.id));
   const relatedMarkupCount = markups.filter((item) => item.location === selected.location || item.itemName === selected.itemName).length;
@@ -450,9 +472,9 @@ export const VisualWorkspace: React.FC = () => {
     },
     {
       id: 'markups',
-      label: `Linked Markups (${relatedMarkupCount})`,
+      label: `Board Markups (${relatedMarkupCount})`,
       subtitle: selected.condition,
-      type: 'Markup Group',
+      type: 'Board Annotations',
       count: relatedMarkupCount,
       color: 'amber',
       x: 30,
@@ -503,7 +525,51 @@ export const VisualWorkspace: React.FC = () => {
   const selectMarkup = (id: number, relationshipNode = 'item') => {
     setSelectedId(id);
     setSelectedRelationshipNode(relationshipNode);
+    const firstPhoto = photos.find((photo) => (markups.find((item) => item.id === id)?.photoIds ?? []).includes(photo.id));
+    setActivePhotoId(firstPhoto?.id ?? null);
   };
+
+  const toggleSection = (section: string) => {
+    setExpandedSections((current) => ({ ...current, [section]: !current[section] }));
+  };
+
+  const toggleLayer = (layer: string) => {
+    setEnabledLayers((current) => ({ ...current, [layer]: !current[layer] }));
+  };
+
+  const selectLinkedCategory = (label: string) => {
+    if (label === 'Linked Photos') {
+      setSelectedRelationshipNode('photos');
+      setShowPhotosPanel(true);
+      setActivePhotoId(linkedPhotos[0]?.id ?? null);
+      return;
+    }
+
+    if (label === 'Linked Documents') {
+      setSelectedRelationshipNode('document');
+      return;
+    }
+
+    if (label === 'Board Markups') {
+      setSelectedRelationshipNode('markups');
+      return;
+    }
+
+    if (label === 'Linked Costs') {
+      setSelectedRelationshipNode('cost');
+    }
+  };
+
+  const activePhoto = photos.find((photo) => photo.id === activePhotoId) ?? linkedPhotos[0] ?? photos[0];
+
+  const statusMessage = (() => {
+    if (activeTool === 'Select') return 'Select active. Click a plan tag, schedule row, photo, or Blueprint node to inspect linked information.';
+    if (activeTool === 'Cloud') return 'Cloud tool active. Drag around a region to create a review cloud linked to the selected item.';
+    if (activeTool === 'Photo') return 'Photo tool active. Click a plan item to attach or view site photos.';
+    if (activeTool === 'Link') return 'Link tool active. Select a plan marker, photo, cost, or document to connect it to the item.';
+    if (activeTool === 'Distance' || activeTool === 'Dimension' || activeTool === 'Area') return `${activeTool} tool active. Pick points on the board to record measurement markup.`;
+    return `${activeTool} tool active. Use the board canvas to place or edit this markup.`;
+  })();
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col overflow-hidden bg-[#071019] text-slate-100">
@@ -521,8 +587,12 @@ export const VisualWorkspace: React.FC = () => {
           </div>
 
           <nav className="hidden h-full items-stretch md:flex">
-            {['Workspace', 'Review', 'Report', 'Export'].map((tab) => (
-              <button key={tab} className={`px-8 text-sm font-bold ${tab === 'Workspace' ? 'border-b-2 border-blue-500 bg-slate-800/80 text-white' : 'text-slate-300 hover:bg-slate-900'}`}>
+            {(['Workspace', 'Review', 'Report', 'Export'] as const).map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setActiveWorkspaceTab(tab)}
+                className={`px-8 text-sm font-bold ${activeWorkspaceTab === tab ? 'border-b-2 border-blue-500 bg-slate-800/80 text-white' : 'text-slate-300 hover:bg-slate-900'}`}
+              >
                 {tab}
               </button>
             ))}
@@ -532,13 +602,15 @@ export const VisualWorkspace: React.FC = () => {
             <div className="hidden text-sm font-semibold text-slate-200 lg:block">
               Project: 1234 - Riverside Office Building <ChevronDown size={14} className="inline" />
             </div>
-            <Search size={18} className="text-slate-300" />
+            <button onClick={() => setBoardSearch("")} title="Clear board search"><Search size={18} className="text-slate-300" /></button>
             <div className="relative">
-              <Bell size={18} className="text-slate-300" />
+              <button onClick={() => setSelectedRelationshipNode("markups")} title="Show board markups"><Bell size={18} className="text-slate-300" /></button>
               <span className="absolute -right-2 -top-2 flex h-4 w-4 items-center justify-center rounded-full bg-red-600 text-[10px] font-bold text-white">3</span>
             </div>
-            <HelpCircle size={18} className="text-slate-300" />
-            <Settings size={18} className="text-slate-300" />
+            <button onClick={() => setActiveWorkspaceTab("Review")} title="Open review mode"><HelpCircle size={18} className="text-slate-300" /></button>
+            <button onClick={() => setSelectedRelationshipNode("item")} title="Center selected item"><Settings size={18} className="text-slate-300" /></button>
+            {!showPhotosPanel && <button onClick={() => setShowPhotosPanel(true)} className="rounded bg-slate-800 px-2 py-1 text-xs font-bold text-slate-200">Photos</button>}
+            {!showInspectorPanel && <button onClick={() => setShowInspectorPanel(true)} className="rounded bg-slate-800 px-2 py-1 text-xs font-bold text-slate-200">Inspector</button>}
             <span className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-600 text-xs font-bold text-white">AM</span>
           </div>
         </div>
@@ -550,8 +622,9 @@ export const VisualWorkspace: React.FC = () => {
                 {group.tools.map(([label, Icon]) => (
                   <button
                     key={label}
+                    onClick={() => setActiveTool(label)}
                     className={`flex min-w-[52px] flex-col items-center gap-1 rounded-md px-2 py-2 text-[11px] font-semibold transition ${
-                      label === 'Select' ? 'bg-blue-600/60 text-white ring-1 ring-blue-400/50' : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                      activeTool === label ? 'bg-blue-600/60 text-white ring-1 ring-blue-400/50' : 'text-slate-300 hover:bg-slate-800 hover:text-white'
                     }`}
                   >
                     <Icon size={17} />
@@ -565,7 +638,7 @@ export const VisualWorkspace: React.FC = () => {
         </div>
       </header>
 
-      <div className="grid min-h-0 flex-1 grid-cols-[252px_minmax(760px,1fr)_260px_315px]">
+      <div className={`grid min-h-0 flex-1 ${showPhotosPanel && showInspectorPanel ? 'grid-cols-[252px_minmax(760px,1fr)_260px_315px]' : showPhotosPanel ? 'grid-cols-[252px_minmax(760px,1fr)_260px]' : showInspectorPanel ? 'grid-cols-[252px_minmax(760px,1fr)_315px]' : 'grid-cols-[252px_minmax(760px,1fr)]'}`}>
         <aside className="flex min-h-0 flex-col border-r border-slate-800 bg-[#0b1620]">
           <div className="border-b border-slate-800 p-4">
             <div className="mb-2 flex items-center justify-between text-xs font-bold uppercase tracking-wide text-slate-300">
@@ -582,35 +655,51 @@ export const VisualWorkspace: React.FC = () => {
             </div>
             <label className="relative block">
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-              <input className="w-full rounded-md border border-slate-700 bg-[#111d29] py-2 pl-8 pr-3 text-xs text-slate-200 placeholder:text-slate-500" placeholder="Search boards..." />
+              <input
+                value={boardSearch}
+                onChange={(event) => setBoardSearch(event.target.value)}
+                className="w-full rounded-md border border-slate-700 bg-[#111d29] py-2 pl-8 pr-3 text-xs text-slate-200 placeholder:text-slate-500"
+                placeholder="Search boards..."
+              />
             </label>
           </div>
 
           <div className="min-h-0 flex-1 overflow-auto p-2 text-sm">
             {[
-              ['01 - General', false, []],
-              ['02 - Architectural', false, []],
-              ['03 - Structural', true, ['Level 2 Framing Plan', 'Roof Framing Plan', 'South Elevation', 'East Elevation', 'Typical Sections']],
-              ['04 - MEP', false, []],
-              ['05 - Site', false, []],
-              ['06 - Inspections', false, []],
-              ['Photos & Documents', true, ['Site Photo Set']],
-            ].map(([folder, open, children]) => (
-              <div key={folder as string} className="mb-1">
-                <div className="flex items-center gap-2 rounded-md px-2 py-2 text-slate-300">
-                  <ChevronRight size={14} className={open ? 'rotate-90' : ''} />
-                  <FileText size={14} />
-                  <span className="text-xs font-semibold">{folder as string}</span>
-                </div>
-                {(children as string[]).map((child) => (
-                  <button key={child} className={`ml-6 mb-1 flex w-[calc(100%-1.5rem)] items-center gap-2 rounded-md px-3 py-2 text-left text-xs font-semibold ${child === 'Level 2 Framing Plan' ? 'bg-blue-600/45 text-blue-50' : 'text-slate-300 hover:bg-slate-800'}`}>
-                    <FileText size={13} />
-                    <span className="truncate">{child}</span>
-                    {child === 'Level 2 Framing Plan' && <span className="ml-auto h-2.5 w-2.5 rounded-full bg-blue-400" />}
+              ['01 - General', []],
+              ['02 - Architectural', []],
+              ['03 - Structural', ['Level 2 Framing Plan', 'Roof Framing Plan', 'South Elevation', 'East Elevation', 'Typical Sections']],
+              ['04 - MEP', []],
+              ['05 - Site', []],
+              ['06 - Inspections', []],
+              ['Photos & Documents', ['Site Photo Set']],
+            ].map(([folder, children]) => {
+              const visibleChildren = (children as string[]).filter((child) => child.toLowerCase().includes(boardSearch.toLowerCase()));
+              const isOpen = expandedSections[folder as string] ?? false;
+              const showFolder = !boardSearch || (folder as string).toLowerCase().includes(boardSearch.toLowerCase()) || visibleChildren.length > 0;
+              if (!showFolder) return null;
+
+              return (
+                <div key={folder as string} className="mb-1">
+                  <button onClick={() => toggleSection(folder as string)} className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-slate-300 hover:bg-slate-900">
+                    <ChevronRight size={14} className={isOpen ? 'rotate-90' : ''} />
+                    <FileText size={14} />
+                    <span className="text-xs font-semibold">{folder as string}</span>
                   </button>
-                ))}
-              </div>
-            ))}
+                  {isOpen && visibleChildren.map((child) => (
+                    <button
+                      key={child}
+                      onClick={() => setActiveBoard(child)}
+                      className={`ml-6 mb-1 flex w-[calc(100%-1.5rem)] items-center gap-2 rounded-md px-3 py-2 text-left text-xs font-semibold ${child === activeBoard ? 'bg-blue-600/45 text-blue-50' : 'text-slate-300 hover:bg-slate-800'}`}
+                    >
+                      <FileText size={13} />
+                      <span className="truncate">{child}</span>
+                      {child === activeBoard && <span className="ml-auto h-2.5 w-2.5 rounded-full bg-blue-400" />}
+                    </button>
+                  ))}
+                </div>
+              );
+            })}
           </div>
 
           <div className="border-t border-slate-800 p-3">
@@ -618,13 +707,17 @@ export const VisualWorkspace: React.FC = () => {
               <span>Layers</span>
               <Filter size={14} />
             </div>
-            {['Plan Grid', 'Structural - Beams', 'Structural - Columns', 'Dimensions', 'Markups', 'Notes', 'Photos', 'Reference'].map((layer, index) => (
-              <button key={layer} className={`mb-1 flex w-full items-center justify-between rounded-md px-2 py-2 text-xs ${index === 4 ? 'bg-slate-800 text-white' : 'text-slate-300 hover:bg-slate-900'}`}>
+            {['Plan Grid', 'Structural - Beams', 'Structural - Columns', 'Dimensions', 'Markups', 'Notes', 'Photos', 'Reference'].map((layer) => (
+              <button
+                key={layer}
+                onClick={() => toggleLayer(layer)}
+                className={`mb-1 flex w-full items-center justify-between rounded-md px-2 py-2 text-xs ${enabledLayers[layer] ? 'text-slate-300 hover:bg-slate-900' : 'text-slate-600 hover:bg-slate-900'}`}
+              >
                 <span className="flex items-center gap-2">
-                  <span className={index === 7 ? 'text-slate-500' : 'text-blue-300'}>{index === 7 ? '◌' : '●'}</span>
+                  <span className={enabledLayers[layer] ? 'text-blue-300' : 'text-slate-600'}>{enabledLayers[layer] ? '●' : '◌'}</span>
                   {layer}
                 </span>
-                {index === 4 && <PenLine size={13} className="text-blue-400" />}
+                {layer === 'Markups' && <PenLine size={13} className={enabledLayers[layer] ? 'text-blue-400' : 'text-slate-600'} />}
               </button>
             ))}
             <div className="mt-4 rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-300">
@@ -636,7 +729,7 @@ export const VisualWorkspace: React.FC = () => {
         <main className="grid min-h-0 grid-rows-[36px_minmax(0,1fr)_292px] bg-[#111827]">
           <div className="flex items-center gap-1 border-b border-slate-800 bg-[#0f1722] px-3">
             <div className="flex h-full items-center gap-3 rounded-t-lg bg-white px-4 text-xs font-bold text-slate-950">
-              Level 2 Framing Plan <X size={13} className="text-slate-500" />
+              {activeBoard} <X size={13} className="text-slate-500" />
             </div>
             <button className="ml-2 text-slate-400 hover:text-white"><Plus size={17} /></button>
           </div>
@@ -773,9 +866,9 @@ export const VisualWorkspace: React.FC = () => {
   </div>
 
   <div className="absolute bottom-3 right-3 flex items-center overflow-hidden rounded-md border border-slate-300 bg-white text-xs text-slate-800 shadow">
-    <button className="px-3 py-2">−</button>
-    <span className="border-x border-slate-300 px-3 py-2 font-bold">100%</span>
-    <button className="px-3 py-2">+</button>
+    <button onClick={() => setZoomLevel((value) => Math.max(50, value - 10))} className="px-3 py-2">−</button>
+    <span className="border-x border-slate-300 px-3 py-2 font-bold">{zoomLevel}%</span>
+    <button onClick={() => setZoomLevel((value) => Math.min(200, value + 10))} className="px-3 py-2">+</button>
     <button className="border-l border-slate-300 px-3 py-2"><Maximize2 size={13} /></button>
   </div>
 </div>
@@ -783,14 +876,17 @@ export const VisualWorkspace: React.FC = () => {
           </section>
         </main>
 
-        <aside className="flex min-h-0 flex-col border-l border-slate-800 bg-[#0b1620]">
+        <aside className={`${showPhotosPanel ? "flex" : "hidden"} min-h-0 flex-col border-l border-slate-800 bg-[#0b1620]`}>
           <div className="flex h-10 items-center justify-between border-b border-slate-800 px-3">
             <h2 className="text-sm font-black uppercase tracking-wide">Site Photos</h2>
-            <div className="flex items-center gap-2 text-slate-400"><Filter size={14} /><X size={14} /></div>
+            <div className="flex items-center gap-2 text-slate-400">
+              <button onClick={() => setSelectedRelationshipNode('photos')} title="Filter linked photos"><Filter size={14} /></button>
+              <button onClick={() => setShowPhotosPanel((value) => !value)} title="Collapse photos panel"><X size={14} /></button>
+            </div>
           </div>
           <div className="min-h-0 flex-1 overflow-auto p-2">
             {photos.slice(0, 3).map((photo) => (
-              <button key={photo.id} onClick={() => selectMarkup(photo.id <= 3 ? photo.id : 1, 'photos')} className="mb-3 w-full overflow-hidden rounded-md border border-slate-800 bg-[#111d29] text-left shadow">
+              <button key={photo.id} onClick={() => selectMarkup(photo.id <= 3 ? photo.id : 1, 'photos')} className={`mb-3 w-full overflow-hidden rounded-md border text-left shadow ${activePhoto?.id === photo.id ? 'border-blue-500 bg-blue-950/40' : 'border-slate-800 bg-[#111d29]'}`}>
                 <div className="relative h-[135px] overflow-hidden">
                   <PhotoSvg photo={photo} />
                   <span className="absolute left-3 top-3 flex h-8 w-8 items-center justify-center rounded-full border-2 border-white text-sm font-black text-white shadow" style={{ backgroundColor: photo.color }}>{photo.id}</span>
@@ -804,16 +900,16 @@ export const VisualWorkspace: React.FC = () => {
                 </div>
               </button>
             ))}
-            <button className="mt-1 w-full rounded-md border border-slate-700 bg-slate-900 px-4 py-3 text-sm font-bold text-slate-200 hover:bg-slate-800">
-              View all photos (32)
+            <button onClick={() => setSelectedRelationshipNode('photos')} className="mt-1 w-full rounded-md border border-slate-700 bg-slate-900 px-4 py-3 text-sm font-bold text-slate-200 hover:bg-slate-800">
+              View all photos ({photos.length})
             </button>
           </div>
         </aside>
 
-        <aside className="flex min-h-0 flex-col border-l border-slate-800 bg-[#0b1620]">
+        <aside className={`${showInspectorPanel ? "flex" : "hidden"} min-h-0 flex-col border-l border-slate-800 bg-[#0b1620]`}>
           <div className="flex h-10 items-center justify-between border-b border-slate-800 px-3">
             <h2 className="text-sm font-black uppercase tracking-wide">Inspector</h2>
-            <X size={14} className="text-slate-400" />
+            <button onClick={() => setShowInspectorPanel((value) => !value)}><X size={14} className="text-slate-400" /></button>
           </div>
 
           <div className="min-h-0 flex-1 overflow-auto">
@@ -856,10 +952,10 @@ export const VisualWorkspace: React.FC = () => {
               {[
                 ['Linked Photos', linkedPhotos.length],
                 ['Linked Documents', 1],
-                ['Linked Markups', relatedMarkupCount],
+                ['Board Markups', relatedMarkupCount],
                 ['Linked Costs', linkedCostAmount ? 1 : 0],
               ].map(([label, count]) => (
-                <button key={label} className="flex w-full items-center justify-between rounded-md px-2 py-2 text-sm text-slate-200 hover:bg-slate-900">
+                <button key={label} onClick={() => selectLinkedCategory(label as string)} className="flex w-full items-center justify-between rounded-md px-2 py-2 text-sm text-slate-200 hover:bg-slate-900">
                   <span className="flex items-center gap-2">
                     <FileText size={14} className="text-slate-400" />
                     {label}
@@ -872,7 +968,7 @@ export const VisualWorkspace: React.FC = () => {
             <section className="border-b border-slate-800 p-4">
               <div className="mb-3 flex items-center justify-between">
                 <h3 className="text-xs font-black uppercase tracking-wide text-slate-300">Linked Photos ({linkedPhotos.length})</h3>
-                <Plus size={15} />
+                <button onClick={() => selectLinkedCategory('Linked Photos')}><Plus size={15} /></button>
               </div>
               <div className="space-y-2">
                 {linkedPhotos.slice(0, 2).map((photo) => (
@@ -925,8 +1021,8 @@ export const VisualWorkspace: React.FC = () => {
       </div>
 
       <footer className="flex h-8 shrink-0 items-center justify-between border-t border-slate-800 bg-[#0b1520] px-4 text-xs text-slate-400">
-        <span>Click an item on the plan to view details in the Inspector. Drag to pan. Scroll to zoom. Hold Shift to select multiple items.</span>
-        <span className="hidden lg:inline">X: 152&apos;-3 1/2&quot; &nbsp;&nbsp; Y: 47&apos;-6 3/4&quot; &nbsp;&nbsp; | &nbsp;&nbsp; Grid: 1&apos;-0&quot; &nbsp;&nbsp; <span className="text-green-400">● Online</span></span>
+        <span>{statusMessage}</span>
+        <span className="hidden lg:inline">X: 152&apos;-3 1/2&quot; &nbsp;&nbsp; Y: 47&apos;-6 3/4&quot; &nbsp;&nbsp; | &nbsp;&nbsp; Zoom: {zoomLevel}% &nbsp;&nbsp; | &nbsp;&nbsp; Grid: 1&apos;-0&quot; &nbsp;&nbsp; <span className="text-green-400">● Online</span></span>
       </footer>
     </div>
   );
