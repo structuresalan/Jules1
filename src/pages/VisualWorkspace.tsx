@@ -409,8 +409,101 @@ const FramingPlan: React.FC<{ onSelect: (id: number) => void }> = ({ onSelect })
 
 export const VisualWorkspace: React.FC = () => {
   const [selectedId, setSelectedId] = useState(1);
+  const [selectedRelationshipNode, setSelectedRelationshipNode] = useState('item');
   const selected = useMemo(() => markups.find((item) => item.id === selectedId) ?? markups[0], [selectedId]);
   const linkedPhotos = photos.filter((photo) => selected.photoIds.includes(photo.id));
+  const relatedMarkupCount = markups.filter((item) => item.location === selected.location || item.itemName === selected.itemName).length;
+  const linkedDocumentId = selected.type === 'Beam' ? 'S-2.3' : 'S-4.1';
+  const linkedCostId = selected.type === 'Beam' ? 'C-102' : 'C-208';
+  const linkedCostAmount = selected.priority === 'High' ? 1240 : selected.priority === 'Medium' ? 720 : 180;
+
+  const relationshipNodes = [
+    {
+      id: 'marker',
+      label: `Plan Marker #${selected.id}`,
+      subtitle: selected.location,
+      type: 'Location',
+      count: 1,
+      color: 'blue',
+      x: 34,
+      y: 72,
+    },
+    {
+      id: 'item',
+      label: `${selected.type} ${selected.itemName}`,
+      subtitle: selected.section,
+      type: 'Project Item',
+      count: 1,
+      color: 'red',
+      x: 236,
+      y: 60,
+    },
+    {
+      id: 'photos',
+      label: `Site Photos (${linkedPhotos.length})`,
+      subtitle: linkedPhotos[0]?.fileName ?? 'No photos linked',
+      type: 'Photo Set',
+      count: linkedPhotos.length,
+      color: 'cyan',
+      x: 438,
+      y: 72,
+    },
+    {
+      id: 'markups',
+      label: `Linked Markups (${relatedMarkupCount})`,
+      subtitle: selected.condition,
+      type: 'Markup Group',
+      count: relatedMarkupCount,
+      color: 'amber',
+      x: 34,
+      y: 150,
+    },
+    {
+      id: 'cost',
+      label: `Cost Item ${linkedCostId}`,
+      subtitle: `$${linkedCostAmount.toLocaleString()} allowance`,
+      type: 'Cost',
+      count: 1,
+      color: 'green',
+      x: 236,
+      y: 177,
+    },
+    {
+      id: 'document',
+      label: `Document ${linkedDocumentId}`,
+      subtitle: 'Reference drawing / report',
+      type: 'Document',
+      count: 1,
+      color: 'purple',
+      x: 438,
+      y: 150,
+    },
+  ];
+
+  const selectedRelationship =
+    relationshipNodes.find((node) => node.id === selectedRelationshipNode) ?? relationshipNodes[1];
+
+  const relationshipEdges = [
+    { from: 'marker', to: 'item', label: 'refers to' },
+    { from: 'item', to: 'photos', label: 'has' },
+    { from: 'item', to: 'cost', label: 'impacts' },
+    { from: 'markups', to: 'item', label: 'relates' },
+    { from: 'cost', to: 'document', label: 'referenced by' },
+  ];
+
+  const nodeTheme = {
+    blue: 'border-blue-500 bg-blue-50 text-blue-900',
+    red: 'border-red-500 bg-red-500 text-white',
+    cyan: 'border-cyan-500 bg-cyan-50 text-cyan-900',
+    amber: 'border-amber-500 bg-amber-50 text-amber-900',
+    green: 'border-green-600 bg-green-50 text-green-900',
+    purple: 'border-purple-500 bg-purple-50 text-purple-900',
+  } as const;
+
+  const selectMarkup = (id: number, relationshipNode = 'item') => {
+    setSelectedId(id);
+    setSelectedRelationshipNode(relationshipNode);
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col overflow-hidden bg-[#071019] text-slate-100">
@@ -550,7 +643,7 @@ export const VisualWorkspace: React.FC = () => {
 
           <section className="min-h-0 overflow-hidden bg-slate-200 p-2">
             <div className="relative mx-auto h-full overflow-hidden rounded-md border border-slate-500 bg-white shadow-2xl">
-              <FramingPlan onSelect={setSelectedId} />
+              <FramingPlan onSelect={(id) => selectMarkup(id)} />
             </div>
           </section>
 
@@ -571,7 +664,7 @@ export const VisualWorkspace: React.FC = () => {
                   </thead>
                   <tbody>
                     {markups.map((row) => (
-                      <tr key={row.id} onClick={() => setSelectedId(row.id)} className={`cursor-pointer border-b border-slate-800/70 hover:bg-slate-800/80 ${selectedId === row.id ? 'bg-blue-950/50' : ''}`}>
+                      <tr key={row.id} onClick={() => selectMarkup(row.id)} className={`cursor-pointer border-b border-slate-800/70 hover:bg-slate-800/80 ${selectedId === row.id ? 'bg-blue-950/50' : ''}`}>
                         <td className="px-3 py-2">
                           <span className="mr-2 inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: row.color }} />
                           {row.id}
@@ -594,46 +687,106 @@ export const VisualWorkspace: React.FC = () => {
 
             <div className="relative min-h-0 overflow-hidden rounded-md border border-slate-800 bg-[#0f1722]">
               <div className="flex h-10 items-center justify-between border-b border-slate-800 px-3 text-xs font-black uppercase tracking-wide text-slate-200">
-                Relationship Map
-                <X size={14} className="text-slate-400" />
+                Relationship Map / Blueprint
+                <span className="text-[10px] font-semibold normal-case tracking-normal text-slate-400">Click nodes to inspect links</span>
               </div>
-              <div className="relative h-[248px] bg-slate-50">
-                <svg className="absolute inset-0 h-full w-full">
-                  <defs>
-                    <pattern id="dots" width="18" height="18" patternUnits="userSpaceOnUse">
-                      <circle cx="1" cy="1" r="1" fill="#e2e8f0" />
-                    </pattern>
-                    <marker id="relArrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
-                      <path d="M0,0 L0,6 L7,3 z" fill="#334155" />
-                    </marker>
-                  </defs>
-                  <rect width="100%" height="100%" fill="url(#dots)" />
-                  <line x1="122" y1="90" x2="225" y2="90" stroke="#334155" strokeWidth="2" markerEnd="url(#relArrow)" />
-                  <text x="152" y="79" fontSize="10" fontWeight="700" fill="#334155">refers to</text>
-                  <line x1="330" y1="90" x2="438" y2="90" stroke="#334155" strokeWidth="2" markerEnd="url(#relArrow)" />
-                  <text x="368" y="79" fontSize="10" fontWeight="700" fill="#334155">has</text>
-                  <line x1="278" y1="123" x2="278" y2="172" stroke="#334155" strokeWidth="2" markerEnd="url(#relArrow)" />
-                  <text x="287" y="151" fontSize="10" fontWeight="700" fill="#334155">impacts</text>
-                  <line x1="122" y1="166" x2="225" y2="166" stroke="#334155" strokeWidth="2" markerEnd="url(#relArrow)" />
-                  <line x1="330" y1="166" x2="438" y2="166" stroke="#334155" strokeWidth="2" markerEnd="url(#relArrow)" />
-                </svg>
-                <div className="absolute left-7 top-16 rounded-md border border-blue-500 bg-blue-50 px-5 py-3 text-center text-xs font-bold text-blue-900">Plan Marker<br />#{selected.id}</div>
-                <div className="absolute left-[225px] top-12 rounded-md border border-red-500 bg-red-500 px-8 py-4 text-center text-sm font-black text-white shadow-lg">
-                  <span className="absolute -top-4 left-1/2 flex h-6 w-6 -translate-x-1/2 items-center justify-center rounded-full border-2 border-white bg-red-500 text-xs">1</span>
-                  {selected.type}<br />{selected.itemName}
+              <div className="grid h-[248px] grid-cols-[minmax(0,1fr)_190px] bg-slate-50">
+                <div className="relative overflow-hidden">
+                  <svg className="absolute inset-0 h-full w-full">
+                    <defs>
+                      <pattern id="dots" width="18" height="18" patternUnits="userSpaceOnUse">
+                        <circle cx="1" cy="1" r="1" fill="#e2e8f0" />
+                      </pattern>
+                      <marker id="relArrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+                        <path d="M0,0 L0,6 L7,3 z" fill="#334155" />
+                      </marker>
+                    </defs>
+                    <rect width="100%" height="100%" fill="url(#dots)" />
+                    {relationshipEdges.map((edge) => {
+                      const from = relationshipNodes.find((node) => node.id === edge.from);
+                      const to = relationshipNodes.find((node) => node.id === edge.to);
+                      if (!from || !to) return null;
+
+                      const x1 = from.x + 84;
+                      const y1 = from.y + 22;
+                      const x2 = to.x;
+                      const y2 = to.y + 22;
+                      const midX = (x1 + x2) / 2;
+
+                      return (
+                        <g key={`${edge.from}-${edge.to}`}>
+                          <path
+                            d={`M ${x1} ${y1} C ${midX} ${y1}, ${midX} ${y2}, ${x2} ${y2}`}
+                            fill="none"
+                            stroke="#334155"
+                            strokeWidth="2"
+                            markerEnd="url(#relArrow)"
+                          />
+                          <text x={midX - 24} y={(y1 + y2) / 2 - 6} fontSize="10" fontWeight="700" fill="#334155">
+                            {edge.label}
+                          </text>
+                        </g>
+                      );
+                    })}
+                  </svg>
+
+                  {relationshipNodes.map((node) => (
+                    <button
+                      key={node.id}
+                      onClick={() => setSelectedRelationshipNode(node.id)}
+                      className={`absolute w-[116px] rounded-md border px-2 py-2 text-center text-[11px] font-bold shadow-sm transition ${
+                        nodeTheme[node.color as keyof typeof nodeTheme]
+                      } ${selectedRelationshipNode === node.id ? 'ring-2 ring-slate-950 ring-offset-2' : 'hover:scale-[1.03]'}`}
+                      style={{ left: node.x, top: node.y }}
+                    >
+                      {node.id === 'item' && (
+                        <span className="absolute -top-4 left-1/2 flex h-6 w-6 -translate-x-1/2 items-center justify-center rounded-full border-2 border-white bg-red-500 text-xs text-white">
+                          {selected.id}
+                        </span>
+                      )}
+                      <span className="block leading-tight">{node.label}</span>
+                      <span className={`mt-1 block truncate text-[9px] ${node.color === 'red' ? 'text-red-50' : 'opacity-70'}`}>{node.type}</span>
+                    </button>
+                  ))}
+
+                  <div className="absolute bottom-3 right-3 flex items-center overflow-hidden rounded-md border border-slate-300 bg-white text-xs text-slate-800 shadow">
+                    <button className="px-3 py-2">−</button>
+                    <span className="border-x border-slate-300 px-3 py-2 font-bold">100%</span>
+                    <button className="px-3 py-2">+</button>
+                    <button className="border-l border-slate-300 px-3 py-2"><Maximize2 size={13} /></button>
+                  </div>
                 </div>
-                <div className="absolute left-[438px] top-16 rounded-md border border-cyan-500 bg-cyan-50 px-5 py-3 text-center text-xs font-bold text-cyan-900">Site Photos<br />({linkedPhotos.length})</div>
-                <div className="absolute left-7 top-[142px] rounded-md border border-amber-500 bg-amber-50 px-5 py-3 text-center text-xs font-bold text-amber-900">Linked Markups<br />(2)</div>
-                <div className="absolute left-[235px] top-[172px] rounded-md border border-green-600 bg-green-50 px-5 py-3 text-center text-xs font-bold text-green-900">Cost Item<br />C-102</div>
-                <div className="absolute left-[438px] top-[142px] rounded-md border border-purple-500 bg-purple-50 px-5 py-3 text-center text-xs font-bold text-purple-900">Document<br />S-2.3</div>
-                <div className="absolute bottom-3 right-3 flex items-center overflow-hidden rounded-md border border-slate-300 bg-white text-xs text-slate-800 shadow">
-                  <button className="px-3 py-2">−</button>
-                  <span className="border-x border-slate-300 px-3 py-2 font-bold">100%</span>
-                  <button className="px-3 py-2">+</button>
-                  <button className="border-l border-slate-300 px-3 py-2"><Maximize2 size={13} /></button>
-                </div>
-              </div>
-            </div>
+
+                <aside className="border-l border-slate-200 bg-white p-3 text-xs text-slate-700">
+                  <div className="mb-2 text-[10px] font-black uppercase tracking-wide text-slate-400">Blueprint Node</div>
+                  <div className="font-black text-slate-950">{selectedRelationship.label}</div>
+                  <div className="mt-1 text-slate-500">{selectedRelationship.type}</div>
+
+                  <div className="mt-3 space-y-2">
+                    <div className="rounded-md bg-slate-100 px-2 py-1.5">
+                      <div className="text-[10px] font-bold uppercase text-slate-400">Connected To</div>
+                      <div className="font-bold text-slate-800">
+                        {relationshipEdges.filter((edge) => edge.from === selectedRelationship.id || edge.to === selectedRelationship.id).length} links
+                      </div>
+                    </div>
+                    <div className="rounded-md bg-slate-100 px-2 py-1.5">
+                      <div className="text-[10px] font-bold uppercase text-slate-400">Count</div>
+                      <div className="font-bold text-slate-800">{selectedRelationship.count}</div>
+                    </div>
+                    <div className="rounded-md bg-slate-100 px-2 py-1.5">
+                      <div className="text-[10px] font-bold uppercase text-slate-400">Details</div>
+                      <div className="font-bold text-slate-800">{selectedRelationship.subtitle}</div>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => setSelectedRelationshipNode('item')}
+                    className="mt-3 w-full rounded-md bg-slate-900 px-3 py-2 font-bold text-white"
+                  >
+                    Center Item
+                  </button>
+                </aside>
+              </div>            </div>
           </section>
         </main>
 
@@ -644,7 +797,7 @@ export const VisualWorkspace: React.FC = () => {
           </div>
           <div className="min-h-0 flex-1 overflow-auto p-2">
             {photos.slice(0, 3).map((photo) => (
-              <button key={photo.id} onClick={() => setSelectedId(photo.id <= 3 ? photo.id : 1)} className="mb-3 w-full overflow-hidden rounded-md border border-slate-800 bg-[#111d29] text-left shadow">
+              <button key={photo.id} onClick={() => selectMarkup(photo.id <= 3 ? photo.id : 1, 'photos')} className="mb-3 w-full overflow-hidden rounded-md border border-slate-800 bg-[#111d29] text-left shadow">
                 <div className="relative h-[135px] overflow-hidden">
                   <PhotoSvg photo={photo} />
                   <span className="absolute left-3 top-3 flex h-8 w-8 items-center justify-center rounded-full border-2 border-white text-sm font-black text-white shadow" style={{ backgroundColor: photo.color }}>{photo.id}</span>
@@ -710,8 +863,8 @@ export const VisualWorkspace: React.FC = () => {
               {[
                 ['Linked Photos', linkedPhotos.length],
                 ['Linked Documents', 1],
-                ['Linked Markups', 2],
-                ['Linked Costs', 1],
+                ['Linked Markups', relatedMarkupCount],
+                ['Linked Costs', linkedCostAmount ? 1 : 0],
               ].map(([label, count]) => (
                 <button key={label} className="flex w-full items-center justify-between rounded-md px-2 py-2 text-sm text-slate-200 hover:bg-slate-900">
                   <span className="flex items-center gap-2">
