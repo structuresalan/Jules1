@@ -1,27 +1,31 @@
-# Visual Workspace Layout Cleanup
+# Visual Workspace Mockup Fullscreen
 
 Replace/add these files:
 - src/pages/VisualWorkspace.tsx
+- src/layouts/MainLayout.tsx
 - src/pages/Documents.tsx
 
 Commit message:
-Improve Visual Workspace canvas layout
+Make Visual Workspace match CAD inspection mockup
 
 What changed:
-- Fixes cramped Boards and Graph layouts by turning them into larger workspace shells.
-- Boards now has:
-  - top toolbar for opening/closing Boards and Inspector panels
-  - zoom controls
-  - collapsible board library
-  - collapsible inspector
-  - a larger canvas-first layout
-  - bottom status bar
-- Graph now has:
-  - top toolbar for opening/closing Node Library and Inspector
-  - graph zoom controls
-  - collapsible node library
-  - collapsible node inspector
-  - larger blueprint canvas
-  - curved wires and node pins remain
-- The 4-step guide is now collapsed under a compact Getting Started panel so it does not take up workspace room.
-- Documents remains cleaned up with the old Visual Map removed.
+- Visual Workspace / Boards now opens as a full-screen CAD/PDF workspace instead of a normal webpage card.
+- Removes the normal project header/max-width wrapper for /visual-workspace so the canvas can use the full browser area.
+- Adds a dark top application bar and command ribbon similar to the mockup:
+  - Workspace / Review / Report / Export
+  - Select, Pan, Zoom
+  - Arrow, Cloud, Text, Box, Dimension, Measure
+  - Note, Photo, File, Link
+  - Layers, Scale, Grid, Snap
+  - Undo, Redo
+- Adds dark left sidebar:
+  - Boards tree
+  - Layers list
+  - Scale readout
+- Adds central drawing canvas with tab header and zoom controls.
+- Adds right Site Photos panel.
+- Adds right Inspector panel with selected item details, linked photos/costs/documents/markups, and notes.
+- Adds bottom Items / Markup Schedule.
+- Adds bottom Relationship Map showing selected item connected to marker, photos, and cost.
+- Keeps Load Demo Workspace so you can instantly populate the interface.
+- Documents stays cleaned up with the old Visual Map removed.

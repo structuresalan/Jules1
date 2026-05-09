@@ -89,6 +89,7 @@ export const MainLayout: React.FC = () => {
   }, [location.pathname]);
 
   const isProjectHome = location.pathname === '/';
+  const isVisualWorkspace = location.pathname === '/visual-workspace';
 
   const handleLogout = async () => {
     try {
@@ -269,38 +270,40 @@ export const MainLayout: React.FC = () => {
         </div>
       </div>
 
-      <div className={`relative flex-1 overflow-auto ${isDesktopStyle ? 'bg-transparent' : 'bg-white'}`}>
-        <main className="p-8 max-w-7xl mx-auto mt-10 md:mt-0">
-          <div className={`mb-6 rounded-3xl border px-5 py-4 ${isDesktopStyle ? 'ss-glass-strong' : 'border-gray-200 bg-gray-50'}`}>
-            <div className={`text-[10px] font-bold uppercase tracking-wide ${isDesktopStyle ? 'ss-text-muted' : 'text-gray-500'}`}>
-              Active Project
-            </div>
-            <div className="mt-1 flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
-              <div>
-                <h1 className={`text-2xl font-bold tracking-tight ${isDesktopStyle ? 'ss-text-primary' : 'text-gray-950'}`}>
-                  {projectSummary.label}
-                </h1>
-                <p className={`mt-1 text-sm ${isDesktopStyle ? 'ss-text-secondary' : 'text-gray-500'}`}>
-                  {projectSummary.mode === 'quick'
-                    ? 'Temporary quick-calculation workspace'
-                    : projectSummary.projectNumber || projectSummary.client
-                      ? [projectSummary.projectNumber, projectSummary.client].filter(Boolean).join(' • ')
-                      : 'Use Projects Home to select or create a project'}
-                </p>
+      <div className={`relative flex-1 overflow-auto ${isVisualWorkspace ? 'bg-slate-950' : isDesktopStyle ? 'bg-transparent' : 'bg-white'}`}>
+        <main className={isVisualWorkspace ? 'h-full min-w-0 p-0 mt-0' : 'p-8 max-w-7xl mx-auto mt-10 md:mt-0'}>
+          {!isVisualWorkspace && (
+            <div className={`mb-6 rounded-3xl border px-5 py-4 ${isDesktopStyle ? 'ss-glass-strong' : 'border-gray-200 bg-gray-50'}`}>
+              <div className={`text-[10px] font-bold uppercase tracking-wide ${isDesktopStyle ? 'ss-text-muted' : 'text-gray-500'}`}>
+                Active Project
               </div>
+              <div className="mt-1 flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+                <div>
+                  <h1 className={`text-2xl font-bold tracking-tight ${isDesktopStyle ? 'ss-text-primary' : 'text-gray-950'}`}>
+                    {projectSummary.label}
+                  </h1>
+                  <p className={`mt-1 text-sm ${isDesktopStyle ? 'ss-text-secondary' : 'text-gray-500'}`}>
+                    {projectSummary.mode === 'quick'
+                      ? 'Temporary quick-calculation workspace'
+                      : projectSummary.projectNumber || projectSummary.client
+                        ? [projectSummary.projectNumber, projectSummary.client].filter(Boolean).join(' • ')
+                        : 'Use Projects Home to select or create a project'}
+                  </p>
+                </div>
 
-              <NavLink
-                to="/"
-                end
-                className={`inline-flex w-fit items-center gap-2 rounded-xl border px-3 py-2 text-sm font-semibold ${
-                  isDesktopStyle ? 'border-white/10 bg-white/10 text-white hover:bg-white/15' : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-100'
-                }`}
-              >
-                <FolderOpen size={16} />
-                Switch Project
-              </NavLink>
+                <NavLink
+                  to="/"
+                  end
+                  className={`inline-flex w-fit items-center gap-2 rounded-xl border px-3 py-2 text-sm font-semibold ${
+                    isDesktopStyle ? 'border-white/10 bg-white/10 text-white hover:bg-white/15' : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-100'
+                  }`}
+                >
+                  <FolderOpen size={16} />
+                  Switch Project
+                </NavLink>
+              </div>
             </div>
-          </div>
+          )}
 
           <Outlet />
         </main>

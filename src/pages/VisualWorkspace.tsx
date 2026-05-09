@@ -2177,8 +2177,30 @@ export const VisualWorkspace: React.FC = () => {
     Costs: <CircleDollarSign size={16} />,
   };
 
+  if (activeTab === 'Boards') {
+    return (
+      <div className="h-full min-h-screen bg-slate-950">
+        <div className="fixed left-1/2 top-3 z-50 flex -translate-x-1/2 gap-1 rounded-full border border-slate-700 bg-slate-950/90 p-1 shadow-2xl backdrop-blur">
+          {(['Boards', 'Items', 'Photos', 'Graph', 'Schedule', 'Costs'] as WorkspaceTab[]).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold transition ${
+                activeTab === tab ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+              }`}
+            >
+              {tabIcons[tab]}
+              {tab}
+            </button>
+          ))}
+        </div>
+        {renderBoards()}
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
+    <div className="space-y-6 animate-in fade-in duration-500 p-6">
       <header className={`relative overflow-hidden rounded-[2rem] border p-6 ${isDesktopStyle ? 'ss-glass-strong' : 'border-gray-200 bg-white shadow-sm'}`}>
         {isDesktopGlass && (
           <>
@@ -2212,7 +2234,6 @@ export const VisualWorkspace: React.FC = () => {
           </div>
         </div>
       </header>
-
 
       <details className={`rounded-3xl border p-4 ${isDesktopStyle ? 'ss-glass text-slate-200' : 'border-gray-200 bg-white text-gray-700 shadow-sm'}`}>
         <summary className="cursor-pointer text-sm font-bold">Getting started / how Visual Workspace works</summary>
@@ -2251,7 +2272,6 @@ export const VisualWorkspace: React.FC = () => {
         ))}
       </nav>
 
-      {activeTab === 'Boards' && renderBoards()}
       {activeTab === 'Items' && renderItems()}
       {activeTab === 'Photos' && renderPhotos()}
       {activeTab === 'Graph' && renderGraph()}
@@ -2259,4 +2279,4 @@ export const VisualWorkspace: React.FC = () => {
       {activeTab === 'Costs' && renderCosts()}
     </div>
   );
-};
+};;
