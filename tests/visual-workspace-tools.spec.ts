@@ -108,19 +108,15 @@ test.describe('Visual Workspace toolbar behavior', () => {
     await expect(page.getByTestId('inspector-title')).toBeVisible();
   });
 
-  test('Text tool prompts for text and creates actual text annotation', async ({ page }) => {
+  test('Text tool creates actual text annotation', async ({ page }) => {
     const before = await annotationCount(page);
-
-    page.once('dialog', async (dialog) => {
-      expect(dialog.type()).toBe('prompt');
-      await dialog.accept('FIELD NOTE TEST');
-    });
 
     await page.getByTestId('tool-text').click();
     await dragOnCanvas(page, { x: 420, y: 210 }, { x: 620, y: 260 });
 
     await expect.poll(() => annotationCount(page)).toBeGreaterThan(before);
-    await expect(page.getByText('FIELD NOTE TEST')).toBeVisible();
+    await expect(page.getByTestId('inspector-title')).toContainText(/Text N\d+/);
+    await expect(page.getByText('TEXT NOTE').first()).toBeVisible();
   });
 
   test('Eraser is a mode and erases the clicked annotation only', async ({ page }) => {
