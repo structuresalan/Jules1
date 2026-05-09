@@ -313,8 +313,9 @@ const FramingPlan: React.FC<{
   onPointerUp: (event: React.PointerEvent<SVGSVGElement>) => void;
   onErase: (id: number) => void;
   onResizeStart: (id: number, handle: 'se', point: { x: number; y: number }) => void;
+  onWheelZoom: (event: React.WheelEvent<SVGSVGElement>) => void;
   showGrid: boolean;
-}> = ({ onSelect, markups, selectedId, activeTool, draftGeometry, onPointerDown, onPointerMove, onPointerUp, onErase, onResizeStart, showGrid }) => {
+}> = ({ onSelect, markups, selectedId, activeTool, draftGeometry, onPointerDown, onPointerMove, onPointerUp, onErase, onResizeStart, onWheelZoom, showGrid }) => {
   const xs = [92, 214, 336, 458, 580, 702, 824];
   const ys = [76, 210, 344, 478];
 
@@ -372,10 +373,11 @@ const FramingPlan: React.FC<{
       className={`h-full w-full select-none bg-white ${activeTool !== 'Select' ? 'cursor-crosshair' : ''}`}
       style={{ userSelect: 'none', WebkitUserSelect: 'none', touchAction: 'none' }}
       onMouseDown={(event) => event.preventDefault()}
-      onPointerDown={onPointerDown}
-      onPointerMove={onPointerMove}
-      onPointerUp={onPointerUp}
+      onPointerDownCapture={onPointerDown}
+      onPointerMoveCapture={onPointerMove}
+      onPointerUpCapture={onPointerUp}
       onPointerLeave={onPointerUp}
+      onWheel={onWheelZoom}
     >
       <defs>
         <pattern id="paper" width="16" height="16" patternUnits="userSpaceOnUse">
@@ -952,6 +954,15 @@ export const VisualWorkspace: React.FC = () => {
     }
   };
 
+  const handleWheelZoom = (event: React.WheelEvent<SVGSVGElement>) => {
+    if (activeTool !== 'Zoom' && activeTool !== 'Zoom Area') return;
+    event.preventDefault();
+    setPlanZoom((value) => {
+      const next = event.deltaY < 0 ? value + 0.1 : value - 0.1;
+      return Math.max(0.5, Math.min(3, Number(next.toFixed(2))));
+    });
+  };
+
   const statusMessage = (() => {
     if (activeTool === 'Select') return 'Select active. Click a markup to select it and show properties. Use Eraser to delete, Pan to move the view, Esc cancels active tools.';
     if (activeTool === 'Cloud') return 'Cloud tool active. Drag around a region to create a review cloud linked to the selected item.';
@@ -1414,6 +1425,7 @@ export const VisualWorkspace: React.FC = () => {
                 data-plan-zoom={planZoom}
                 data-plan-pan-x={planPan.x}
                 data-plan-pan-y={planPan.y}
+                data-active-tool={activeTool}
                 style={{ transform: `translate(${planPan.x}px, ${planPan.y}px) scale(${planZoom})`, transformOrigin: 'top center' }}
                 onWheel={(event) => {
                   if (activeTool !== 'Zoom' && activeTool !== 'Zoom Area') return;
@@ -1436,6 +1448,7 @@ export const VisualWorkspace: React.FC = () => {
                   onPointerUp={handlePlanPointerUp}
                   onErase={handleEraseMarkup}
                   onResizeStart={handleResizeStart}
+                  onWheelZoom={handleWheelZoom}
                   showGrid={enabledLayers['Plan Grid']}
                 />
               </div>

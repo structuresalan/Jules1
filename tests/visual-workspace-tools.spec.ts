@@ -2,6 +2,8 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
 
 async function openWorkspace(page: Page) {
   await page.goto('/qa/visual-workspace');
+  await page.evaluate(() => window.localStorage.clear());
+  await page.reload();
   await expect(page.getByTestId('plan-canvas')).toBeVisible();
 }
 
@@ -16,8 +18,9 @@ async function dragOnCanvas(page: Page, start: { x: number; y: number }, end: { 
 
   await page.mouse.move(box.x + start.x, box.y + start.y);
   await page.mouse.down();
-  await page.mouse.move(box.x + end.x, box.y + end.y, { steps: 8 });
+  await page.mouse.move(box.x + end.x, box.y + end.y, { steps: 12 });
   await page.mouse.up();
+  await page.waitForTimeout(150);
 }
 
 async function getBox(locator: Locator) {
@@ -37,7 +40,7 @@ test.describe('Visual Workspace toolbar behavior', () => {
     const annotation = page.getByTestId('annotation-1');
     const before = await getBox(annotation);
 
-    await annotation.click({ position: { x: 10, y: 10 } });
+    await annotation.click({ position: { x: 10, y: 10 }, force: true });
     await expect(page.getByTestId('inspector-title')).toContainText(/B12|N1|Text|Beam/);
 
     const after = await getBox(annotation);
@@ -78,7 +81,7 @@ test.describe('Visual Workspace toolbar behavior', () => {
     await page.getByTestId('tool-eraser').click();
     await expect(page.getByTestId('status-message')).toHaveAttribute('data-active-tool', 'Eraser');
 
-    await page.getByTestId('annotation-1').click();
+    await page.getByTestId('annotation-1').click({ force: true });
 
     await expect.poll(() => annotationCount(page)).toBe(before - 1);
     await expect(page.getByTestId('plan-canvas')).toBeVisible();
@@ -118,6 +121,7 @@ test.describe('Visual Workspace toolbar behavior', () => {
     if (!box) throw new Error('plan canvas not visible');
 
     await page.mouse.move(box.x + 450, box.y + 250);
+    await page.mouse.wheel(0, -400);
     await page.mouse.wheel(0, -400);
 
     await expect(transform).not.toHaveAttribute('data-plan-zoom', '1');

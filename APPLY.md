@@ -1,21 +1,16 @@
-# Fix Visual Workspace QA Auth Bypass
+# Fix Visual Workspace QA Canvas Events
 
 Replace/add these files:
-- src/App.tsx
 - src/pages/VisualWorkspace.tsx
 - tests/visual-workspace-tools.spec.ts
-- playwright.config.ts
-- tests/README.md
-- package-json-additions.md
 
 Commit message:
-Fix Visual Workspace QA route for Playwright
+Fix Visual Workspace QA canvas event handling
 
 What changed:
-- The uploaded report showed every test was blocked at the login screen.
-- Adds an unprotected QA route:
-  - /qa/visual-workspace
-- Updates Playwright tests to use /qa/visual-workspace instead of /visual-workspace.
-- This lets tests check the Visual Workspace component even when Firebase auth is not configured.
-- Adds close-panel test IDs to make modal tests more reliable.
-- Keeps the real /visual-workspace route protected for normal users.
+- The Playwright report showed tests were reaching the Visual Workspace, but SVG background elements intercepted clicks/drags.
+- Updates the plan SVG to use pointer capture/capture-phase pointer handlers.
+- Adds wheel handling directly on the SVG canvas so Zoom tests and real mouse wheel zoom are more reliable.
+- Adds deterministic localStorage clearing before each QA test.
+- Forces annotation clicks in tests where SVG group bounding boxes include transparent areas.
+- Keeps the QA route /qa/visual-workspace from the previous package.
