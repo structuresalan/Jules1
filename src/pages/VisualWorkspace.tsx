@@ -311,10 +311,10 @@ const FramingPlan: React.FC<{
   onPointerDown: (event: React.PointerEvent<SVGSVGElement>) => void;
   onPointerMove: (event: React.PointerEvent<SVGSVGElement>) => void;
   onPointerUp: (event: React.PointerEvent<SVGSVGElement>) => void;
-  onMoveStart: (id: number, point: { x: number; y: number }) => void;
+  onErase: (id: number) => void;
   onResizeStart: (id: number, handle: 'se', point: { x: number; y: number }) => void;
   showGrid: boolean;
-}> = ({ onSelect, markups, selectedId, activeTool, draftGeometry, onPointerDown, onPointerMove, onPointerUp, onMoveStart, onResizeStart, showGrid }) => {
+}> = ({ onSelect, markups, selectedId, activeTool, draftGeometry, onPointerDown, onPointerMove, onPointerUp, onErase, onResizeStart, showGrid }) => {
   const xs = [92, 214, 336, 458, 580, 702, 824];
   const ys = [76, 210, 344, 478];
 
@@ -463,7 +463,6 @@ const FramingPlan: React.FC<{
               onPointerDown={(event) => {
                 event.stopPropagation();
                 onSelect(item.id);
-                onMoveStart(item.id, { x: (event.clientX), y: (event.clientY) });
               }}
               onClick={(event) => { event.stopPropagation(); onSelect(item.id); }}
               className={activeTool === 'Select' ? 'cursor-move' : 'cursor-pointer'}
@@ -482,7 +481,6 @@ const FramingPlan: React.FC<{
               onPointerDown={(event) => {
                 event.stopPropagation();
                 onSelect(item.id);
-                onMoveStart(item.id, { x: (event.clientX), y: (event.clientY) });
               }}
               onClick={(event) => { event.stopPropagation(); onSelect(item.id); }}
               className={activeTool === 'Select' ? 'cursor-move' : 'cursor-pointer'}
@@ -502,7 +500,6 @@ const FramingPlan: React.FC<{
               onPointerDown={(event) => {
                 event.stopPropagation();
                 onSelect(item.id);
-                onMoveStart(item.id, { x: (event.clientX), y: (event.clientY) });
               }}
               onClick={(event) => { event.stopPropagation(); onSelect(item.id); }}
               className={activeTool === 'Select' ? 'cursor-move' : 'cursor-pointer'}
@@ -524,8 +521,12 @@ const FramingPlan: React.FC<{
               key={item.id}
               onPointerDown={(event) => {
                 event.stopPropagation();
+                if (activeTool === 'Eraser') {
+                  onSelect(item.id);
+                  onErase(item.id);
+                  return;
+                }
                 onSelect(item.id);
-                onMoveStart(item.id, { x: event.clientX, y: event.clientY });
               }}
               onClick={(event) => { event.stopPropagation(); onSelect(item.id); }}
               className={activeTool === 'Select' ? 'cursor-move' : 'cursor-pointer'}
@@ -546,7 +547,6 @@ const FramingPlan: React.FC<{
               onPointerDown={(event) => {
                 event.stopPropagation();
                 onSelect(item.id);
-                onMoveStart(item.id, { x: (event.clientX), y: (event.clientY) });
               }}
               onClick={(event) => { event.stopPropagation(); onSelect(item.id); }}
               className={activeTool === 'Select' ? 'cursor-move' : 'cursor-pointer'}
@@ -566,7 +566,6 @@ const FramingPlan: React.FC<{
               onPointerDown={(event) => {
                 event.stopPropagation();
                 onSelect(item.id);
-                onMoveStart(item.id, { x: (event.clientX), y: (event.clientY) });
               }}
               onClick={(event) => { event.stopPropagation(); onSelect(item.id); }}
               className={activeTool === 'Select' ? 'cursor-move' : 'cursor-pointer'}
@@ -629,6 +628,8 @@ export const VisualWorkspace: React.FC = () => {
   });
   const [zoomLevel, setZoomLevel] = useState(100);
   const [planZoom, setPlanZoom] = useState(1);
+  const [planPan, setPlanPan] = useState({ x: 0, y: 0 });
+  const [panState, setPanState] = useState<{ startClient: { x: number; y: number }; original: { x: number; y: number } } | null>(null);
   const [draftGeometry, setDraftGeometry] = useState<MarkupGeometry | null>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [showAllPhotos, setShowAllPhotos] = useState(false);
@@ -654,7 +655,10 @@ export const VisualWorkspace: React.FC = () => {
         setIsDrawing(false);
         setMoveState(null);
         setResizeState(null);
+        setPanState(null);
+        setIsSettingScale(false);
         setActiveTool('Select');
+        showToast('Tool cancelled. Select mode active.');
         return;
       }
 
@@ -662,7 +666,11 @@ export const VisualWorkspace: React.FC = () => {
         const currentSelected = markups.find((item) => item.id === selectedId);
         if (!currentSelected) return;
         if (!requireEngineer('delete markups')) return;
-        const fallback = markups.find((item) => item.id !== currentSelected.id)?.id ?? 1;
+        if (markups.length <= 1) {
+          showToast('At least one item must remain in this prototype.');
+          return;
+        }
+        const fallback = markups.find((item) => item.id !== currentSelected.id)?.id ?? markups[0].id;
         applyMarkups((current) => current.filter((item) => item.id !== currentSelected.id));
         setSelectedId(fallback);
         showToast('Selected markup deleted.');
@@ -673,7 +681,7 @@ export const VisualWorkspace: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [activeTool, markups, selectedId, role]);
 
-  const selected = useMemo(() => markups.find((item) => item.id === selectedId) ?? markups[0], [markups, selectedId]);
+  const selected = useMemo(() => markups.find((item) => item.id === selectedId) ?? markups[0] ?? initialMarkups[0], [markups, selectedId]);
   const linkedPhotos = useMemo(() => photos.filter((photo) => selected.photoIds.includes(photo.id)), [photos, selected]);
   const selectedDocuments = useMemo(() => documents.filter((document) => document.itemId === selected.id), [documents, selected]);
   const selectedComments = useMemo(() => comments.filter((comment) => comment.itemId === selected.id), [comments, selected]);
@@ -878,8 +886,13 @@ export const VisualWorkspace: React.FC = () => {
     if (label === 'File') setActivePanel('file');
     if (label === 'Note') setActivePanel('note');
     if (label === 'Link') setSelectedRelationshipNode('item');
-    if (label === 'Fit') setPlanZoom(1);
-    if (label === 'Zoom' || label === 'Zoom Area') setPlanZoom((value) => Math.min(2.5, Number((value + 0.15).toFixed(2))));
+    if (label === 'Pan') showToast('Pan active. Hold left click and drag the plan. Press Esc to cancel.');
+    if (label === 'Fit') {
+      setPlanZoom(1);
+      setPlanPan({ x: 0, y: 0 });
+      showToast('View fit to screen.');
+    }
+    if (label === 'Zoom' || label === 'Zoom Area') showToast('Zoom active. Use the mouse wheel over the plan. Press Esc to cancel.');
     if (label === 'Undo') {
       const previous = undoStack[undoStack.length - 1];
       if (previous) {
@@ -916,18 +929,17 @@ export const VisualWorkspace: React.FC = () => {
     if (label === 'Layers') showToast('Use the Layers list on the left to toggle layers.');
     if (label === 'Color') setActivePanel('color');
     if (label === 'Eraser') {
-      if (!requireEngineer('delete markups')) return;
-      const fallback = markups.find((item) => item.id !== selected.id)?.id ?? 1;
-      applyMarkups((current) => current.filter((item) => item.id !== selected.id));
-      setSelectedId(fallback);
-      showToast('Selected markup removed.');
+      showToast('Eraser active. Click the annotation you want to erase. Press Esc to cancel.');
     }
   };
 
   const statusMessage = (() => {
-    if (activeTool === 'Select') return 'Select active. Click a markup to select it, drag it to move, drag the black handle to resize, Delete removes it, Esc cancels.';
+    if (activeTool === 'Select') return 'Select active. Click a markup to select it and show properties. Use Eraser to delete, Pan to move the view, Esc cancels active tools.';
     if (activeTool === 'Cloud') return 'Cloud tool active. Drag around a region to create a review cloud linked to the selected item.';
-    if (activeTool === 'Photo') return 'Photo tool active. Click a plan item to attach or view site photos.';
+    if (activeTool === 'Pan') return 'Pan active. Hold left click and drag to move the plan view. Press Esc for Select.';
+    if (activeTool === 'Zoom' || activeTool === 'Zoom Area') return 'Zoom active. Scroll wheel over the plan to zoom in/out. Press Esc for Select.';
+    if (activeTool === 'Eraser') return 'Eraser active. Click the annotation you want erased. Press Esc for Select.';
+    if (activeTool === 'Photo') return 'Photo tool active. Choose or add a site photo from the photo picker.';
     if (activeTool === 'Link') return 'Link tool active. Select a plan marker, photo, cost, or document to connect it to the item.';
     if (activeTool === 'Distance' || activeTool === 'Dimension' || activeTool === 'Area') return `${activeTool} tool active. Pick points on the board to record measurement markup.`;
     return `${activeTool} tool active. Use the board canvas to place or edit this markup.`;
@@ -1079,12 +1091,19 @@ export const VisualWorkspace: React.FC = () => {
   };
 
   const handlePlanPointerDown = (event: React.PointerEvent<SVGSVGElement>) => {
-    if (activeTool === 'Select') {
+    if (activeTool === 'Select' || activeTool === 'Eraser') {
       setDraftGeometry(null);
       setIsDrawing(false);
       return;
     }
-    if (['Photo', 'File', 'Link', 'Undo', 'Redo', 'More', 'Color', 'Eraser', 'Layers', 'Grid', 'Snap', 'Zoom', 'Fit', 'Zoom Area'].includes(activeTool)) return;
+
+    if (activeTool === 'Pan') {
+      event.preventDefault();
+      setPanState({ startClient: { x: event.clientX, y: event.clientY }, original: planPan });
+      return;
+    }
+
+    if (['Photo', 'File', 'Link', 'Undo', 'Redo', 'More', 'Color', 'Layers', 'Grid', 'Snap', 'Zoom', 'Fit', 'Zoom Area'].includes(activeTool)) return;
     event.preventDefault();
     const point = pointFromPointer(event);
     setIsDrawing(true);
@@ -1092,6 +1111,14 @@ export const VisualWorkspace: React.FC = () => {
   };
 
   const handlePlanPointerMove = (event: React.PointerEvent<SVGSVGElement>) => {
+    if (panState) {
+      setPlanPan({
+        x: panState.original.x + event.clientX - panState.startClient.x,
+        y: panState.original.y + event.clientY - panState.startClient.y,
+      });
+      return;
+    }
+
     if (resizeState) {
       const pixelDistance = Math.hypot(event.clientX - resizeState.startClient.x, event.clientY - resizeState.startClient.y);
       if (pixelDistance < 4) return;
@@ -1138,6 +1165,11 @@ export const VisualWorkspace: React.FC = () => {
   };
 
   const handlePlanPointerUp = () => {
+    if (panState) {
+      setPanState(null);
+      return;
+    }
+
     if (resizeState) {
       setUndoStack((current) => [...current.slice(-19), resizeState.before]);
       setRedoStack([]);
@@ -1160,11 +1192,16 @@ export const VisualWorkspace: React.FC = () => {
     createMarkupFromGeometry(activeTool, draftGeometry);
   };
 
-  const handleMoveStart = (id: number, clientPoint: { x: number; y: number }) => {
-    if (activeTool !== 'Select') return;
-    const item = markups.find((candidate) => candidate.id === id);
-    if (!item?.geometry) return;
-    setMoveState({ id, startClient: clientPoint, original: item.geometry, before: markups });
+  const handleEraseMarkup = (id: number) => {
+    if (!requireEngineer('delete markups')) return;
+    if (markups.length <= 1) {
+      showToast('At least one item must remain in this prototype.');
+      return;
+    }
+    const fallback = markups.find((item) => item.id !== id)?.id ?? markups[0].id;
+    applyMarkups((current) => current.filter((item) => item.id !== id));
+    setSelectedId(fallback);
+    showToast('Markup erased.');
   };
 
   const handleResizeStart = (id: number, _handle: 'se', clientPoint: { x: number; y: number }) => {
@@ -1352,7 +1389,18 @@ export const VisualWorkspace: React.FC = () => {
 
           <section className="min-h-0 overflow-hidden bg-slate-200 p-2">
             <div className="relative mx-auto h-full overflow-auto rounded-md border border-slate-500 bg-white shadow-2xl">
-              <div style={{ transform: `scale(${planZoom})`, transformOrigin: 'top center' }} className="h-full w-full">
+              <div
+                style={{ transform: `translate(${planPan.x}px, ${planPan.y}px) scale(${planZoom})`, transformOrigin: 'top center' }}
+                onWheel={(event) => {
+                  if (activeTool !== 'Zoom' && activeTool !== 'Zoom Area') return;
+                  event.preventDefault();
+                  setPlanZoom((value) => {
+                    const next = event.deltaY < 0 ? value + 0.1 : value - 0.1;
+                    return Math.max(0.5, Math.min(3, Number(next.toFixed(2))));
+                  });
+                }}
+                className={`h-full w-full ${activeTool === 'Pan' ? 'cursor-grab' : ''}`}
+              >
                 <FramingPlan
                   onSelect={(id) => selectMarkup(id)}
                   markups={markups}
@@ -1362,7 +1410,7 @@ export const VisualWorkspace: React.FC = () => {
                   onPointerDown={handlePlanPointerDown}
                   onPointerMove={handlePlanPointerMove}
                   onPointerUp={handlePlanPointerUp}
-                  onMoveStart={handleMoveStart}
+                  onErase={handleEraseMarkup}
                   onResizeStart={handleResizeStart}
                   showGrid={enabledLayers['Plan Grid']}
                 />

@@ -1,15 +1,28 @@
-# Fix Select Versus Move Behavior
+# Fix Tool Modes
 
 Replace this file:
 - src/pages/VisualWorkspace.tsx
 
 Commit message:
-Fix annotation select versus move behavior
+Fix eraser select pan and zoom tool modes
 
 What changed:
-- A simple click now selects a markup and updates the Inspector/properties.
-- A markup only moves after an intentional drag threshold.
-- This prevents accidental movement when users only wanted to select.
-- Prevents browser/SVG text selection on the background plan.
-- Background plan labels no longer highlight blue when selecting or dragging annotations.
-- Move/resize undo history now stores the state before the move/resize.
+- Eraser is now a mode:
+  - click Eraser
+  - click the annotation to erase
+  - Esc cancels back to Select
+- Eraser no longer instantly deletes the selected annotation.
+- Prevents the app from going blank by blocking deletion of the final remaining prototype item.
+- Select now only selects and shows properties.
+- Select no longer moves annotations.
+- Pan is now a mode:
+  - click Pan
+  - hold left mouse and drag the plan view
+  - Esc cancels back to Select
+- Zoom is now a mode:
+  - click Zoom / Zoom Area
+  - use mouse wheel over the plan to zoom in/out
+  - Esc cancels back to Select
+- Fit resets both plan zoom and pan.
+- Escape cancels active drawing, moving, resizing, panning, scaling, erasing, and zooming back to normal Select.
+- Background plan text remains non-selectable.
