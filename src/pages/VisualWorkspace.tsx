@@ -7,7 +7,7 @@ import {
   FileText,
   Image as ImageIcon,
   Link as LinkIcon,
-  Map,
+  Map as MapIcon,
   Network,
   Plus,
   Save,
@@ -1256,7 +1256,7 @@ export const VisualWorkspace: React.FC = () => {
   );
 
   const renderGraph = () => {
-    const nodeMap = new Map(graphNodes.map((node, index) => [node.id, { node, position: graphPositionForNode(node.id, index) }]));
+    const nodeMap = new globalThis.Map<string, { node: GraphNode; position: GraphPosition }>(graphNodes.map((node, index) => [node.id, { node, position: graphPositionForNode(node.id, index) }]));
 
     return (
       <div className="space-y-4">
@@ -1437,7 +1437,7 @@ export const VisualWorkspace: React.FC = () => {
   );
 
   const tabIcons: Record<WorkspaceTab, React.ReactNode> = {
-    Boards: <Map size={16} />,
+    Boards: <MapIcon size={16} />,
     Items: <Box size={16} />,
     Photos: <Camera size={16} />,
     Graph: <Network size={16} />,
