@@ -2,18 +2,22 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Box,
   Camera,
+  ChevronRight,
   CircleDollarSign,
   Download,
   FileText,
   Image as ImageIcon,
   Link as LinkIcon,
   Map as MapIcon,
+  MousePointer2,
   Network,
   Plus,
   Save,
   Search,
+  Sparkles,
   Trash2,
   Upload,
+  X,
 } from 'lucide-react';
 import { useWebsiteStyleSettings } from '../utils/websiteStyle';
 
@@ -149,7 +153,6 @@ const STORAGE_KEYS = {
 
 const statusOptions: WorkspaceStatus[] = ['Draft', 'Review', 'Pass', 'Fail', 'Field Verify', 'Resolved'];
 const itemTypeOptions: WorkspaceItemType[] = ['Beam', 'Column', 'Header', 'Footing', 'Wall', 'Connection', 'Opening', 'Repair Area', 'General Note'];
-const annotationTools: AnnotationTool[] = ['Select', 'Arrow', 'Line', 'Box', 'Cloud', 'Highlight', 'Text', 'Stamp', 'Count', 'Reference', 'Length', 'Perimeter', 'Area'];
 const stampOptions = ['PASS', 'REVIEW', 'FAIL', 'FIELD VERIFY', 'TYP.', 'SEE CALC', 'REVISED', 'VOID', 'SUPERSEDED', 'AS-BUILT', 'BY OTHERS', 'N.I.C.'];
 
 const makeId = (prefix: string) => `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
@@ -316,6 +319,7 @@ export const VisualWorkspace: React.FC = () => {
   const [edgeSource, setEdgeSource] = useState('');
   const [edgeTarget, setEdgeTarget] = useState('');
   const [edgeRelation, setEdgeRelation] = useState('references');
+  const [selectedGraphNodeId, setSelectedGraphNodeId] = useState('');
   const [draggingNodeId, setDraggingNodeId] = useState('');
   const [draggingNodeOffset, setDraggingNodeOffset] = useState({ x: 0, y: 0 });
 
@@ -384,6 +388,11 @@ export const VisualWorkspace: React.FC = () => {
 
     return [...itemNodes, ...boardNodes, ...annotationNodes, ...photoNodes, ...costNodes];
   }, [annotations, boards, estimates, items, photos]);
+
+  const selectedGraphNode = useMemo(
+    () => graphNodes.find((node) => node.id === selectedGraphNodeId) ?? graphNodes[0] ?? null,
+    [graphNodes, selectedGraphNodeId],
+  );
 
   const graphEdges = useMemo<WorkspaceEdge[]>(() => {
     const autoEdges: WorkspaceEdge[] = [];
@@ -471,6 +480,32 @@ export const VisualWorkspace: React.FC = () => {
     };
   }, [draggingNodeId, draggingNodeOffset]);
 
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      const tagName = target?.tagName?.toLowerCase();
+      if (tagName === 'input' || tagName === 'textarea' || tagName === 'select') return;
+
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        cancelActiveAction();
+      }
+
+      if (event.key === 'Enter' && (tool === 'Perimeter' || tool === 'Area')) {
+        event.preventDefault();
+        finishMeasurement();
+      }
+
+      if ((event.key === 'Delete' || event.key === 'Backspace') && selectedAnnotationId) {
+        event.preventDefault();
+        deleteAnnotation(selectedAnnotationId);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [pendingMeasurePoints, selectedAnnotationId, tool]);
+
   const refreshBoardNotes = (board: VisualBoard | null) => {
     setBoardName(board?.name ?? '');
     setBoardKind(board?.kind ?? 'Plan');
@@ -494,6 +529,345 @@ export const VisualWorkspace: React.FC = () => {
     const column = index % 4;
     const row = Math.floor(index / 4);
     return { x: 60 + column * 270, y: 70 + row * 170 };
+  };
+
+  const cancelActiveAction = () => {
+    setPendingMeasurePoints([]);
+    setDraftAnnotation(null);
+    dragStartRef.current = null;
+    setDraggingAnnotationId('');
+  };
+
+  const selectTool = (nextTool: AnnotationTool) => {
+    cancelActiveAction();
+    setTool(nextTool);
+  };
+
+  const getToolInstruction = (currentTool: AnnotationTool) => {
+    if (currentTool === 'Select') return 'Select: click a markup to inspect it, click-hold and drag to move it. Press Delete to remove selected markup.';
+    if (currentTool === 'Arrow') return 'Arrow: click and drag from the note toward the target. Release to place.';
+    if (currentTool === 'Line') return 'Line: click and drag between two points.';
+    if (currentTool === 'Box') return 'Box: click and drag around the region.';
+    if (currentTool === 'Cloud') return 'Cloud: click and drag around a review or field-verify area.';
+    if (currentTool === 'Highlight') return 'Highlight: click and drag over a region.';
+    if (currentTool === 'Text') return 'Text: click once to place a text label.';
+    if (currentTool === 'Stamp') return 'Stamp: choose a stamp and click to place it.';
+    if (currentTool === 'Count') return 'Count: click each location to place count dots.';
+    if (currentTool === 'Reference') return 'Reference: enter known feet, then click two points to set scale.';
+    if (currentTool === 'Length') return 'Length: click start point, then end point.';
+    if (currentTool === 'Perimeter') return 'Perimeter: click each corner, then press Enter or Finish Perimeter.';
+    return 'Area: click each corner, then press Enter or Finish Area.';
+  };
+
+  const getGraphNodePins = (node: GraphNode) => {
+    if (node.type === 'Item') {
+      const itemAnnotations = annotations.filter((annotation) => annotation.itemId === node.sourceId);
+      const itemPhotos = photos.filter((photo) => photo.itemId === node.sourceId);
+      const itemCosts = estimates.filter((estimate) => estimate.itemId === node.sourceId);
+      const itemIssues = itemAnnotations.filter((annotation) => annotation.status === 'Review' || annotation.status === 'Fail' || annotation.status === 'Field Verify');
+
+      return [
+        { label: 'Markers', count: itemAnnotations.length },
+        { label: 'Photos', count: itemPhotos.length },
+        { label: 'Costs', count: itemCosts.length },
+        { label: 'Issues', count: itemIssues.length },
+      ];
+    }
+
+    if (node.type === 'Board') {
+      return [
+        { label: 'Annotations', count: annotations.filter((annotation) => annotation.boardId === node.sourceId).length },
+        { label: 'Measurements', count: annotations.filter((annotation) => annotation.boardId === node.sourceId && annotation.type === 'Measurement').length },
+      ];
+    }
+
+    if (node.type === 'Annotation') {
+      const annotation = annotations.find((item) => item.id === node.sourceId);
+      return [
+        { label: 'Item', count: annotation?.itemId ? 1 : 0 },
+        { label: 'Board', count: annotation?.boardId ? 1 : 0 },
+      ];
+    }
+
+    if (node.type === 'Photo') {
+      const photo = photos.find((item) => item.id === node.sourceId);
+      return [{ label: 'Photo of', count: photo?.itemId ? 1 : 0 }];
+    }
+
+    const estimate = estimates.find((item) => item.id === node.sourceId);
+    return [
+      { label: 'Costs item', count: estimate?.itemId ? 1 : 0 },
+      { label: 'Total', count: estimate ? Math.round(estimate.quantity * estimate.unitCost) : 0 },
+    ];
+  };
+
+  const getNodeInspectorRows = (node: GraphNode | null) => {
+    if (!node) return [];
+
+    if (node.type === 'Item') {
+      const item = items.find((candidate) => candidate.id === node.sourceId);
+      if (!item) return [];
+      return [
+        ['Type', item.type],
+        ['Status', item.status],
+        ['Material', item.material || 'TBD'],
+        ['Section', item.section || 'TBD'],
+        ['Span', item.spanFt || 'TBD'],
+      ];
+    }
+
+    if (node.type === 'Board') {
+      const board = boards.find((candidate) => candidate.id === node.sourceId);
+      if (!board) return [];
+      return [
+        ['Kind', board.kind],
+        ['File', board.fileName],
+        ['Scale', board.scaleFtPerPercent ? `${board.scaleFtPerPercent.toFixed(3)} ft / board %` : 'Not set'],
+      ];
+    }
+
+    if (node.type === 'Annotation') {
+      const annotation = annotations.find((candidate) => candidate.id === node.sourceId);
+      if (!annotation) return [];
+      return [
+        ['Type', annotation.type],
+        ['Status', annotation.status],
+        ['Linked item', getItemName(annotation.itemId)],
+      ];
+    }
+
+    if (node.type === 'Photo') {
+      const photo = photos.find((candidate) => candidate.id === node.sourceId);
+      if (!photo) return [];
+      return [
+        ['Linked item', getItemName(photo.itemId)],
+        ['Notes', photo.notes || 'None'],
+      ];
+    }
+
+    const estimate = estimates.find((candidate) => candidate.id === node.sourceId);
+    if (!estimate) return [];
+    return [
+      ['Linked item', getItemName(estimate.itemId)],
+      ['Quantity', `${estimate.quantity} ${estimate.unit}`],
+      ['Total', `$${(estimate.quantity * estimate.unitCost).toFixed(2)}`],
+    ];
+  };
+
+  const loadDemoWorkspace = () => {
+    const now = new Date().toISOString();
+
+    const demoBoardId = makeId('board');
+    const demoBeamId = makeId('item');
+    const demoColumnId = makeId('item');
+    const demoRepairId = makeId('item');
+    const demoAnnotationId = makeId('anno');
+    const demoPhotoId = makeId('photo');
+    const demoCostId = makeId('cost');
+
+    const demoBoardSvg = encodeURIComponent(`
+      <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="760" viewBox="0 0 1200 760">
+        <rect width="1200" height="760" fill="#f8fafc"/>
+        <rect x="90" y="90" width="1020" height="560" fill="white" stroke="#334155" stroke-width="4"/>
+        <g stroke="#94a3b8" stroke-width="2">
+          <line x1="90" y1="230" x2="1110" y2="230"/>
+          <line x1="90" y1="370" x2="1110" y2="370"/>
+          <line x1="90" y1="510" x2="1110" y2="510"/>
+          <line x1="270" y1="90" x2="270" y2="650"/>
+          <line x1="510" y1="90" x2="510" y2="650"/>
+          <line x1="750" y1="90" x2="750" y2="650"/>
+          <line x1="990" y1="90" x2="990" y2="650"/>
+        </g>
+        <g fill="#e2e8f0" stroke="#0f172a" stroke-width="2">
+          <circle cx="270" cy="230" r="18"/>
+          <circle cx="510" cy="230" r="18"/>
+          <circle cx="750" cy="230" r="18"/>
+          <circle cx="990" cy="230" r="18"/>
+          <circle cx="270" cy="510" r="18"/>
+          <circle cx="510" cy="510" r="18"/>
+          <circle cx="750" cy="510" r="18"/>
+          <circle cx="990" cy="510" r="18"/>
+        </g>
+        <g stroke="#1d4ed8" stroke-width="12">
+          <line x1="270" y1="230" x2="750" y2="230"/>
+          <line x1="510" y1="370" x2="990" y2="370"/>
+        </g>
+        <text x="90" y="55" font-family="Arial" font-size="28" font-weight="700" fill="#0f172a">Demo Level 2 Framing Plan</text>
+        <text x="290" y="210" font-family="Arial" font-size="18" fill="#1d4ed8">Beam B12</text>
+        <text x="530" y="350" font-family="Arial" font-size="18" fill="#1d4ed8">Beam B18</text>
+      </svg>
+    `);
+
+    const demoPhotoSvg = encodeURIComponent(`
+      <svg xmlns="http://www.w3.org/2000/svg" width="640" height="420" viewBox="0 0 640 420">
+        <defs>
+          <linearGradient id="g" x1="0" x2="1">
+            <stop stop-color="#0f172a"/>
+            <stop offset="1" stop-color="#475569"/>
+          </linearGradient>
+        </defs>
+        <rect width="640" height="420" fill="url(#g)"/>
+        <rect x="70" y="175" width="500" height="52" rx="8" fill="#94a3b8" stroke="#e2e8f0" stroke-width="4"/>
+        <rect x="130" y="120" width="36" height="210" fill="#64748b" stroke="#e2e8f0" stroke-width="3"/>
+        <rect x="470" y="120" width="36" height="210" fill="#64748b" stroke="#e2e8f0" stroke-width="3"/>
+        <text x="58" y="380" font-family="Arial" font-size="26" font-weight="700" fill="#f8fafc">Demo site photo: Beam B12</text>
+      </svg>
+    `);
+
+    const demoItems: WorkspaceItem[] = [
+      {
+        id: demoBeamId,
+        name: 'Beam B12',
+        type: 'Beam',
+        material: 'Steel',
+        status: 'Pass',
+        section: 'W16x26',
+        spanFt: '18',
+        notes: 'Demo item. Blue beam on Level 2 framing plan.',
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        id: demoColumnId,
+        name: 'Column C4',
+        type: 'Column',
+        material: 'Steel',
+        status: 'Review',
+        section: 'HSS6x6x1/4',
+        spanFt: '',
+        notes: 'Demo column connected to B12.',
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        id: demoRepairId,
+        name: 'Repair Area R1',
+        type: 'Repair Area',
+        material: 'Existing framing',
+        status: 'Field Verify',
+        section: '',
+        spanFt: '',
+        notes: 'Demo cloud/review area.',
+        createdAt: now,
+        updatedAt: now,
+      },
+    ];
+
+    const demoBoard: VisualBoard = {
+      id: demoBoardId,
+      name: 'Demo Level 2 Framing Plan',
+      kind: 'Plan',
+      fileName: 'demo-level-2-framing-plan.svg',
+      fileType: 'image/svg+xml',
+      dataUrl: `data:image/svg+xml;charset=utf-8,${demoBoardSvg}`,
+      notes: 'Demo board showing how markers, items, photos, and cost lines connect.',
+      scaleFtPerPercent: 0.42,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    const demoAnnotations: VisualAnnotation[] = [
+      {
+        id: demoAnnotationId,
+        boardId: demoBoardId,
+        itemId: demoBeamId,
+        type: 'Arrow',
+        status: 'Pass',
+        label: 'Beam B12',
+        notes: 'Arrow marks Beam B12 on the demo framing plan.',
+        x: 30,
+        y: 24,
+        x2: 52,
+        y2: 30,
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        id: makeId('anno'),
+        boardId: demoBoardId,
+        itemId: demoRepairId,
+        type: 'Cloud',
+        status: 'Field Verify',
+        label: 'Verify repair area',
+        notes: 'Demo review cloud.',
+        x: 60,
+        y: 52,
+        width: 20,
+        height: 14,
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        id: makeId('measure'),
+        boardId: demoBoardId,
+        itemId: demoBeamId,
+        type: 'Measurement',
+        status: 'Draft',
+        label: 'L-1',
+        notes: 'Demo measured span.',
+        x: 22.5,
+        y: 30,
+        x2: 62.5,
+        y2: 30,
+        points: [{ x: 22.5, y: 30 }, { x: 62.5, y: 30 }],
+        measurementKind: 'Length',
+        createdAt: now,
+        updatedAt: now,
+      },
+    ];
+
+    const demoPhoto: WorkspacePhoto = {
+      id: demoPhotoId,
+      itemId: demoBeamId,
+      name: 'Beam B12 site photo',
+      dataUrl: `data:image/svg+xml;charset=utf-8,${demoPhotoSvg}`,
+      notes: 'Demo photo that appears when hovering linked Beam B12 markups.',
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    const demoEstimate: WorkspaceEstimate = {
+      id: demoCostId,
+      itemId: demoBeamId,
+      description: 'W16x26 supply/install allowance',
+      category: 'Steel',
+      quantity: 18,
+      unit: 'LF',
+      unitCost: 135,
+      status: 'Allowance',
+      notes: 'Demo lightweight cost line linked to Beam B12.',
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    const demoEdges: WorkspaceEdge[] = [
+      {
+        id: makeId('edge'),
+        sourceId: `item:${demoBeamId}`,
+        targetId: `item:${demoColumnId}`,
+        relation: 'connects to',
+        createdAt: now,
+      },
+      {
+        id: makeId('edge'),
+        sourceId: `item:${demoRepairId}`,
+        targetId: `item:${demoBeamId}`,
+        relation: 'field verifies',
+        createdAt: now,
+      },
+    ];
+
+    setItems((current) => [...demoItems, ...current]);
+    setBoards((current) => [demoBoard, ...current]);
+    setAnnotations((current) => [...demoAnnotations, ...current]);
+    setPhotos((current) => [demoPhoto, ...current]);
+    setEstimates((current) => [demoEstimate, ...current]);
+    setManualEdges((current) => [...demoEdges, ...current]);
+    setSelectedBoardId(demoBoardId);
+    setSelectedItemId(demoBeamId);
+    setSelectedAnnotationId(demoAnnotationId);
+    setSelectedGraphNodeId(`item:${demoBeamId}`);
+    setActiveTab('Boards');
   };
 
   const createItem = (event: React.FormEvent) => {
@@ -680,6 +1054,7 @@ export const VisualWorkspace: React.FC = () => {
   };
 
   const handleBoardMouseDown = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (event.button !== 0) return;
     if (!selectedBoard) return;
     if (tool === 'Select') return;
 
@@ -1079,39 +1454,102 @@ export const VisualWorkspace: React.FC = () => {
       </aside>
 
       <section className={`overflow-hidden rounded-3xl border ${isDesktopStyle ? 'ss-glass-strong' : 'border-gray-200 bg-white shadow-sm'}`}>
-        <div className={`border-b px-4 py-3 ${isDesktopStyle ? 'border-white/10 bg-slate-950/80 text-white' : 'border-gray-200 bg-slate-950 text-white'}`}>
-          <div className="mb-3 flex flex-wrap items-center gap-2">
-            <select value={tool} onChange={(event) => setTool(event.target.value as AnnotationTool)} className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm font-bold text-white">
-              {annotationTools.map((option) => <option key={option}>{option}</option>)}
-            </select>
-            <select value={annotationStatus} onChange={(event) => setAnnotationStatus(event.target.value as WorkspaceStatus)} className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm font-bold text-white">
-              {statusOptions.map((option) => <option key={option}>{option}</option>)}
-            </select>
-            <select value={selectedToolItemId} onChange={(event) => setSelectedToolItemId(event.target.value)} className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm font-bold text-white">
-              <option value="">Link item...</option>
-              {items.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-            </select>
-            {tool === 'Stamp' && (
-              <select value={stampPreset} onChange={(event) => setStampPreset(event.target.value)} className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm font-bold text-white">
-                {stampOptions.map((stamp) => <option key={stamp}>{stamp}</option>)}
-              </select>
-            )}
-            {tool === 'Reference' && (
-              <input value={referenceKnownFt} onChange={(event) => setReferenceKnownFt(event.target.value)} placeholder="Known length ft" className="w-36 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white" />
-            )}
-            {(tool === 'Perimeter' || tool === 'Area') && pendingMeasurePoints.length > 0 && (
-              <button onClick={finishMeasurement} className="rounded-lg border border-green-400/40 bg-green-500/20 px-3 py-2 text-sm font-bold text-green-100">
-                Finish {tool} ({pendingMeasurePoints.length} pts)
+        <div className="border-b border-slate-800 bg-slate-950 px-4 py-3 text-white">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <div className="text-xs font-bold uppercase tracking-[0.2em] text-slate-400">Board Ribbon</div>
+              <div className="mt-1 flex items-center gap-2 text-sm text-slate-200">
+                <MousePointer2 size={15} className="text-blue-300" />
+                <span className="font-bold text-white">{tool}</span>
+                <ChevronRight size={14} className="text-slate-500" />
+                <span>{getToolInstruction(tool)}</span>
+              </div>
+            </div>
+
+            {tool !== 'Select' || pendingMeasurePoints.length > 0 || draftAnnotation ? (
+              <button
+                onClick={cancelActiveAction}
+                className="inline-flex items-center gap-2 rounded-full border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs font-bold text-slate-200 hover:bg-slate-800"
+                title="Escape also cancels the active action"
+              >
+                <X size={14} />
+                Cancel
               </button>
-            )}
-            <button onClick={() => { setPendingMeasurePoints([]); setDraftAnnotation(null); dragStartRef.current = null; }} className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm font-bold text-slate-200">
-              Clear action
-            </button>
+            ) : null}
           </div>
 
-          <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-            <input value={annotationLabel} onChange={(event) => setAnnotationLabel(event.target.value)} placeholder="Label / callout text" className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white" />
-            <input value={annotationNotes} onChange={(event) => setAnnotationNotes(event.target.value)} placeholder="Annotation note" className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white" />
+          <div className="grid grid-cols-1 gap-3 xl:grid-cols-[1.4fr_1.1fr_1.1fr_1.2fr]">
+            <div className="rounded-2xl border border-slate-800 bg-slate-900 p-3">
+              <div className="mb-2 text-[10px] font-bold uppercase tracking-wide text-slate-500">Select + Markup</div>
+              <div className="flex flex-wrap gap-2">
+                {(['Select', 'Arrow', 'Line', 'Box', 'Cloud', 'Highlight', 'Text', 'Stamp', 'Count'] as AnnotationTool[]).map((option) => (
+                  <button
+                    key={option}
+                    onClick={() => selectTool(option)}
+                    className={`rounded-lg px-3 py-1.5 text-xs font-bold transition ${
+                      tool === option ? 'bg-blue-600 text-white shadow' : 'bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white'
+                    }`}
+                  >
+                    {option}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-slate-800 bg-slate-900 p-3">
+              <div className="mb-2 text-[10px] font-bold uppercase tracking-wide text-slate-500">Measure</div>
+              <div className="flex flex-wrap gap-2">
+                {(['Reference', 'Length', 'Perimeter', 'Area'] as AnnotationTool[]).map((option) => (
+                  <button
+                    key={option}
+                    onClick={() => selectTool(option)}
+                    className={`rounded-lg px-3 py-1.5 text-xs font-bold transition ${
+                      tool === option ? 'bg-purple-600 text-white shadow' : 'bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white'
+                    }`}
+                  >
+                    {option}
+                  </button>
+                ))}
+                {(tool === 'Perimeter' || tool === 'Area') && pendingMeasurePoints.length > 0 && (
+                  <button onClick={finishMeasurement} className="rounded-lg bg-green-600 px-3 py-1.5 text-xs font-bold text-white">
+                    Finish {tool}
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-slate-800 bg-slate-900 p-3">
+              <div className="mb-2 text-[10px] font-bold uppercase tracking-wide text-slate-500">Link + Status</div>
+              <div className="grid grid-cols-1 gap-2">
+                <select value={annotationStatus} onChange={(event) => setAnnotationStatus(event.target.value as WorkspaceStatus)} className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm font-bold text-white">
+                  {statusOptions.map((option) => <option key={option}>{option}</option>)}
+                </select>
+                <select value={selectedToolItemId} onChange={(event) => setSelectedToolItemId(event.target.value)} className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm font-bold text-white">
+                  <option value="">Link item...</option>
+                  {items.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+                </select>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-slate-800 bg-slate-900 p-3">
+              <div className="mb-2 text-[10px] font-bold uppercase tracking-wide text-slate-500">Options</div>
+              <div className="grid grid-cols-1 gap-2">
+                {tool === 'Stamp' ? (
+                  <select value={stampPreset} onChange={(event) => setStampPreset(event.target.value)} className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm font-bold text-white">
+                    {stampOptions.map((stamp) => <option key={stamp}>{stamp}</option>)}
+                  </select>
+                ) : null}
+                {tool === 'Reference' ? (
+                  <input value={referenceKnownFt} onChange={(event) => setReferenceKnownFt(event.target.value)} placeholder="Known length ft" className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white" />
+                ) : null}
+                <input value={annotationLabel} onChange={(event) => setAnnotationLabel(event.target.value)} placeholder="Label / callout text" className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white" />
+                <input value={annotationNotes} onChange={(event) => setAnnotationNotes(event.target.value)} placeholder="Annotation note" className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white" />
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-3 rounded-xl border border-slate-800 bg-black/25 px-3 py-2 text-xs text-slate-400">
+            Shortcuts: Esc cancels, Enter finishes perimeter/area, Delete removes selected markup, right-click cancels current action.
           </div>
         </div>
 
@@ -1129,6 +1567,13 @@ export const VisualWorkspace: React.FC = () => {
           {selectedBoard && (
             <div
               ref={boardSurfaceRef}
+              onContextMenu={(event) => {
+                event.preventDefault();
+                cancelActiveAction();
+              }}
+              onDoubleClick={() => {
+                if (tool === 'Perimeter' || tool === 'Area') finishMeasurement();
+              }}
               onMouseDown={handleBoardMouseDown}
               onMouseMove={(event) => {
                 handleAnnotationDragMove(event);
@@ -1326,38 +1771,99 @@ export const VisualWorkspace: React.FC = () => {
   );
 
   const renderGraph = () => {
-    const nodeMap = new globalThis.Map<string, { node: GraphNode; position: GraphPosition }>(graphNodes.map((node, index) => [node.id, { node, position: graphPositionForNode(node.id, index) }]));
+    const nodeMap = new globalThis.Map<string, { node: GraphNode; position: GraphPosition }>(
+      graphNodes.map((node, index) => [node.id, { node, position: graphPositionForNode(node.id, index) }]),
+    );
+
+    const selectedPins = selectedGraphNode ? getGraphNodePins(selectedGraphNode) : [];
+    const selectedRows = getNodeInspectorRows(selectedGraphNode);
 
     return (
-      <div className="space-y-4">
-        <section className={`rounded-3xl border p-4 ${isDesktopStyle ? 'ss-glass' : 'border-gray-200 bg-white shadow-sm'}`}>
-          <div className="flex flex-wrap items-center gap-2">
-            <select value={edgeSource} onChange={(event) => setEdgeSource(event.target.value)} className="rounded-lg border px-3 py-2 text-sm">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[300px_minmax(0,1fr)_340px]">
+        <aside className={`rounded-3xl border p-4 ${isDesktopStyle ? 'ss-glass' : 'border-gray-200 bg-white shadow-sm'}`}>
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <h2 className={`font-bold ${isDesktopStyle ? 'text-white' : 'text-gray-900'}`}>Node Library</h2>
+            <span className={`rounded-full px-2 py-1 text-[10px] font-bold ${isDesktopStyle ? 'bg-white/10 text-slate-300' : 'bg-gray-100 text-gray-500'}`}>{graphNodes.length} nodes</span>
+          </div>
+
+          <div className="space-y-2">
+            {(['Item', 'Board', 'Annotation', 'Photo', 'Cost'] as GraphNodeType[]).map((type) => {
+              const nodes = graphNodes.filter((node) => node.type === type);
+              if (nodes.length === 0) return null;
+
+              return (
+                <div key={type}>
+                  <div className={`mb-1 px-2 text-[10px] font-bold uppercase tracking-wide ${isDesktopStyle ? 'text-slate-400' : 'text-gray-500'}`}>{type}s</div>
+                  {nodes.map((node) => (
+                    <button
+                      key={node.id}
+                      onClick={() => setSelectedGraphNodeId(node.id)}
+                      className={`mb-1 w-full rounded-xl border px-3 py-2 text-left text-xs transition ${
+                        selectedGraphNodeId === node.id
+                          ? 'border-blue-400 bg-blue-500/15 text-blue-700'
+                          : isDesktopStyle
+                            ? 'border-white/10 bg-white/5 text-slate-200 hover:bg-white/10'
+                            : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+                      }`}
+                    >
+                      <div className="font-bold">{node.title}</div>
+                      <div className="mt-0.5 opacity-70">{node.subtitle}</div>
+                    </button>
+                  ))}
+                </div>
+              );
+            })}
+          </div>
+        </aside>
+
+        <section ref={graphRef} className="relative min-h-[760px] overflow-auto rounded-3xl border border-slate-800 bg-slate-950 shadow-2xl">
+          <div className="sticky top-0 z-30 flex flex-wrap items-center gap-2 border-b border-slate-800 bg-slate-950/95 px-4 py-3 backdrop-blur">
+            <div className="mr-2 flex items-center gap-2 text-sm font-bold text-white">
+              <Network size={17} className="text-blue-300" />
+              Blueprint Graph
+            </div>
+            <select value={edgeSource} onChange={(event) => setEdgeSource(event.target.value)} className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs font-semibold text-white">
               <option value="">Source node...</option>
               {graphNodes.map((node) => <option key={node.id} value={node.id}>{node.type}: {node.title}</option>)}
             </select>
-            <input value={edgeRelation} onChange={(event) => setEdgeRelation(event.target.value)} className="rounded-lg border px-3 py-2 text-sm" placeholder="relation" />
-            <select value={edgeTarget} onChange={(event) => setEdgeTarget(event.target.value)} className="rounded-lg border px-3 py-2 text-sm">
+            <input value={edgeRelation} onChange={(event) => setEdgeRelation(event.target.value)} className="w-32 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-white" placeholder="relation" />
+            <select value={edgeTarget} onChange={(event) => setEdgeTarget(event.target.value)} className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs font-semibold text-white">
               <option value="">Target node...</option>
               {graphNodes.map((node) => <option key={node.id} value={node.id}>{node.type}: {node.title}</option>)}
             </select>
-            <button onClick={addManualEdge} className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-bold text-white">
-              <LinkIcon size={15} /> Add Link
+            <button onClick={addManualEdge} className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white">
+              <LinkIcon size={14} /> Add Link
             </button>
           </div>
-        </section>
 
-        <section ref={graphRef} className="relative min-h-[760px] overflow-auto rounded-3xl border border-slate-800 bg-slate-950 shadow-2xl">
           <div className="absolute inset-0 opacity-40" style={{ backgroundImage: 'linear-gradient(#1e293b 1px, transparent 1px), linear-gradient(90deg, #1e293b 1px, transparent 1px)', backgroundSize: '32px 32px' }} />
-          <svg className="pointer-events-none absolute inset-0 h-[1200px] w-[1400px]">
+          <svg className="pointer-events-none absolute left-0 top-0 h-[1200px] w-[1600px]">
+            <defs>
+              <marker id="graph-arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+                <path d="M0,0 L0,6 L9,3 z" fill="#38bdf8" />
+              </marker>
+            </defs>
             {graphEdges.map((edge) => {
               const source = nodeMap.get(edge.sourceId);
               const target = nodeMap.get(edge.targetId);
               if (!source || !target) return null;
+              const startX = source.position.x + 240;
+              const startY = source.position.y + 98;
+              const endX = target.position.x;
+              const endY = target.position.y + 98;
+              const midX = (startX + endX) / 2;
+
               return (
                 <g key={edge.id}>
-                  <line x1={source.position.x + 105} y1={source.position.y + 45} x2={target.position.x + 105} y2={target.position.y + 45} stroke="#38bdf8" strokeWidth="2" strokeOpacity="0.65" />
-                  <text x={(source.position.x + target.position.x) / 2 + 105} y={(source.position.y + target.position.y) / 2 + 40} fill="#bae6fd" fontSize="11" fontWeight="700">{edge.relation}</text>
+                  <path
+                    d={`M ${startX} ${startY} C ${midX} ${startY}, ${midX} ${endY}, ${endX} ${endY}`}
+                    fill="none"
+                    stroke="#38bdf8"
+                    strokeWidth="2"
+                    strokeOpacity="0.75"
+                    markerEnd="url(#graph-arrow)"
+                  />
+                  <text x={midX - 28} y={(startY + endY) / 2 - 8} fill="#bae6fd" fontSize="11" fontWeight="700">{edge.relation}</text>
                 </g>
               );
             })}
@@ -1365,27 +1871,140 @@ export const VisualWorkspace: React.FC = () => {
 
           {graphNodes.map((node, index) => {
             const position = graphPositionForNode(node.id, index);
+            const pins = getGraphNodePins(node);
+            const isSelected = selectedGraphNodeId === node.id;
+
             return (
               <div
                 key={node.id}
                 onMouseDown={(event) => {
                   const rect = (event.currentTarget as HTMLDivElement).getBoundingClientRect();
+                  setSelectedGraphNodeId(node.id);
                   setDraggingNodeId(node.id);
                   setDraggingNodeOffset({ x: event.clientX - rect.left, y: event.clientY - rect.top });
                 }}
-                className="absolute z-10 w-56 cursor-grab rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl active:cursor-grabbing"
+                className={`absolute z-10 w-64 cursor-grab rounded-2xl border bg-slate-900 shadow-2xl active:cursor-grabbing ${
+                  isSelected ? 'border-blue-300 ring-2 ring-blue-500/40' : 'border-slate-700'
+                }`}
                 style={{ left: position.x, top: position.y }}
               >
-                <div className="rounded-t-2xl bg-gradient-to-r from-blue-600 to-cyan-500 px-3 py-2 text-xs font-bold uppercase tracking-wide text-white">{node.type}</div>
+                <div className="rounded-t-2xl bg-gradient-to-r from-blue-600 to-cyan-500 px-3 py-2 text-xs font-bold uppercase tracking-wide text-white">
+                  {node.type}
+                </div>
                 <div className="p-3">
                   <div className="font-bold text-white">{node.title}</div>
                   <div className="mt-1 text-xs text-slate-400">{node.subtitle}</div>
                   {node.status && <span className={`mt-3 inline-flex rounded-full border px-2 py-1 text-[11px] font-bold ${statusClasses(node.status)}`}>{node.status}</span>}
+
+                  <div className="mt-3 space-y-1 border-t border-slate-700 pt-3">
+                    {pins.map((pin) => (
+                      <div key={pin.label} className="flex items-center justify-between gap-2 text-xs">
+                        <div className="flex items-center gap-2 text-slate-300">
+                          <span className="h-2.5 w-2.5 rounded-full border border-cyan-300 bg-slate-950 shadow-[0_0_10px_rgba(34,211,238,0.8)]" />
+                          {pin.label}
+                        </div>
+                        <span className="rounded-full bg-slate-800 px-2 py-0.5 font-bold text-slate-200">{pin.count}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
             );
           })}
         </section>
+
+        <aside className={`rounded-3xl border p-4 ${isDesktopStyle ? 'ss-glass' : 'border-gray-200 bg-white shadow-sm'}`}>
+          <div className="mb-3 flex items-center gap-2">
+            <Network size={18} className="text-blue-500" />
+            <h2 className={`font-bold ${isDesktopStyle ? 'text-white' : 'text-gray-900'}`}>Node Inspector</h2>
+          </div>
+
+          {!selectedGraphNode ? (
+            <p className={isDesktopStyle ? 'text-sm text-slate-400' : 'text-sm text-gray-500'}>Select a node to inspect its attachments.</p>
+          ) : (
+            <div className="space-y-4">
+              <div className={`rounded-2xl border p-4 ${isDesktopStyle ? 'border-white/10 bg-white/5' : 'border-gray-200 bg-gray-50'}`}>
+                <div className={`text-[10px] font-bold uppercase tracking-wide ${isDesktopStyle ? 'text-slate-400' : 'text-gray-500'}`}>{selectedGraphNode.type}</div>
+                <div className={`mt-1 text-lg font-bold ${isDesktopStyle ? 'text-white' : 'text-gray-900'}`}>{selectedGraphNode.title}</div>
+                <div className={`mt-1 text-xs ${isDesktopStyle ? 'text-slate-400' : 'text-gray-500'}`}>{selectedGraphNode.subtitle}</div>
+              </div>
+
+              <div>
+                <div className={`mb-2 text-xs font-bold uppercase tracking-wide ${isDesktopStyle ? 'text-slate-400' : 'text-gray-500'}`}>Attachment Pins</div>
+                <div className="space-y-2">
+                  {selectedPins.map((pin) => (
+                    <div key={pin.label} className={`flex items-center justify-between rounded-xl border px-3 py-2 text-sm ${isDesktopStyle ? 'border-white/10 bg-white/5 text-slate-200' : 'border-gray-200 bg-white text-gray-700'}`}>
+                      <span>{pin.label}</span>
+                      <span className="rounded-full bg-blue-600 px-2 py-0.5 text-xs font-bold text-white">{pin.count}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <div className={`mb-2 text-xs font-bold uppercase tracking-wide ${isDesktopStyle ? 'text-slate-400' : 'text-gray-500'}`}>Details</div>
+                <div className="space-y-2">
+                  {selectedRows.map(([label, value]) => (
+                    <div key={label} className={`rounded-xl border px-3 py-2 text-sm ${isDesktopStyle ? 'border-white/10 bg-white/5 text-slate-200' : 'border-gray-200 bg-white text-gray-700'}`}>
+                      <div className="text-[10px] font-bold uppercase tracking-wide opacity-60">{label}</div>
+                      <div className="mt-0.5 font-semibold">{value}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-2">
+                {selectedGraphNode.type === 'Board' && (
+                  <button
+                    onClick={() => {
+                      setSelectedBoardId(selectedGraphNode.sourceId);
+                      setActiveTab('Boards');
+                    }}
+                    className="rounded-xl bg-blue-600 px-3 py-2 text-sm font-bold text-white"
+                  >
+                    Open Board
+                  </button>
+                )}
+                {selectedGraphNode.type === 'Item' && (
+                  <button
+                    onClick={() => {
+                      setSelectedItemId(selectedGraphNode.sourceId);
+                      setActiveTab('Items');
+                    }}
+                    className="rounded-xl bg-blue-600 px-3 py-2 text-sm font-bold text-white"
+                  >
+                    Open Item
+                  </button>
+                )}
+                {selectedGraphNode.type === 'Photo' && (
+                  <button onClick={() => setActiveTab('Photos')} className="rounded-xl bg-blue-600 px-3 py-2 text-sm font-bold text-white">
+                    Open Photos
+                  </button>
+                )}
+                {selectedGraphNode.type === 'Cost' && (
+                  <button onClick={() => setActiveTab('Costs')} className="rounded-xl bg-blue-600 px-3 py-2 text-sm font-bold text-white">
+                    Open Costs
+                  </button>
+                )}
+                {selectedGraphNode.type === 'Annotation' && (
+                  <button
+                    onClick={() => {
+                      const annotation = annotations.find((candidate) => candidate.id === selectedGraphNode.sourceId);
+                      if (annotation) {
+                        setSelectedAnnotationId(annotation.id);
+                        setSelectedBoardId(annotation.boardId);
+                        setActiveTab('Boards');
+                      }
+                    }}
+                    className="rounded-xl bg-blue-600 px-3 py-2 text-sm font-bold text-white"
+                  >
+                    Open Board Markup
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+        </aside>
       </div>
     );
   };
@@ -1534,10 +2153,19 @@ export const VisualWorkspace: React.FC = () => {
               Connect project items, annotated plans/PDFs, site photos, graph nodes, measurements, and lightweight cost lines in one visual workspace.
             </p>
           </div>
-          <div className="grid grid-cols-3 gap-2 text-center text-xs">
-            <div className={`rounded-2xl border px-4 py-3 ${isDesktopStyle ? 'border-white/10 bg-white/10 text-slate-200' : 'border-gray-200 bg-gray-50 text-gray-700'}`}><div className="text-xl font-bold">{items.length}</div>Items</div>
-            <div className={`rounded-2xl border px-4 py-3 ${isDesktopStyle ? 'border-white/10 bg-white/10 text-slate-200' : 'border-gray-200 bg-gray-50 text-gray-700'}`}><div className="text-xl font-bold">{annotations.length}</div>Marks</div>
-            <div className={`rounded-2xl border px-4 py-3 ${isDesktopStyle ? 'border-white/10 bg-white/10 text-slate-200' : 'border-gray-200 bg-gray-50 text-gray-700'}`}><div className="text-xl font-bold">{graphEdges.length}</div>Links</div>
+          <div className="space-y-3">
+            <button
+              onClick={loadDemoWorkspace}
+              className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 py-3 text-sm font-bold text-white shadow hover:bg-blue-700"
+            >
+              <Sparkles size={16} />
+              Load Demo Workspace
+            </button>
+            <div className="grid grid-cols-3 gap-2 text-center text-xs">
+              <div className={`rounded-2xl border px-4 py-3 ${isDesktopStyle ? 'border-white/10 bg-white/10 text-slate-200' : 'border-gray-200 bg-gray-50 text-gray-700'}`}><div className="text-xl font-bold">{items.length}</div>Items</div>
+              <div className={`rounded-2xl border px-4 py-3 ${isDesktopStyle ? 'border-white/10 bg-white/10 text-slate-200' : 'border-gray-200 bg-gray-50 text-gray-700'}`}><div className="text-xl font-bold">{annotations.length}</div>Marks</div>
+              <div className={`rounded-2xl border px-4 py-3 ${isDesktopStyle ? 'border-white/10 bg-white/10 text-slate-200' : 'border-gray-200 bg-gray-50 text-gray-700'}`}><div className="text-xl font-bold">{graphEdges.length}</div>Links</div>
+            </div>
           </div>
         </div>
       </header>
