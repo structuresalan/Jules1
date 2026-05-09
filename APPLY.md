@@ -1,16 +1,16 @@
-# Add Strict Visual Workspace QA Hooks
+# Fix Overlay Tool Event Handling
 
 Replace/add these files:
 - src/pages/VisualWorkspace.tsx
-- tests/visual-workspace-tools.spec.ts
 
 Commit message:
-Add strict Visual Workspace QA hooks
+Fix overlay drawing pan and zoom handlers
 
 What changed:
-- Report 4 showed tests expected `plan-event-layer` and `annotation-hit-*`, but the running page could not find them.
-- Adds a permanent HTML `plan-event-layer` overlay inside the plan viewport.
-- Adds permanent HTML `annotation-hit-*` buttons overlayed on annotations.
-- This avoids SVG hit-testing issues in Playwright and gives stable DOM targets.
-- Keeps SVG annotations visible while HTML hit targets handle reliable selection/erase testing.
-- Updates tests to fall back to SVG annotations if an HTML hit target is missing.
+- Report 5 showed the overlay hooks existed but Cloud/Text/Pan/Zoom still did not change state.
+- The previous overlay tried to synthesize SVG events, which was too indirect.
+- The plan event layer now handles drawing, pan, and zoom directly.
+- Cloud/Text/other drawing tools use overlay pointer coordinates.
+- Pan updates planPan directly from overlay pointer movement.
+- Zoom wheel updates planZoom directly from overlay wheel events.
+- Annotation hit buttons only receive pointer events in Select/Eraser modes, so they do not block drawing tools.

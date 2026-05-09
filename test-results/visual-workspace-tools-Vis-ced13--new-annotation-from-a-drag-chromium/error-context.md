@@ -6,25 +6,19 @@
 
 # Test info
 
-- Name: visual-workspace-tools.spec.ts >> Visual Workspace toolbar behavior >> Pan moves the view and Fit resets it
-- Location: tests\visual-workspace-tools.spec.ts:116:3
+- Name: visual-workspace-tools.spec.ts >> Visual Workspace toolbar behavior >> Cloud tool creates a new annotation from a drag
+- Location: tests\visual-workspace-tools.spec.ts:68:3
 
 # Error details
 
 ```
-Error: expect(locator).not.toHaveAttribute(expected) failed
+Error: expect(received).toBeGreaterThan(expected)
 
-Locator:  getByTestId('plan-transform')
-Expected: not "0"
-Received: "0"
-Timeout:  5000ms
+Expected: > 5
+Received:   5
 
-Call log:
-  - Expect "not toHaveAttribute" with timeout 5000ms
-  - waiting for getByTestId('plan-transform')
-    9 × locator resolved to <div data-plan-zoom="1" data-plan-pan-x="0" data-plan-pan-y="0" data-active-tool="Pan" data-testid="plan-transform" class="h-full w-full cursor-grab">…</div>
-      - unexpected value "0"
-
+Call Log:
+- Timeout 5000ms exceeded while waiting on the predicate
 ```
 
 # Page snapshot
@@ -638,13 +632,34 @@ Call log:
               - generic [ref=e932]: Due Date
               - generic [ref=e933]: May 26, 2025
   - contentinfo [ref=e934]:
-    - generic [ref=e935]: Pan active. Hold left click and drag to move the plan view. Press Esc for Select.
+    - generic [ref=e935]: Cloud tool active. Drag around a region to create a review cloud linked to the selected item.
     - generic [ref=e936]: "X: 152'-3 1/2\" Y: 47'-6 3/4\" | Plan: 100% / Map: 100% | Grid: 1'-0\" ● Online"
 ```
 
 # Test source
 
 ```ts
+  1   | import { expect, test, type Locator, type Page } from '@playwright/test';
+  2   | 
+  3   | async function openWorkspace(page: Page) {
+  4   |   await page.goto('/qa/visual-workspace');
+  5   |   await page.evaluate(() => window.localStorage.clear());
+  6   |   await page.reload();
+  7   |   await expect(page.getByTestId('plan-canvas')).toBeVisible();
+  8   | }
+  9   | 
+  10  | async function annotationCount(page: Page) {
+  11  |   return page.locator('[data-testid^="annotation-"][data-tool-type]').count();
+  12  | }
+  13  | 
+  14  | async function dragOnCanvas(page: Page, start: { x: number; y: number }, end: { x: number; y: number }) {
+  15  |   const layer = page.getByTestId('plan-event-layer');
+  16  |   const canvas = page.getByTestId('plan-canvas');
+  17  |   const target = (await layer.count()) ? layer : canvas;
+  18  |   const box = await target.boundingBox();
+  19  |   if (!box) throw new Error('plan canvas not visible');
+  20  | 
+  21  |   await page.mouse.move(box.x + start.x, box.y + start.y);
   22  |   await page.mouse.down();
   23  |   await page.mouse.move(box.x + end.x, box.y + end.y, { steps: 12 });
   24  |   await page.mouse.up();
@@ -699,7 +714,8 @@ Call log:
   73  | 
   74  |     await dragOnCanvas(page, { x: 360, y: 180 }, { x: 560, y: 260 });
   75  | 
-  76  |     await expect.poll(() => annotationCount(page)).toBeGreaterThan(before);
+> 76  |     await expect.poll(() => annotationCount(page)).toBeGreaterThan(before);
+      |     ^ Error: expect(received).toBeGreaterThan(expected)
   77  |     await expect(page.getByTestId('inspector-title')).toBeVisible();
   78  |   });
   79  | 
@@ -745,8 +761,7 @@ Call log:
   119 |     await page.getByTestId('tool-pan').click();
   120 |     await dragOnCanvas(page, { x: 360, y: 240 }, { x: 440, y: 300 });
   121 | 
-> 122 |     await expect(transform).not.toHaveAttribute('data-plan-pan-x', '0');
-      |                                 ^ Error: expect(locator).not.toHaveAttribute(expected) failed
+  122 |     await expect(transform).not.toHaveAttribute('data-plan-pan-x', '0');
   123 | 
   124 |     await page.getByTestId('tool-fit').click();
   125 | 
@@ -801,15 +816,4 @@ Call log:
   174 |     await expect(page.getByTestId('photo-library-title')).toBeVisible();
   175 |   });
   176 | 
-  177 |   test('Distance requires scale first', async ({ page }) => {
-  178 |     const before = await annotationCount(page);
-  179 | 
-  180 |     await page.getByTestId('tool-distance').click();
-  181 |     await dragOnCanvas(page, { x: 300, y: 200 }, { x: 470, y: 200 });
-  182 | 
-  183 |     await expect.poll(() => annotationCount(page)).toBe(before);
-  184 |     await expect(page.getByTestId('status-message')).toHaveAttribute('data-active-tool', 'Distance');
-  185 |   });
-  186 | });
-  187 | 
 ```

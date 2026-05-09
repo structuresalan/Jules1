@@ -963,6 +963,73 @@ export const VisualWorkspace: React.FC = () => {
     });
   };
 
+  const overlayPointFromPointer = (event: React.PointerEvent<HTMLDivElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    return {
+      x: Math.max(0, Math.min(100, ((event.clientX - rect.left) / rect.width) * 100)),
+      y: Math.max(0, Math.min(100, ((event.clientY - rect.top) / rect.height) * 100)),
+    };
+  };
+
+  const handleOverlayPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (activeTool === 'Pan') {
+      event.currentTarget.setPointerCapture(event.pointerId);
+      setPanState({ startClient: { x: event.clientX, y: event.clientY }, original: planPan });
+      return;
+    }
+
+    if (activeTool === 'Zoom' || activeTool === 'Zoom Area') return;
+
+    if (activeTool === 'Select' || activeTool === 'Eraser') return;
+    if (['Photo', 'File', 'Link', 'Undo', 'Redo', 'More', 'Color', 'Layers', 'Grid', 'Snap', 'Fit'].includes(activeTool)) return;
+
+    event.currentTarget.setPointerCapture(event.pointerId);
+    const point = overlayPointFromPointer(event);
+    setIsDrawing(true);
+    setDraftGeometry(activeTool === 'Pen' ? { ...point, points: [point] } : { ...point, x2: point.x, y2: point.y });
+  };
+
+  const handleOverlayPointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (panState) {
+      setPlanPan({
+        x: panState.original.x + event.clientX - panState.startClient.x,
+        y: panState.original.y + event.clientY - panState.startClient.y,
+      });
+      return;
+    }
+
+    if (!isDrawing || !draftGeometry) return;
+    const point = overlayPointFromPointer(event);
+    setDraftGeometry((current) => {
+      if (!current) return current;
+      if (snapEnabled) {
+        point.x = Math.round(point.x);
+        point.y = Math.round(point.y);
+      }
+      if (activeTool === 'Pen') return { ...current, points: [...(current.points ?? []), point] };
+      return { ...current, x2: point.x, y2: point.y };
+    });
+  };
+
+  const handleOverlayPointerUp = () => {
+    if (panState) {
+      setPanState(null);
+      return;
+    }
+
+    if (!isDrawing || !draftGeometry) return;
+    createMarkupFromGeometry(activeTool, draftGeometry);
+  };
+
+  const handleOverlayWheel = (event: React.WheelEvent<HTMLDivElement>) => {
+    if (activeTool !== 'Zoom' && activeTool !== 'Zoom Area') return;
+    event.preventDefault();
+    setPlanZoom((value) => {
+      const next = event.deltaY < 0 ? value + 0.1 : value - 0.1;
+      return Math.max(0.5, Math.min(3, Number(next.toFixed(2))));
+    });
+  };
+
   const statusMessage = (() => {
     if (activeTool === 'Select') return 'Select active. Click a markup to select it and show properties. Use Eraser to delete, Pan to move the view, Esc cancels active tools.';
     if (activeTool === 'Cloud') return 'Cloud tool active. Drag around a region to create a review cloud linked to the selected item.';
@@ -1433,29 +1500,13 @@ export const VisualWorkspace: React.FC = () => {
             >
               <div
                 data-testid="plan-event-layer"
-                className={`absolute inset-0 z-20 ${activeTool !== 'Select' && activeTool !== 'Eraser' ? 'cursor-crosshair' : 'pointer-events-none'}`}
+                className={`absolute inset-0 z-20 ${activeTool === 'Pan' ? 'cursor-grab' : activeTool === 'Zoom' || activeTool === 'Zoom Area' ? 'cursor-zoom-in' : activeTool !== 'Select' && activeTool !== 'Eraser' ? 'cursor-crosshair' : 'pointer-events-none'}`}
                 style={{ pointerEvents: activeTool !== 'Select' && activeTool !== 'Eraser' ? 'auto' : 'none' }}
-                onPointerDown={(event) => {
-                  const svg = document.querySelector('[data-testid="plan-canvas"]') as SVGSVGElement | null;
-                  if (!svg) return;
-                  const syntheticEvent = {
-                    ...event,
-                    currentTarget: svg,
-                    target: svg,
-                  } as unknown as React.PointerEvent<SVGSVGElement>;
-                  handlePlanPointerDown(syntheticEvent);
-                }}
-                onPointerMove={(event) => {
-                  const svg = document.querySelector('[data-testid="plan-canvas"]') as SVGSVGElement | null;
-                  if (!svg) return;
-                  const syntheticEvent = {
-                    ...event,
-                    currentTarget: svg,
-                    target: svg,
-                  } as unknown as React.PointerEvent<SVGSVGElement>;
-                  handlePlanPointerMove(syntheticEvent);
-                }}
-                onPointerUp={() => handlePlanPointerUp()}
+                onPointerDown={handleOverlayPointerDown}
+                onPointerMove={handleOverlayPointerMove}
+                onPointerUp={handleOverlayPointerUp}
+                onPointerLeave={handleOverlayPointerUp}
+                onWheel={handleOverlayWheel}
               />
               <div
                 data-testid="plan-transform"
@@ -1503,7 +1554,7 @@ export const VisualWorkspace: React.FC = () => {
                       key={`hit-${item.id}`}
                       data-testid={`annotation-hit-${item.id}`}
                       aria-label={`Annotation ${item.id}`}
-                      className="pointer-events-auto absolute rounded border border-transparent bg-transparent"
+                      className={`absolute rounded border border-transparent bg-transparent ${activeTool === 'Select' || activeTool === 'Eraser' ? 'pointer-events-auto' : 'pointer-events-none'}`}
                       style={{ left, top, width, height }}
                       onClick={(event) => {
                         event.stopPropagation();
