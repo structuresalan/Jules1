@@ -1,16 +1,16 @@
-# Fix Visual Marker Text Narrowing Build Error
+# Final Fix for Visual Marker Type Narrowing Errors
 
 Replace this file:
 - src/pages/Documents.tsx
 
 Commit message:
-Fix visual marker stretch type check
+Fix visual marker dropdown stretch build errors
 
 What changed:
-- Fixes TS2367 caused by checking markerStyle === 'Text' inside a Box/Cloud-only branch.
+- Fixes the remaining TS2367 type-narrowing errors.
+- Separates Box/Cloud resize controls from Text resize controls.
+- Removes impossible Text comparisons inside Box/Cloud-only branches.
 - Keeps marker type dropdown.
-- Keeps stretch controls:
-  - Arrow length
-  - Box width/height
-  - Cloud width/height
-  - Text width/height
+- Keeps stamp preset dropdown.
+- Keeps arrow length slider.
+- Keeps Box, Cloud, and Text width/height sliders.

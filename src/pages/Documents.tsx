@@ -1350,7 +1350,7 @@ export const Documents: React.FC = () => {
               className="mt-1 w-full"
             />
           </label>
-        ) : markerStyle === 'Box' || markerStyle === 'Cloud' || markerStyle === 'Text' ? (
+        ) : markerStyle === 'Box' || markerStyle === 'Cloud' ? (
           <div className="mt-2 grid grid-cols-2 gap-2">
             <label className="block text-xs font-semibold text-gray-600">
               Width: {markerWidth}px
@@ -1555,8 +1555,8 @@ export const Documents: React.FC = () => {
     }
 
     if (style === 'Box' || style === 'Cloud') {
-      const width = clampVisualDimension(marker.markerWidth ?? getDefaultMarkerWidth(style, sizeConfig), style === 'Text' ? 60 : 50, 240);
-      const height = clampVisualDimension(marker.markerHeight ?? getDefaultMarkerHeight(style, sizeConfig), style === 'Text' ? 24 : 30, 160);
+      const width = clampVisualDimension(marker.markerWidth ?? getDefaultMarkerWidth(style, sizeConfig), 50, 240);
+      const height = clampVisualDimension(marker.markerHeight ?? getDefaultMarkerHeight(style, sizeConfig), 30, 160);
       const wrapperStyle: React.CSSProperties = {
         left: `calc(${marker.xPercent}% - ${width / 2}px)`,
         top: `calc(${marker.yPercent}% - ${height / 2}px)`,
@@ -1597,8 +1597,8 @@ export const Documents: React.FC = () => {
           style={{
             left: `${marker.xPercent}%`,
             top: `${marker.yPercent}%`,
-            width: `${clampVisualDimension(marker.markerWidth ?? getDefaultMarkerWidth(style, sizeConfig), 60, 240)}px`,
-            minHeight: `${clampVisualDimension(marker.markerHeight ?? getDefaultMarkerHeight(style, sizeConfig), 24, 160)}px`,
+            width: `${clampVisualDimension(marker.markerWidth ?? getDefaultMarkerWidth('Text', sizeConfig), 60, 240)}px`,
+            minHeight: `${clampVisualDimension(marker.markerHeight ?? getDefaultMarkerHeight('Text', sizeConfig), 24, 160)}px`,
             transform: 'translate(-50%, -50%)',
           }}
         >
