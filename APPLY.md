@@ -1,16 +1,15 @@
-# Final Fix for Visual Marker Type Narrowing Errors
+# Visual Marker Instant Preview and Drag Offset
 
 Replace this file:
 - src/pages/Documents.tsx
 
 Commit message:
-Fix visual marker dropdown stretch build errors
+Improve visual marker preview and dragging
 
 What changed:
-- Fixes the remaining TS2367 type-narrowing errors.
-- Separates Box/Cloud resize controls from Text resize controls.
-- Removes impossible Text comparisons inside Box/Cloud-only branches.
-- Keeps marker type dropdown.
-- Keeps stamp preset dropdown.
-- Keeps arrow length slider.
-- Keeps Box, Cloud, and Text width/height sliders.
+- Pending markers now render as the actual selected marker style before pressing Save Marker.
+- If you choose Arrow, Box, Cloud, Text, or a stamp preset, the pending marker preview updates immediately.
+- Pending marker preview uses selected status, size, label display, arrow length, width, and height.
+- Dragging no longer snaps the marker anchor to the middle of the cursor.
+- Dragging preserves the offset between where you grabbed the marker and the marker's anchor point.
+- This should feel more like PDF annotation tools: click/hold anywhere on the marker and it moves naturally.

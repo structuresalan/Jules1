@@ -539,6 +539,7 @@ export const Documents: React.FC = () => {
   const [newBoardName, setNewBoardName] = useState('');
   const boardCanvasRef = useRef<HTMLDivElement | null>(null);
   const latestVisualMarkersRef = useRef<VisualMarker[]>([]);
+  const dragOffsetRef = useRef<{ xPercent: number; yPercent: number }>({ xPercent: 0, yPercent: 0 });
   const [newBoardKind, setNewBoardKind] = useState<VisualBoardKind>('Plan');
   const [uploadMessage, setUploadMessage] = useState('');
 
@@ -836,7 +837,11 @@ export const Documents: React.FC = () => {
       const point = getBoardCanvasPercentFromClientPoint(event.clientX, event.clientY);
       if (!point) return;
 
-      updateMarkerPositionLocally(draggingMarkerId, point.xPercent, point.yPercent);
+      updateMarkerPositionLocally(
+        draggingMarkerId,
+        Math.min(100, Math.max(0, point.xPercent - dragOffsetRef.current.xPercent)),
+        Math.min(100, Math.max(0, point.yPercent - dragOffsetRef.current.yPercent)),
+      );
       setHoverPoint({ x: event.clientX, y: event.clientY });
     };
 
@@ -850,6 +855,7 @@ export const Documents: React.FC = () => {
         setSelectedMarkerId(draggingMarkerId);
       }
 
+      dragOffsetRef.current = { xPercent: 0, yPercent: 0 };
       setDraggingMarkerId(null);
     };
 
@@ -1440,6 +1446,34 @@ export const Documents: React.FC = () => {
     </div>
   );
 
+  const getPendingPreviewMarker = (): VisualMarker | null => {
+    if (!activeProject || !selectedBoard || !pendingMarkerPoint) return null;
+
+    const now = new Date().toISOString();
+
+    return {
+      id: 'pending-marker-preview',
+      projectId: activeProject.id,
+      boardId: selectedBoard.id,
+      documentId: markerDocumentIds[0] ?? '',
+      documentIds: markerDocumentIds,
+      label: markerLabel.trim() || (selectedStampPreset || markerStyle),
+      notes: markerNotes,
+      xPercent: pendingMarkerPoint.xPercent,
+      yPercent: pendingMarkerPoint.yPercent,
+      style: markerStyle,
+      direction: markerDirection,
+      status: markerStatus,
+      size: markerSize,
+      labelVisibility: 'Always',
+      arrowLength: markerArrowLength,
+      markerWidth,
+      markerHeight,
+      createdAt: now,
+      updatedAt: now,
+    };
+  };
+
   const renderVisualMarkerButton = (marker: VisualMarker) => {
     const markerDocuments = getMarkerDocuments(marker, documents);
     const markerDocument = markerDocuments[0] ?? null;
@@ -1449,9 +1483,10 @@ export const Documents: React.FC = () => {
     const size = normalizeMarkerSize(marker.size);
     const labelVisibility = normalizeMarkerLabelVisibility(marker.labelVisibility);
     const sizeConfig = getMarkerSizeConfig(size);
-    const isSelected = selectedMarkerId === marker.id;
-    const isMoving = movingMarkerId === marker.id;
-    const isHovered = hoverVisualMarker?.id === marker.id;
+    const isPreview = marker.id === 'pending-marker-preview';
+    const isSelected = !isPreview && selectedMarkerId === marker.id;
+    const isMoving = !isPreview && movingMarkerId === marker.id;
+    const isHovered = !isPreview && hoverVisualMarker?.id === marker.id;
     const showLabel = labelDisplayOverride === 'Show all' || (labelDisplayOverride !== 'Hide all' && (labelVisibility === 'Always' || isSelected || isMoving || isHovered));
     const accentColor = markerStatusColor(status);
     const labelStyle: React.CSSProperties = {
@@ -1467,9 +1502,23 @@ export const Documents: React.FC = () => {
       draggable: false,
       onDragStart: (event: React.DragEvent<HTMLButtonElement>) => event.preventDefault(),
       onMouseDown: (event: React.MouseEvent<HTMLButtonElement>) => {
-        if (event.button !== 0) return;
+        if (isPreview || event.button !== 0) return;
         event.preventDefault();
         event.stopPropagation();
+
+        const rect = boardCanvasRef.current?.getBoundingClientRect();
+        if (rect && rect.width && rect.height) {
+          const anchorX = rect.left + (marker.xPercent / 100) * rect.width;
+          const anchorY = rect.top + (marker.yPercent / 100) * rect.height;
+
+          dragOffsetRef.current = {
+            xPercent: ((event.clientX - anchorX) / rect.width) * 100,
+            yPercent: ((event.clientY - anchorY) / rect.height) * 100,
+          };
+        } else {
+          dragOffsetRef.current = { xPercent: 0, yPercent: 0 };
+        }
+
         setSelectedMarkerId(marker.id);
         setPendingMarkerPoint(null);
         setIsAddingMarker(false);
@@ -1478,20 +1527,29 @@ export const Documents: React.FC = () => {
       },
       onClick: (event: React.MouseEvent<HTMLButtonElement>) => {
         event.stopPropagation();
+        if (isPreview) return;
         setSelectedMarkerId(marker.id);
         setPendingMarkerPoint(null);
         setIsAddingMarker(false);
       },
       onDoubleClick: (event: React.MouseEvent<HTMLButtonElement>) => {
         event.stopPropagation();
+        if (isPreview) return;
         startEditMarker(marker);
       },
       onMouseEnter: (event: React.MouseEvent<HTMLButtonElement>) => {
+        if (isPreview) return;
         setHoverVisualMarker(marker);
         setHoverPoint({ x: event.clientX, y: event.clientY });
       },
-      onMouseMove: (event: React.MouseEvent<HTMLButtonElement>) => setHoverPoint({ x: event.clientX, y: event.clientY }),
-      onMouseLeave: () => setHoverVisualMarker(null),
+      onMouseMove: (event: React.MouseEvent<HTMLButtonElement>) => {
+        if (isPreview) return;
+        setHoverPoint({ x: event.clientX, y: event.clientY });
+      },
+      onMouseLeave: () => {
+        if (isPreview) return;
+        setHoverVisualMarker(null);
+      },
       title: markerDocument
         ? `${marker.label}: ${markerDocument.name}${markerDocuments.length > 1 ? ` + ${markerDocuments.length - 1} more` : ''}`
         : marker.label,
@@ -1539,7 +1597,7 @@ export const Documents: React.FC = () => {
       return (
         <button
           {...commonProps}
-          className="absolute z-10 overflow-visible bg-transparent p-0 cursor-grab active:cursor-grabbing"
+          className={`absolute z-10 overflow-visible bg-transparent p-0 ${isPreview ? 'pointer-events-none opacity-90' : 'cursor-grab active:cursor-grabbing'}`}
           style={wrapperStyle}
         >
           {showLabel && (
@@ -1567,7 +1625,7 @@ export const Documents: React.FC = () => {
       return (
         <button
           {...commonProps}
-          className="absolute z-10 overflow-visible bg-transparent p-0 cursor-grab active:cursor-grabbing"
+          className={`absolute z-10 overflow-visible bg-transparent p-0 ${isPreview ? 'pointer-events-none opacity-90' : 'cursor-grab active:cursor-grabbing'}`}
           style={wrapperStyle}
         >
           <span
@@ -1593,7 +1651,7 @@ export const Documents: React.FC = () => {
       return (
         <button
           {...commonProps}
-          className="absolute z-10 overflow-visible bg-transparent p-0 cursor-grab active:cursor-grabbing"
+          className={`absolute z-10 overflow-visible bg-transparent p-0 ${isPreview ? 'pointer-events-none opacity-90' : 'cursor-grab active:cursor-grabbing'}`}
           style={{
             left: `${marker.xPercent}%`,
             top: `${marker.yPercent}%`,
@@ -1613,7 +1671,7 @@ export const Documents: React.FC = () => {
     return (
       <button
         {...commonProps}
-        className="absolute z-10 overflow-visible bg-transparent p-0 cursor-grab active:cursor-grabbing"
+        className={`absolute z-10 overflow-visible bg-transparent p-0 ${isPreview ? 'pointer-events-none opacity-90' : 'cursor-grab active:cursor-grabbing'}`}
         style={{ left: `${marker.xPercent}%`, top: `${marker.yPercent}%`, transform: 'translate(-50%, -100%)' }}
       >
         <span
@@ -1986,20 +2044,7 @@ export const Documents: React.FC = () => {
                     );
                   })}
 
-                  {pendingMarkerPoint && (
-                    <div
-                      className="absolute z-20 -translate-x-1/2 -translate-y-full rounded-full border border-amber-300 bg-amber-100 px-2 py-1 text-xs font-bold text-amber-900 shadow-lg"
-                      style={{
-                        left: `${pendingMarkerPoint.xPercent}%`,
-                        top: `${pendingMarkerPoint.yPercent}%`,
-                      }}
-                    >
-                      <span className="inline-flex items-center gap-1">
-                        <MapPin size={13} />
-                        {markerStyle} marker
-                      </span>
-                    </div>
-                  )}
+                  {pendingMarkerPoint && getPendingPreviewMarker() && renderVisualMarkerButton(getPendingPreviewMarker()!)}
                 </div>
               </div>
             </div>
