@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Bell,
   Camera,
@@ -36,6 +36,9 @@ import {
 
 type MarkupStatus = 'Field Verify' | 'Monitor' | 'Complete';
 type Priority = 'High' | 'Medium' | 'Low';
+type UserRole = 'Engineer' | 'Client';
+type WorkspaceTab = 'Workspace' | 'Review' | 'Report' | 'Export';
+type PanelMode = 'none' | 'report' | 'export' | 'settings';
 
 interface MarkupItem {
   id: number;
@@ -61,9 +64,28 @@ interface SitePhoto {
   grid: string;
   caption: string;
   photoType: 'seat' | 'flange' | 'section';
+  itemId?: number;
 }
 
-const markups: MarkupItem[] = [
+interface CommentItem {
+  id: number;
+  itemId: number;
+  authorRole: UserRole;
+  author: string;
+  body: string;
+  createdAt: string;
+  resolved: boolean;
+}
+
+interface DocumentLink {
+  id: number;
+  itemId: number;
+  name: string;
+  type: string;
+  reference: string;
+}
+
+const initialMarkups: MarkupItem[] = [
   {
     id: 1,
     color: '#ef4444',
@@ -141,80 +163,65 @@ const markups: MarkupItem[] = [
   },
 ];
 
-const photos: SitePhoto[] = [
-  { id: 1, color: '#ef4444', fileName: 'P101_0456.JPG', date: 'May 11, 2025', grid: 'Grid 6 / A-B', caption: 'Corroded beam seat connection', photoType: 'seat' },
-  { id: 2, color: '#2563eb', fileName: 'P101_0461.JPG', date: 'May 11, 2025', grid: 'Grid 6 / B-C', caption: 'Peeling paint and rust scale', photoType: 'flange' },
-  { id: 3, color: '#16a34a', fileName: 'P101_0468.JPG', date: 'May 11, 2025', grid: 'Grid 5 / C-D', caption: 'Midspan section loss', photoType: 'section' },
-  { id: 4, color: '#ef4444', fileName: 'P101_0457.JPG', date: 'May 11, 2025', grid: 'Grid 6 / A-B', caption: 'Seat bearing corrosion close-up', photoType: 'seat' },
-  { id: 5, color: '#ef4444', fileName: 'P101_0458.JPG', date: 'May 11, 2025', grid: 'Grid 6 / A-B', caption: 'Bearing stiffener rust', photoType: 'flange' },
+const initialPhotos: SitePhoto[] = [
+  { id: 1, color: '#ef4444', fileName: 'P101_0456.JPG', date: 'May 11, 2025', grid: 'Grid 6 / A-B', caption: 'Corroded beam seat connection', photoType: 'seat', itemId: 1 },
+  { id: 2, color: '#2563eb', fileName: 'P101_0461.JPG', date: 'May 11, 2025', grid: 'Grid 6 / B-C', caption: 'Peeling paint and rust scale', photoType: 'flange', itemId: 2 },
+  { id: 3, color: '#16a34a', fileName: 'P101_0468.JPG', date: 'May 11, 2025', grid: 'Grid 5 / C-D', caption: 'Midspan section loss', photoType: 'section', itemId: 3 },
+  { id: 4, color: '#ef4444', fileName: 'P101_0457.JPG', date: 'May 11, 2025', grid: 'Grid 6 / A-B', caption: 'Seat bearing corrosion close-up', photoType: 'seat', itemId: 1 },
+  { id: 5, color: '#ef4444', fileName: 'P101_0458.JPG', date: 'May 11, 2025', grid: 'Grid 6 / A-B', caption: 'Bearing stiffener rust', photoType: 'flange', itemId: 1 },
+];
+
+const initialComments: CommentItem[] = [
+  {
+    id: 1,
+    itemId: 1,
+    authorRole: 'Engineer',
+    author: 'A. Morgan',
+    body: 'Verify seat angle thickness and bearing stiffener condition during follow-up visit.',
+    createdAt: 'May 12, 2025 9:15 AM',
+    resolved: false,
+  },
+  {
+    id: 2,
+    itemId: 2,
+    authorRole: 'Client',
+    author: 'Client Reviewer',
+    body: 'Please clarify whether this needs immediate repair or can be monitored.',
+    createdAt: 'May 12, 2025 10:40 AM',
+    resolved: false,
+  },
+];
+
+const initialDocuments: DocumentLink[] = [
+  { id: 1, itemId: 1, name: 'Level 2 Framing Plan', type: 'Drawing', reference: 'S-2.3' },
+  { id: 2, itemId: 1, name: 'Beam B12 Repair Sketch', type: 'Sketch', reference: 'SK-S-101' },
+  { id: 3, itemId: 2, name: 'Inspection Photo Report', type: 'Report', reference: 'RPT-001' },
 ];
 
 const toolGroups = [
-  {
-    label: 'Navigate',
-    tools: [
-      ['Select', MousePointer2],
-      ['Pan', Move],
-      ['Zoom', ZoomIn],
-      ['Fit', Maximize2],
-      ['Zoom Area', Search],
-    ],
-  },
-  {
-    label: 'Markup',
-    tools: [
-      ['Arrow', MousePointer2],
-      ['Cloud', Cloud],
-      ['Text', Type],
-      ['Box', Square],
-      ['Callout', MessageSquare],
-      ['Dimension', Ruler],
-    ],
-  },
-  {
-    label: 'Measure',
-    tools: [
-      ['Distance', Ruler],
-      ['Angle', PenLine],
-      ['Area', Square],
-    ],
-  },
-  {
-    label: 'Insert',
-    tools: [
-      ['Note', FileText],
-      ['Photo', Camera],
-      ['File', Upload],
-      ['Link', LinkIcon],
-    ],
-  },
-  {
-    label: 'Annotate',
-    tools: [
-      ['Highlighter', Highlighter],
-      ['Pen', PenLine],
-      ['Eraser', PenLine],
-      ['Color', Palette],
-    ],
-  },
-  {
-    label: 'Layers',
-    tools: [
-      ['Layers', Layers],
-      ['Scale', Ruler],
-      ['Grid', Grid3X3],
-      ['Snap', Sparkles],
-    ],
-  },
-  {
-    label: 'Edit',
-    tools: [
-      ['Undo', Undo2],
-      ['Redo', Redo2],
-      ['More', MoreHorizontal],
-    ],
-  },
+  { label: 'Navigate', tools: [['Select', MousePointer2], ['Pan', Move], ['Zoom', ZoomIn], ['Fit', Maximize2], ['Zoom Area', Search]] },
+  { label: 'Markup', tools: [['Arrow', MousePointer2], ['Cloud', Cloud], ['Text', Type], ['Box', Square], ['Callout', MessageSquare], ['Dimension', Ruler]] },
+  { label: 'Measure', tools: [['Distance', Ruler], ['Angle', PenLine], ['Area', Square]] },
+  { label: 'Insert', tools: [['Note', FileText], ['Photo', Camera], ['File', Upload], ['Link', LinkIcon]] },
+  { label: 'Annotate', tools: [['Highlighter', Highlighter], ['Pen', PenLine], ['Eraser', PenLine], ['Color', Palette]] },
+  { label: 'Layers', tools: [['Layers', Layers], ['Scale', Ruler], ['Grid', Grid3X3], ['Snap', Sparkles]] },
+  { label: 'Edit', tools: [['Undo', Undo2], ['Redo', Redo2], ['More', MoreHorizontal]] },
 ] as const;
+
+const readLocal = <T,>(key: string, fallback: T): T => {
+  if (typeof window === 'undefined') return fallback;
+  try {
+    const raw = window.localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as T) : fallback;
+  } catch {
+    return fallback;
+  }
+};
+
+const writeLocal = <T,>(key: string, value: T) => {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(key, JSON.stringify(value));
+};
 
 const statusClass = (status: MarkupStatus) => {
   if (status === 'Field Verify') return 'bg-red-500/20 text-red-100 border-red-400/40';
@@ -234,13 +241,8 @@ const priorityClass = (priority: Priority) => {
   return 'bg-green-100 text-green-700';
 };
 
-const PhotoSvg: React.FC<{ photo: SitePhoto; compact?: boolean }> = ({ photo }) => {
-  const tone =
-    photo.photoType === 'seat'
-      ? ['#5b3b22', '#9a6537', '#1f2937']
-      : photo.photoType === 'flange'
-        ? ['#6b4a2f', '#c58a4b', '#334155']
-        : ['#78350f', '#b45309', '#475569'];
+const PhotoSvg: React.FC<{ photo: SitePhoto }> = ({ photo }) => {
+  const tone = photo.photoType === 'seat' ? ['#5b3b22', '#9a6537', '#1f2937'] : photo.photoType === 'flange' ? ['#6b4a2f', '#c58a4b', '#334155'] : ['#78350f', '#b45309', '#475569'];
 
   return (
     <svg viewBox="0 0 360 190" className="h-full w-full">
@@ -271,8 +273,8 @@ const PhotoSvg: React.FC<{ photo: SitePhoto; compact?: boolean }> = ({ photo }) 
         <circle cx="104" cy="72" r="7" fill="#292524" />
         <rect x="76" y="32" width="28" height="122" fill="#57534e" stroke="#cbd5e1" strokeWidth="2" opacity="0.72" />
         <rect x="251" y="35" width="30" height="116" fill="#57534e" stroke="#cbd5e1" strokeWidth="2" opacity="0.68" />
-        {[0, 1, 2, 3, 4].map((i) => (
-          <circle key={i} cx={92 + i * 39} cy={74 + (i % 2) * 10} r="6" fill="#1f2937" stroke="#cbd5e1" strokeWidth="1.2" />
+        {[0, 1, 2, 3, 4].map((index) => (
+          <circle key={index} cx={92 + index * 39} cy={74 + (index % 2) * 10} r="6" fill="#1f2937" stroke="#cbd5e1" strokeWidth="1.2" />
         ))}
         <path d="M0 150c52-18 100 14 150-6 52-21 109-13 210 3v43H0z" fill="#a16207" opacity="0.6" />
       </g>
@@ -280,18 +282,13 @@ const PhotoSvg: React.FC<{ photo: SitePhoto; compact?: boolean }> = ({ photo }) 
   );
 };
 
-const FramingPlan: React.FC<{ onSelect: (id: number) => void }> = ({ onSelect }) => {
+const FramingPlan: React.FC<{ onSelect: (id: number) => void; markups: MarkupItem[] }> = ({ onSelect, markups }) => {
   const xs = [92, 214, 336, 458, 580, 702, 824];
   const ys = [76, 210, 344, 478];
-  const beamLabel = (x1: number, y1: number, x2: number, y2: number, label: string) => {
-    const x = (x1 + x2) / 2;
-    const y = (y1 + y2) / 2 - 8;
-    return (
-      <text x={x} y={y} textAnchor="middle" fontSize="8.5" fontWeight="700" fill="#111827">
-        {label}
-      </text>
-    );
-  };
+
+  const beamLabel = (x1: number, y1: number, x2: number, label: string) => (
+    <text x={(x1 + x2) / 2} y={y1 - 8} textAnchor="middle" fontSize="8.5" fontWeight="700" fill="#111827">{label}</text>
+  );
 
   return (
     <svg viewBox="0 0 980 640" className="h-full w-full bg-white">
@@ -310,26 +307,28 @@ const FramingPlan: React.FC<{ onSelect: (id: number) => void }> = ({ onSelect })
           <path d="M0,0 L0,6 L9,3 z" fill="#16a34a" />
         </marker>
       </defs>
+
       <rect width="980" height="640" fill="url(#paper)" />
 
-      {xs.map((x, i) => (
-        <g key={`gx-${i}`}>
+      {xs.map((x, index) => (
+        <g key={`gx-${index}`}>
           <line x1={x} y1="72" x2={x} y2="528" stroke="#9ca3af" strokeDasharray="6 6" />
           <circle cx={x} cy="36" r="15" fill="white" stroke="#6b7280" />
-          <text x={x} y="41" textAnchor="middle" fontSize="14" fontWeight="700" fill="#374151">{i === 5 ? '' : i + 1}</text>
+          <text x={x} y="41" textAnchor="middle" fontSize="14" fontWeight="700" fill="#374151">{index + 1}</text>
         </g>
       ))}
-      {ys.map((y, i) => (
-        <g key={`gy-${i}`}>
+
+      {ys.map((y, index) => (
+        <g key={`gy-${index}`}>
           <line x1="92" y1={y} x2="824" y2={y} stroke="#9ca3af" strokeDasharray="6 6" />
           <circle cx="38" cy={y} r="15" fill="white" stroke="#6b7280" />
-          <text x="38" y={y + 5} textAnchor="middle" fontSize="14" fontWeight="700" fill="#374151">{String.fromCharCode(65 + i)}</text>
+          <text x="38" y={y + 5} textAnchor="middle" fontSize="14" fontWeight="700" fill="#374151">{String.fromCharCode(65 + index)}</text>
         </g>
       ))}
 
       <g stroke="#111827" strokeWidth="2">
-        {ys.map((y) => xs.slice(0, -1).map((x, i) => <line key={`${y}-${x}`} x1={x} y1={y} x2={xs[i + 1]} y2={y} />))}
-        {xs.map((x) => ys.slice(0, -1).map((y, i) => <line key={`${x}-${y}`} x1={x} y1={y} x2={x} y2={ys[i + 1]} stroke="#6b7280" strokeWidth="1.2" />))}
+        {ys.map((y) => xs.slice(0, -1).map((x, index) => <line key={`${y}-${x}`} x1={x} y1={y} x2={xs[index + 1]} y2={y} />))}
+        {xs.map((x) => ys.slice(0, -1).map((y, index) => <line key={`${x}-${y}`} x1={x} y1={y} x2={x} y2={ys[index + 1]} stroke="#6b7280" strokeWidth="1.2" />))}
       </g>
 
       <g fill="white" stroke="#111827" strokeWidth="1.3">
@@ -337,8 +336,7 @@ const FramingPlan: React.FC<{ onSelect: (id: number) => void }> = ({ onSelect })
       </g>
 
       <g fontSize="8" fontWeight="700" fill="#111827">
-        {ys.map((y, row) => xs.slice(0, -1).map((x, col) => beamLabel(x, y, xs[col + 1], y, `B${row * 6 + col + 1} (W16x26)`)))}
-        {xs.map((x, xi) => ys.map((y, yi) => <text key={`c-${xi}-${yi}`} x={x + 9} y={y - 10}>C{yi * 6 + xi + 1}</text>))}
+        {ys.map((y, row) => xs.slice(0, -1).map((x, col) => beamLabel(x, y, xs[col + 1], `B${row * 6 + col + 1} (W16x26)`)))}
       </g>
 
       <g stroke="#111827" strokeWidth="1.2" fill="none">
@@ -354,68 +352,47 @@ const FramingPlan: React.FC<{ onSelect: (id: number) => void }> = ({ onSelect })
         <text x="66" y="141">24&apos;-0&quot;</text>
         <text x="66" y="275">24&apos;-0&quot;</text>
         <text x="66" y="409">24&apos;-0&quot;</text>
-        <text x="115" y="560">30&apos;-0&quot;</text>
-        <text x="237" y="560">30&apos;-0&quot;</text>
-        <text x="359" y="560">30&apos;-0&quot;</text>
-        <text x="481" y="560">30&apos;-0&quot;</text>
-        <text x="603" y="560">30&apos;-0&quot;</text>
-        <text x="725" y="560">30&apos;-0&quot;</text>
         <text x="431" y="592" fontWeight="700">180&apos;-0&quot;</text>
       </g>
-      <g transform="translate(42 588)">
-        <circle r="24" fill="none" stroke="#111827" />
-        <path d="M0-30v60M-30 0h60" stroke="#111827" />
-        <path d="M0-20l8 20H-8z" fill="#111827" />
-        <text x="-4" y="-36" fontSize="14" fontWeight="700">N</text>
-      </g>
 
-      <g onClick={() => onSelect(1)} className="cursor-pointer">
-        <path d="M750 57c24-14 66-11 78 6 12 17-1 35-33 31-31 12-63-2-62-19 0-8 7-14 17-18z" fill="none" stroke="#ef4444" strokeWidth="2.5" strokeDasharray="5 4" />
-        <circle cx="782" cy="102" r="12" fill="#ef4444" />
-        <text x="782" y="107" textAnchor="middle" fontSize="12" fontWeight="700" fill="white">1</text>
-        <line x1="795" y1="103" x2="865" y2="158" stroke="#ef4444" strokeWidth="2" markerEnd="url(#planArrowRed)" />
-        <rect x="856" y="58" width="120" height="58" rx="4" fill="#fff5f5" stroke="#ef4444" strokeWidth="1.6" />
-        <text x="865" y="76" fontSize="10" fontWeight="800" fill="#ef4444">CORROSION AT SEAT</text>
-        <text x="865" y="91" fontSize="10" fontWeight="800" fill="#ef4444">CONNECTION, TYP.</text>
-        <text x="865" y="106" fontSize="10" fontWeight="800" fill="#ef4444">FIELD VERIFY SECTION LOSS.</text>
-        <text x="897" y="172" fontSize="15" fontWeight="800" fill="#ef4444">5/8&quot;</text>
-      </g>
-
-      <g onClick={() => onSelect(2)} className="cursor-pointer">
-        <path d="M745 192c22-13 62-9 77 4 14 12 3 29-21 27-28 11-62-1-65-14-2-8 2-13 9-17z" fill="none" stroke="#2563eb" strokeWidth="2.5" strokeDasharray="5 4" />
-        <circle cx="792" cy="239" r="12" fill="#2563eb" />
-        <text x="792" y="244" textAnchor="middle" fontSize="12" fontWeight="700" fill="white">2</text>
-        <line x1="804" y1="239" x2="870" y2="285" stroke="#2563eb" strokeWidth="2" markerEnd="url(#planArrowBlue)" />
-        <rect x="874" y="278" width="120" height="64" rx="4" fill="#eff6ff" stroke="#2563eb" strokeWidth="1.6" />
-        <text x="884" y="298" fontSize="10" fontWeight="800" fill="#2563eb">PAINT PEELING AND</text>
-        <text x="884" y="313" fontSize="10" fontWeight="800" fill="#2563eb">RUST SCALE. CHECK</text>
-        <text x="884" y="328" fontSize="10" fontWeight="800" fill="#2563eb">BOTTOM FLANGE.</text>
-        <text x="882" y="252" fontSize="14" fontWeight="800" fill="#2563eb">2 1/4&quot;</text>
-      </g>
-
-      <g onClick={() => onSelect(3)} className="cursor-pointer">
-        <path d="M642 450c25-16 69-9 84 9 12 14 2 35-28 30-27 12-64-2-69-17-3-10 1-17 13-22z" fill="none" stroke="#16a34a" strokeWidth="2.5" strokeDasharray="5 4" />
-        <circle cx="728" cy="520" r="12" fill="#16a34a" />
-        <text x="728" y="525" textAnchor="middle" fontSize="12" fontWeight="700" fill="white">3</text>
-        <line x1="728" y1="520" x2="745" y2="570" stroke="#16a34a" strokeWidth="2" markerEnd="url(#planArrowGreen)" />
-        <rect x="736" y="558" width="190" height="55" rx="4" fill="#f0fdf4" stroke="#16a34a" strokeWidth="1.6" />
-        <text x="748" y="579" fontSize="11" fontWeight="800" fill="#15803d">SECTION LOSS AT MIDSPAN.</text>
-        <text x="748" y="595" fontSize="11" fontWeight="800" fill="#15803d">VERIFY REMAINING THICKNESS.</text>
-        <text x="793" y="434" fontSize="14" fontWeight="800" fill="#16a34a">3/4&quot;</text>
-      </g>
+      {markups.slice(0, 3).map((item, index) => {
+        const markerColors = ['#ef4444', '#2563eb', '#16a34a'];
+        const x = [782, 792, 728][index] ?? 680;
+        const y = [102, 239, 520][index] ?? 390;
+        const markerEnd = ['url(#planArrowRed)', 'url(#planArrowBlue)', 'url(#planArrowGreen)'][index] ?? 'url(#planArrowRed)';
+        const boxX = [856, 874, 736][index] ?? 730;
+        const boxY = [58, 278, 558][index] ?? 440;
+        return (
+          <g key={item.id} onClick={() => onSelect(item.id)} className="cursor-pointer">
+            <path d={`M${x - 32} ${y - 45}c24-14 66-11 78 6 12 17-1 35-33 31-31 12-63-2-62-19 0-8 7-14 17-18z`} fill="none" stroke={markerColors[index]} strokeWidth="2.5" strokeDasharray="5 4" />
+            <circle cx={x} cy={y} r="12" fill={markerColors[index]} />
+            <text x={x} y={y + 5} textAnchor="middle" fontSize="12" fontWeight="700" fill="white">{item.id}</text>
+            <line x1={x + 12} y1={y + 1} x2={boxX + 10} y2={boxY + 34} stroke={markerColors[index]} strokeWidth="2" markerEnd={markerEnd} />
+            <rect x={boxX} y={boxY} width="150" height="58" rx="4" fill="#fff" stroke={markerColors[index]} strokeWidth="1.6" />
+            <text x={boxX + 10} y={boxY + 20} fontSize="10" fontWeight="800" fill={markerColors[index]}>{item.condition.toUpperCase().slice(0, 22)}</text>
+            <text x={boxX + 10} y={boxY + 36} fontSize="10" fontWeight="800" fill={markerColors[index]}>FIELD VERIFY.</text>
+          </g>
+        );
+      })}
     </svg>
   );
 };
 
 export const VisualWorkspace: React.FC = () => {
+  const [markups, setMarkups] = useState<MarkupItem[]>(() => readLocal('simplifystruct.visual.markups.v3', initialMarkups));
+  const [photos, setPhotos] = useState<SitePhoto[]>(() => readLocal('simplifystruct.visual.photos.v3', initialPhotos));
+  const [comments, setComments] = useState<CommentItem[]>(() => readLocal('simplifystruct.visual.comments.v3', initialComments));
+  const [documents, setDocuments] = useState<DocumentLink[]>(() => readLocal('simplifystruct.visual.documents.v3', initialDocuments));
+  const [role, setRole] = useState<UserRole>(() => readLocal<UserRole>('simplifystruct.visual.role.v3', 'Engineer'));
   const [selectedId, setSelectedId] = useState(1);
   const [selectedRelationshipNode, setSelectedRelationshipNode] = useState('item');
-  const [activeWorkspaceTab, setActiveWorkspaceTab] = useState<'Workspace' | 'Review' | 'Report' | 'Export'>('Workspace');
+  const [activeWorkspaceTab, setActiveWorkspaceTab] = useState<WorkspaceTab>('Workspace');
   const [activeTool, setActiveTool] = useState('Select');
-  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
-    '03 - Structural': true,
-    'Photos & Documents': true,
-  });
+  const [activePanel, setActivePanel] = useState<PanelMode>('none');
+  const [newComment, setNewComment] = useState('');
+  const [draftFieldValue, setDraftFieldValue] = useState('');
+  const [toastMessage, setToastMessage] = useState('');
+  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({ '03 - Structural': true, 'Photos & Documents': true });
   const [activeBoard, setActiveBoard] = useState('Level 2 Framing Plan');
   const [boardSearch, setBoardSearch] = useState('');
   const [showPhotosPanel, setShowPhotosPanel] = useState(true);
@@ -432,78 +409,33 @@ export const VisualWorkspace: React.FC = () => {
     Reference: false,
   });
   const [zoomLevel, setZoomLevel] = useState(100);
-  const selected = useMemo(() => markups.find((item) => item.id === selectedId) ?? markups[0], [selectedId]);
-  const linkedPhotos = photos.filter((photo) => selected.photoIds.includes(photo.id));
-  const relatedMarkupCount = markups.filter((item) => item.location === selected.location || item.itemName === selected.itemName).length;
-  const linkedDocumentId = selected.type === 'Beam' ? 'S-2.3' : 'S-4.1';
+
+  useEffect(() => writeLocal('simplifystruct.visual.markups.v3', markups), [markups]);
+  useEffect(() => writeLocal('simplifystruct.visual.photos.v3', photos), [photos]);
+  useEffect(() => writeLocal('simplifystruct.visual.comments.v3', comments), [comments]);
+  useEffect(() => writeLocal('simplifystruct.visual.documents.v3', documents), [documents]);
+  useEffect(() => writeLocal('simplifystruct.visual.role.v3', role), [role]);
+
+  const selected = useMemo(() => markups.find((item) => item.id === selectedId) ?? markups[0], [markups, selectedId]);
+  const linkedPhotos = useMemo(() => photos.filter((photo) => selected.photoIds.includes(photo.id)), [photos, selected]);
+  const selectedDocuments = useMemo(() => documents.filter((document) => document.itemId === selected.id), [documents, selected]);
+  const selectedComments = useMemo(() => comments.filter((comment) => comment.itemId === selected.id), [comments, selected]);
+  const relatedMarkupCount = useMemo(() => markups.filter((item) => item.location === selected.location || item.itemName === selected.itemName).length, [markups, selected]);
+  const activePhoto = photos.find((photo) => photo.id === activePhotoId) ?? linkedPhotos[0] ?? photos[0];
+  const linkedDocumentId = selectedDocuments[0]?.reference ?? (selected.type === 'Beam' ? 'S-2.3' : 'S-4.1');
   const linkedCostId = selected.type === 'Beam' ? 'C-102' : 'C-208';
   const linkedCostAmount = selected.priority === 'High' ? 1240 : selected.priority === 'Medium' ? 720 : 180;
 
   const relationshipNodes = [
-    {
-      id: 'marker',
-      label: `Plan Marker #${selected.id}`,
-      subtitle: selected.location,
-      type: 'Location',
-      count: 1,
-      color: 'blue',
-      x: 30,
-      y: 48,
-    },
-    {
-      id: 'item',
-      label: `${selected.type} ${selected.itemName}`,
-      subtitle: selected.section,
-      type: 'Project Item',
-      count: 1,
-      color: 'red',
-      x: 262,
-      y: 38,
-    },
-    {
-      id: 'photos',
-      label: `Site Photos (${linkedPhotos.length})`,
-      subtitle: linkedPhotos[0]?.fileName ?? 'No photos linked',
-      type: 'Photo Set',
-      count: linkedPhotos.length,
-      color: 'cyan',
-      x: 500,
-      y: 48,
-    },
-    {
-      id: 'markups',
-      label: `Board Markups (${relatedMarkupCount})`,
-      subtitle: selected.condition,
-      type: 'Board Annotations',
-      count: relatedMarkupCount,
-      color: 'amber',
-      x: 30,
-      y: 152,
-    },
-    {
-      id: 'cost',
-      label: `Cost Item ${linkedCostId}`,
-      subtitle: `$${linkedCostAmount.toLocaleString()} allowance`,
-      type: 'Cost',
-      count: 1,
-      color: 'green',
-      x: 262,
-      y: 154,
-    },
-    {
-      id: 'document',
-      label: `Document ${linkedDocumentId}`,
-      subtitle: 'Reference drawing / report',
-      type: 'Document',
-      count: 1,
-      color: 'purple',
-      x: 500,
-      y: 152,
-    },
+    { id: 'marker', label: `Plan Marker #${selected.id}`, subtitle: selected.location, type: 'Location', count: 1, color: 'blue', x: 30, y: 48 },
+    { id: 'item', label: `${selected.type} ${selected.itemName}`, subtitle: selected.section, type: 'Project Item', count: 1, color: 'red', x: 262, y: 38 },
+    { id: 'photos', label: `Site Photos (${linkedPhotos.length})`, subtitle: linkedPhotos[0]?.fileName ?? 'No photos linked', type: 'Photo Set', count: linkedPhotos.length, color: 'cyan', x: 500, y: 48 },
+    { id: 'markups', label: `Board Markups (${relatedMarkupCount})`, subtitle: selected.condition, type: 'Board Annotations', count: relatedMarkupCount, color: 'amber', x: 30, y: 152 },
+    { id: 'cost', label: `Cost Item ${linkedCostId}`, subtitle: `$${linkedCostAmount.toLocaleString()} allowance`, type: 'Cost', count: 1, color: 'green', x: 262, y: 154 },
+    { id: 'document', label: `Document ${linkedDocumentId}`, subtitle: selectedDocuments[0]?.name ?? 'Reference drawing / report', type: 'Document', count: selectedDocuments.length || 1, color: 'purple', x: 500, y: 152 },
   ];
 
-  const selectedRelationship =
-    relationshipNodes.find((node) => node.id === selectedRelationshipNode) ?? relationshipNodes[1];
+  const selectedRelationship = relationshipNodes.find((node) => node.id === selectedRelationshipNode) ?? relationshipNodes[1];
 
   const relationshipEdges = [
     { from: 'marker', to: 'item', label: 'refers to' },
@@ -523,10 +455,113 @@ export const VisualWorkspace: React.FC = () => {
   } as const;
 
   const selectMarkup = (id: number, relationshipNode = 'item') => {
+    const target = markups.find((item) => item.id === id);
     setSelectedId(id);
     setSelectedRelationshipNode(relationshipNode);
-    const firstPhoto = photos.find((photo) => (markups.find((item) => item.id === id)?.photoIds ?? []).includes(photo.id));
+    const firstPhoto = photos.find((photo) => (target?.photoIds ?? []).includes(photo.id));
     setActivePhotoId(firstPhoto?.id ?? null);
+  };
+
+  const showToast = (message: string) => {
+    setToastMessage(message);
+    window.setTimeout(() => setToastMessage(''), 2600);
+  };
+
+  const requireEngineer = (action: string) => {
+    if (role === 'Engineer') return true;
+    showToast(`Clients can comment only. Switch to Engineer to ${action}.`);
+    return false;
+  };
+
+  const updateSelectedMarkup = (updates: Partial<MarkupItem>) => {
+    if (!requireEngineer('edit this item')) return;
+    setMarkups((current) => current.map((item) => (item.id === selected.id ? { ...item, ...updates } : item)));
+    showToast('Item updated.');
+  };
+
+  const addBoardMarkup = (type: string) => {
+    if (!requireEngineer(`add ${type.toLowerCase()} markup`)) return;
+    const nextId = Math.max(...markups.map((item) => item.id)) + 1;
+    const newItem: MarkupItem = {
+      id: nextId,
+      color: '#0ea5e9',
+      type: type === 'Cloud' ? 'Beam' : type,
+      itemName: `NEW-${nextId}`,
+      location: 'Grid TBD',
+      status: 'Field Verify',
+      condition: `${type} markup added from toolbar`,
+      priority: 'Medium',
+      discipline: 'Structural',
+      dueDate: 'TBD',
+      section: 'TBD',
+      notes: `New ${type.toLowerCase()} markup. Add notes, photos, and issue details.`,
+      photoIds: [],
+    };
+    setMarkups((current) => [...current, newItem]);
+    selectMarkup(nextId, 'markups');
+    showToast(`${type} markup added.`);
+  };
+
+  const attachFakePhoto = () => {
+    if (!requireEngineer('attach photos')) return;
+    const nextPhotoId = Math.max(...photos.map((photo) => photo.id)) + 1;
+    const newPhoto: SitePhoto = {
+      id: nextPhotoId,
+      color: selected.color,
+      fileName: `FIELD_${String(nextPhotoId).padStart(4, '0')}.JPG`,
+      date: new Date().toLocaleDateString(),
+      grid: selected.location,
+      caption: `New field photo linked to ${selected.type} ${selected.itemName}`,
+      photoType: selected.priority === 'High' ? 'seat' : 'flange',
+      itemId: selected.id,
+    };
+    setPhotos((current) => [newPhoto, ...current]);
+    setMarkups((current) => current.map((item) => (item.id === selected.id ? { ...item, photoIds: [...item.photoIds, nextPhotoId] } : item)));
+    setActivePhotoId(nextPhotoId);
+    setSelectedRelationshipNode('photos');
+    showToast('Photo attached to selected item.');
+  };
+
+  const attachFakeDocument = () => {
+    if (!requireEngineer('attach documents')) return;
+    const nextId = Math.max(0, ...documents.map((document) => document.id)) + 1;
+    setDocuments((current) => [
+      ...current,
+      {
+        id: nextId,
+        itemId: selected.id,
+        name: `${selected.type} ${selected.itemName} Field Reference`,
+        type: 'Field Note',
+        reference: `REF-${String(nextId).padStart(3, '0')}`,
+      },
+    ]);
+    setSelectedRelationshipNode('document');
+    showToast('Document linked to selected item.');
+  };
+
+  const addComment = () => {
+    const body = newComment.trim();
+    if (!body) return;
+    const nextId = Math.max(0, ...comments.map((comment) => comment.id)) + 1;
+    setComments((current) => [
+      {
+        id: nextId,
+        itemId: selected.id,
+        authorRole: role,
+        author: role === 'Engineer' ? 'A. Morgan' : 'Client Reviewer',
+        body,
+        createdAt: new Date().toLocaleString(),
+        resolved: false,
+      },
+      ...current,
+    ]);
+    setNewComment('');
+    showToast('Comment added.');
+  };
+
+  const resolveComment = (commentId: number) => {
+    if (!requireEngineer('resolve comments')) return;
+    setComments((current) => current.map((comment) => (comment.id === commentId ? { ...comment, resolved: !comment.resolved } : comment)));
   };
 
   const toggleSection = (section: string) => {
@@ -560,7 +595,42 @@ export const VisualWorkspace: React.FC = () => {
     }
   };
 
-  const activePhoto = photos.find((photo) => photo.id === activePhotoId) ?? linkedPhotos[0] ?? photos[0];
+  const exportData = (kind: 'pdf' | 'word' | 'csv') => {
+    const rows = markups.map((item) => `${item.id},${item.type},${item.itemName},${item.location},${item.status},${item.condition},${item.priority}`).join('\n');
+    const content = kind === 'csv'
+      ? `ID,Type,Item,Location,Status,Condition,Priority\n${rows}`
+      : `SimplifyStruct Inspection Report\n\nProject: 1234 - Riverside Office Building\nSelected Item: ${selected.type} ${selected.itemName}\nStatus: ${selected.status}\nCondition: ${selected.condition}\n\nNotes:\n${selected.notes}\n\nComments:\n${selectedComments.map((comment) => `- ${comment.author}: ${comment.body}`).join('\n') || 'No comments.'}`;
+    const extension = kind === 'word' ? 'doc' : kind;
+    const blob = new Blob([content], { type: kind === 'csv' ? 'text/csv;charset=utf-8' : 'application/msword;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const anchorElement = document.createElement('a');
+    anchorElement.href = url;
+    anchorElement.download = `simplifystruct-${kind}-export.${extension}`;
+    anchorElement.click();
+    URL.revokeObjectURL(url);
+    showToast(`${kind.toUpperCase()} export created.`);
+  };
+
+  const resetDemoData = () => {
+    if (!requireEngineer('reset demo data')) return;
+    setMarkups(initialMarkups);
+    setPhotos(initialPhotos);
+    setComments(initialComments);
+    setDocuments(initialDocuments);
+    setSelectedId(1);
+    setSelectedRelationshipNode('item');
+    showToast('Demo data reset.');
+  };
+
+  const handleToolClick = (label: string) => {
+    setActiveTool(label);
+    if (['Arrow', 'Cloud', 'Text', 'Box', 'Callout', 'Dimension', 'Distance', 'Angle', 'Area'].includes(label)) addBoardMarkup(label);
+    if (label === 'Photo') attachFakePhoto();
+    if (label === 'File') attachFakeDocument();
+    if (label === 'Link') setSelectedRelationshipNode('item');
+    if (label === 'Undo') showToast('Undo is tracked locally in this prototype.');
+    if (label === 'Redo') showToast('Redo is tracked locally in this prototype.');
+  };
 
   const statusMessage = (() => {
     if (activeTool === 'Select') return 'Select active. Click a plan tag, schedule row, photo, or Blueprint node to inspect linked information.';
@@ -587,10 +657,14 @@ export const VisualWorkspace: React.FC = () => {
           </div>
 
           <nav className="hidden h-full items-stretch md:flex">
-            {(['Workspace', 'Review', 'Report', 'Export'] as const).map((tab) => (
+            {(['Workspace', 'Review', 'Report', 'Export'] as WorkspaceTab[]).map((tab) => (
               <button
                 key={tab}
-                onClick={() => setActiveWorkspaceTab(tab)}
+                onClick={() => {
+                  setActiveWorkspaceTab(tab);
+                  if (tab === 'Report') setActivePanel('report');
+                  if (tab === 'Export') setActivePanel('export');
+                }}
                 className={`px-8 text-sm font-bold ${activeWorkspaceTab === tab ? 'border-b-2 border-blue-500 bg-slate-800/80 text-white' : 'text-slate-300 hover:bg-slate-900'}`}
               >
                 {tab}
@@ -602,13 +676,21 @@ export const VisualWorkspace: React.FC = () => {
             <div className="hidden text-sm font-semibold text-slate-200 lg:block">
               Project: 1234 - Riverside Office Building <ChevronDown size={14} className="inline" />
             </div>
-            <button onClick={() => setBoardSearch("")} title="Clear board search"><Search size={18} className="text-slate-300" /></button>
-            <div className="relative">
-              <button onClick={() => setSelectedRelationshipNode("markups")} title="Show board markups"><Bell size={18} className="text-slate-300" /></button>
-              <span className="absolute -right-2 -top-2 flex h-4 w-4 items-center justify-center rounded-full bg-red-600 text-[10px] font-bold text-white">3</span>
-            </div>
-            <button onClick={() => setActiveWorkspaceTab("Review")} title="Open review mode"><HelpCircle size={18} className="text-slate-300" /></button>
-            <button onClick={() => setSelectedRelationshipNode("item")} title="Center selected item"><Settings size={18} className="text-slate-300" /></button>
+            <select
+              value={role}
+              onChange={(event) => setRole(event.target.value as UserRole)}
+              className="hidden rounded-md border border-slate-700 bg-slate-900 px-2 py-1 text-xs font-bold text-slate-100 lg:block"
+              title="Engineer can edit. Client can comment only."
+            >
+              <option>Engineer</option>
+              <option>Client</option>
+            </select>
+            <button onClick={() => setBoardSearch('')} title="Clear board search"><Search size={18} className="text-slate-300" /></button>
+            <button onClick={() => setSelectedRelationshipNode('markups')} title="Show board markups">
+              <Bell size={18} className="text-slate-300" />
+            </button>
+            <button onClick={() => setActivePanel('report')}><HelpCircle size={18} className="text-slate-300" /></button>
+            <button onClick={() => setActivePanel('settings')}><Settings size={18} className="text-slate-300" /></button>
             {!showPhotosPanel && <button onClick={() => setShowPhotosPanel(true)} className="rounded bg-slate-800 px-2 py-1 text-xs font-bold text-slate-200">Photos</button>}
             {!showInspectorPanel && <button onClick={() => setShowInspectorPanel(true)} className="rounded bg-slate-800 px-2 py-1 text-xs font-bold text-slate-200">Inspector</button>}
             <span className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-600 text-xs font-bold text-white">AM</span>
@@ -622,7 +704,7 @@ export const VisualWorkspace: React.FC = () => {
                 {group.tools.map(([label, Icon]) => (
                   <button
                     key={label}
-                    onClick={() => setActiveTool(label)}
+                    onClick={() => handleToolClick(label)}
                     className={`flex min-w-[52px] flex-col items-center gap-1 rounded-md px-2 py-2 text-[11px] font-semibold transition ${
                       activeTool === label ? 'bg-blue-600/60 text-white ring-1 ring-blue-400/50' : 'text-slate-300 hover:bg-slate-800 hover:text-white'
                     }`}
@@ -632,7 +714,7 @@ export const VisualWorkspace: React.FC = () => {
                   </button>
                 ))}
               </div>
-              <div className="mt-1 text-center text-[10px] text-slate-500">{group.label}{['Insert', 'Layers', 'More'].includes(group.label) ? '⌄' : ''}</div>
+              <div className="mt-1 text-center text-[10px] text-slate-500">{group.label}</div>
             </div>
           ))}
         </div>
@@ -643,7 +725,7 @@ export const VisualWorkspace: React.FC = () => {
           <div className="border-b border-slate-800 p-4">
             <div className="mb-2 flex items-center justify-between text-xs font-bold uppercase tracking-wide text-slate-300">
               <span>Project</span>
-              <MoreHorizontal size={16} />
+              <button onClick={() => setActivePanel('settings')}><MoreHorizontal size={16} /></button>
             </div>
             <div className="text-sm font-semibold text-white">1234 - Riverside Office Building</div>
           </div>
@@ -651,7 +733,7 @@ export const VisualWorkspace: React.FC = () => {
           <div className="border-b border-slate-800 p-4">
             <div className="mb-3 flex items-center justify-between">
               <h2 className="text-sm font-black uppercase tracking-wide text-white">Boards</h2>
-              <Plus size={17} className="text-slate-300" />
+              <button onClick={() => setActivePanel('settings')} title="Add board"><Plus size={17} className="text-slate-300" /></button>
             </div>
             <label className="relative block">
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
@@ -720,9 +802,6 @@ export const VisualWorkspace: React.FC = () => {
                 {layer === 'Markups' && <PenLine size={13} className={enabledLayers[layer] ? 'text-blue-400' : 'text-slate-600'} />}
               </button>
             ))}
-            <div className="mt-4 rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-300">
-              Scale: 1/8&quot; = 1&apos;-0&quot; <ChevronDown size={13} className="float-right" />
-            </div>
           </div>
         </aside>
 
@@ -731,12 +810,12 @@ export const VisualWorkspace: React.FC = () => {
             <div className="flex h-full items-center gap-3 rounded-t-lg bg-white px-4 text-xs font-bold text-slate-950">
               {activeBoard} <X size={13} className="text-slate-500" />
             </div>
-            <button className="ml-2 text-slate-400 hover:text-white"><Plus size={17} /></button>
+            <button onClick={() => setActivePanel('settings')} className="ml-2 text-slate-400 hover:text-white"><Plus size={17} /></button>
           </div>
 
           <section className="min-h-0 overflow-hidden bg-slate-200 p-2">
             <div className="relative mx-auto h-full overflow-hidden rounded-md border border-slate-500 bg-white shadow-2xl">
-              <FramingPlan onSelect={(id) => selectMarkup(id)} />
+              <FramingPlan onSelect={(id) => selectMarkup(id)} markups={markups} />
             </div>
           </section>
 
@@ -775,7 +854,7 @@ export const VisualWorkspace: React.FC = () => {
                   </tbody>
                 </table>
               </div>
-              <div className="border-t border-slate-800 px-3 py-2 text-xs text-slate-400">1–5 of 5 items</div>
+              <div className="border-t border-slate-800 px-3 py-2 text-xs text-slate-400">1–{markups.length} of {markups.length} items</div>
             </div>
 
             <div className="relative min-h-0 overflow-hidden rounded-md border border-slate-800 bg-[#0f1722]">
@@ -783,110 +862,100 @@ export const VisualWorkspace: React.FC = () => {
                 Relationship Map / Blueprint
                 <span className="text-[10px] font-semibold normal-case tracking-normal text-slate-400">Click nodes to inspect links</span>
               </div>
+              <div className="relative h-[248px] overflow-hidden bg-slate-50">
+                <svg className="absolute inset-0 h-full w-full">
+                  <defs>
+                    <pattern id="dots" width="18" height="18" patternUnits="userSpaceOnUse">
+                      <circle cx="1" cy="1" r="1" fill="#e2e8f0" />
+                    </pattern>
+                    <marker id="relArrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+                      <path d="M0,0 L0,6 L7,3 z" fill="#334155" />
+                    </marker>
+                  </defs>
+                  <rect width="100%" height="100%" fill="url(#dots)" />
+                  {relationshipEdges.map((edge) => {
+                    const from = relationshipNodes.find((node) => node.id === edge.from);
+                    const to = relationshipNodes.find((node) => node.id === edge.to);
+                    if (!from || !to) return null;
+                    const x1 = from.x + 118;
+                    const y1 = from.y + 27;
+                    const x2 = to.x;
+                    const y2 = to.y + 27;
+                    const midX = (x1 + x2) / 2;
+                    return (
+                      <g key={`${edge.from}-${edge.to}`}>
+                        <path d={`M ${x1} ${y1} C ${midX} ${y1}, ${midX} ${y2}, ${x2} ${y2}`} fill="none" stroke="#334155" strokeWidth="2" markerEnd="url(#relArrow)" />
+                        <rect x={midX - 33} y={(y1 + y2) / 2 - 18} width="66" height="16" rx="8" fill="white" stroke="#cbd5e1" />
+                        <text x={midX} y={(y1 + y2) / 2 - 6} textAnchor="middle" fontSize="9" fontWeight="800" fill="#334155">{edge.label}</text>
+                      </g>
+                    );
+                  })}
+                </svg>
 
-<div className="relative h-[248px] overflow-hidden bg-slate-50">
-  <svg className="absolute inset-0 h-full w-full">
-    <defs>
-      <pattern id="dots" width="18" height="18" patternUnits="userSpaceOnUse">
-        <circle cx="1" cy="1" r="1" fill="#e2e8f0" />
-      </pattern>
-      <marker id="relArrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
-        <path d="M0,0 L0,6 L7,3 z" fill="#334155" />
-      </marker>
-    </defs>
-    <rect width="100%" height="100%" fill="url(#dots)" />
-    {relationshipEdges.map((edge) => {
-      const from = relationshipNodes.find((node) => node.id === edge.from);
-      const to = relationshipNodes.find((node) => node.id === edge.to);
-      if (!from || !to) return null;
+                {relationshipNodes.map((node) => (
+                  <button
+                    key={node.id}
+                    onClick={() => setSelectedRelationshipNode(node.id)}
+                    className={`absolute w-[138px] rounded-lg border px-3 py-2 text-center text-[11px] font-black shadow-md transition ${
+                      nodeTheme[node.color as keyof typeof nodeTheme]
+                    } ${selectedRelationshipNode === node.id ? 'ring-2 ring-slate-950 ring-offset-2' : 'hover:scale-[1.03]'}`}
+                    style={{ left: node.x, top: node.y }}
+                  >
+                    {node.id === 'item' && <span className="absolute -top-4 left-1/2 flex h-7 w-7 -translate-x-1/2 items-center justify-center rounded-full border-2 border-white bg-red-500 text-xs text-white">{selected.id}</span>}
+                    <span className="block leading-tight">{node.label}</span>
+                    <span className={`mt-1 block truncate text-[9px] ${node.color === 'red' ? 'text-red-50' : 'opacity-70'}`}>{node.type}</span>
+                  </button>
+                ))}
 
-      const x1 = from.x + 118;
-      const y1 = from.y + 27;
-      const x2 = to.x;
-      const y2 = to.y + 27;
-      const midX = (x1 + x2) / 2;
+                <div className="absolute right-3 top-3 w-56 rounded-lg border border-slate-300 bg-white/95 p-3 text-xs text-slate-700 shadow-lg backdrop-blur">
+                  <div className="text-[10px] font-black uppercase tracking-wide text-slate-400">Selected Blueprint Node</div>
+                  <div className="mt-1 font-black text-slate-950">{selectedRelationship.label}</div>
+                  <div className="mt-1 text-slate-500">{selectedRelationship.type}</div>
+                  <div className="mt-3 grid grid-cols-2 gap-2">
+                    <div className="rounded bg-slate-100 px-2 py-1">
+                      <div className="text-[9px] font-bold uppercase text-slate-400">Links</div>
+                      <div className="font-black">{relationshipEdges.filter((edge) => edge.from === selectedRelationship.id || edge.to === selectedRelationship.id).length}</div>
+                    </div>
+                    <div className="rounded bg-slate-100 px-2 py-1">
+                      <div className="text-[9px] font-bold uppercase text-slate-400">Count</div>
+                      <div className="font-black">{selectedRelationship.count}</div>
+                    </div>
+                  </div>
+                  <div className="mt-2 rounded bg-slate-100 px-2 py-1">
+                    <div className="text-[9px] font-bold uppercase text-slate-400">Details</div>
+                    <div className="truncate font-bold">{selectedRelationship.subtitle}</div>
+                  </div>
+                </div>
 
-      return (
-        <g key={`${edge.from}-${edge.to}`}>
-          <path
-            d={`M ${x1} ${y1} C ${midX} ${y1}, ${midX} ${y2}, ${x2} ${y2}`}
-            fill="none"
-            stroke="#334155"
-            strokeWidth="2"
-            markerEnd="url(#relArrow)"
-          />
-          <rect x={midX - 33} y={(y1 + y2) / 2 - 18} width="66" height="16" rx="8" fill="white" stroke="#cbd5e1" />
-          <text x={midX} y={(y1 + y2) / 2 - 6} textAnchor="middle" fontSize="9" fontWeight="800" fill="#334155">
-            {edge.label}
-          </text>
-        </g>
-      );
-    })}
-  </svg>
-
-  {relationshipNodes.map((node) => (
-    <button
-      key={node.id}
-      onClick={() => setSelectedRelationshipNode(node.id)}
-      className={`absolute w-[138px] rounded-lg border px-3 py-2 text-center text-[11px] font-black shadow-md transition ${
-        nodeTheme[node.color as keyof typeof nodeTheme]
-      } ${selectedRelationshipNode === node.id ? 'ring-2 ring-slate-950 ring-offset-2' : 'hover:scale-[1.03]'}`}
-      style={{ left: node.x, top: node.y }}
-    >
-      {node.id === 'item' && (
-        <span className="absolute -top-4 left-1/2 flex h-7 w-7 -translate-x-1/2 items-center justify-center rounded-full border-2 border-white bg-red-500 text-xs text-white">
-          {selected.id}
-        </span>
-      )}
-      <span className="block leading-tight">{node.label}</span>
-      <span className={`mt-1 block truncate text-[9px] ${node.color === 'red' ? 'text-red-50' : 'opacity-70'}`}>{node.type}</span>
-    </button>
-  ))}
-
-  <div className="absolute right-3 top-3 w-56 rounded-lg border border-slate-300 bg-white/95 p-3 text-xs text-slate-700 shadow-lg backdrop-blur">
-    <div className="text-[10px] font-black uppercase tracking-wide text-slate-400">Selected Blueprint Node</div>
-    <div className="mt-1 font-black text-slate-950">{selectedRelationship.label}</div>
-    <div className="mt-1 text-slate-500">{selectedRelationship.type}</div>
-    <div className="mt-3 grid grid-cols-2 gap-2">
-      <div className="rounded bg-slate-100 px-2 py-1">
-        <div className="text-[9px] font-bold uppercase text-slate-400">Links</div>
-        <div className="font-black">
-          {relationshipEdges.filter((edge) => edge.from === selectedRelationship.id || edge.to === selectedRelationship.id).length}
-        </div>
-      </div>
-      <div className="rounded bg-slate-100 px-2 py-1">
-        <div className="text-[9px] font-bold uppercase text-slate-400">Count</div>
-        <div className="font-black">{selectedRelationship.count}</div>
-      </div>
-    </div>
-    <div className="mt-2 rounded bg-slate-100 px-2 py-1">
-      <div className="text-[9px] font-bold uppercase text-slate-400">Details</div>
-      <div className="truncate font-bold">{selectedRelationship.subtitle}</div>
-    </div>
-  </div>
-
-  <div className="absolute bottom-3 right-3 flex items-center overflow-hidden rounded-md border border-slate-300 bg-white text-xs text-slate-800 shadow">
-    <button onClick={() => setZoomLevel((value) => Math.max(50, value - 10))} className="px-3 py-2">−</button>
-    <span className="border-x border-slate-300 px-3 py-2 font-bold">{zoomLevel}%</span>
-    <button onClick={() => setZoomLevel((value) => Math.min(200, value + 10))} className="px-3 py-2">+</button>
-    <button className="border-l border-slate-300 px-3 py-2"><Maximize2 size={13} /></button>
-  </div>
-</div>
+                <div className="absolute bottom-3 right-3 flex items-center overflow-hidden rounded-md border border-slate-300 bg-white text-xs text-slate-800 shadow">
+                  <button onClick={() => setZoomLevel((value) => Math.max(50, value - 10))} className="px-3 py-2">−</button>
+                  <span className="border-x border-slate-300 px-3 py-2 font-bold">{zoomLevel}%</span>
+                  <button onClick={() => setZoomLevel((value) => Math.min(200, value + 10))} className="px-3 py-2">+</button>
+                  <button className="border-l border-slate-300 px-3 py-2"><Maximize2 size={13} /></button>
+                </div>
+              </div>
             </div>
           </section>
         </main>
 
-        <aside className={`${showPhotosPanel ? "flex" : "hidden"} min-h-0 flex-col border-l border-slate-800 bg-[#0b1620]`}>
+        <aside className={`${showPhotosPanel ? 'flex' : 'hidden'} min-h-0 flex-col border-l border-slate-800 bg-[#0b1620]`}>
           <div className="flex h-10 items-center justify-between border-b border-slate-800 px-3">
             <h2 className="text-sm font-black uppercase tracking-wide">Site Photos</h2>
             <div className="flex items-center gap-2 text-slate-400">
               <button onClick={() => setSelectedRelationshipNode('photos')} title="Filter linked photos"><Filter size={14} /></button>
-              <button onClick={() => setShowPhotosPanel((value) => !value)} title="Collapse photos panel"><X size={14} /></button>
+              <button onClick={() => setShowPhotosPanel(false)} title="Collapse photos panel"><X size={14} /></button>
             </div>
           </div>
           <div className="min-h-0 flex-1 overflow-auto p-2">
             {photos.slice(0, 3).map((photo) => (
-              <button key={photo.id} onClick={() => selectMarkup(photo.id <= 3 ? photo.id : 1, 'photos')} className={`mb-3 w-full overflow-hidden rounded-md border text-left shadow ${activePhoto?.id === photo.id ? 'border-blue-500 bg-blue-950/40' : 'border-slate-800 bg-[#111d29]'}`}>
+              <button
+                key={photo.id}
+                onClick={() => {
+                  selectMarkup(photo.itemId ?? (photo.id <= 3 ? photo.id : 1), 'photos');
+                  setActivePhotoId(photo.id);
+                }}
+                className={`mb-3 w-full overflow-hidden rounded-md border text-left shadow ${activePhoto?.id === photo.id ? 'border-blue-500 bg-blue-950/40' : 'border-slate-800 bg-[#111d29]'}`}
+              >
                 <div className="relative h-[135px] overflow-hidden">
                   <PhotoSvg photo={photo} />
                   <span className="absolute left-3 top-3 flex h-8 w-8 items-center justify-center rounded-full border-2 border-white text-sm font-black text-white shadow" style={{ backgroundColor: photo.color }}>{photo.id}</span>
@@ -906,10 +975,10 @@ export const VisualWorkspace: React.FC = () => {
           </div>
         </aside>
 
-        <aside className={`${showInspectorPanel ? "flex" : "hidden"} min-h-0 flex-col border-l border-slate-800 bg-[#0b1620]`}>
+        <aside className={`${showInspectorPanel ? 'flex' : 'hidden'} min-h-0 flex-col border-l border-slate-800 bg-[#0b1620]`}>
           <div className="flex h-10 items-center justify-between border-b border-slate-800 px-3">
             <h2 className="text-sm font-black uppercase tracking-wide">Inspector</h2>
-            <button onClick={() => setShowInspectorPanel((value) => !value)}><X size={14} className="text-slate-400" /></button>
+            <button onClick={() => setShowInspectorPanel(false)}><X size={14} className="text-slate-400" /></button>
           </div>
 
           <div className="min-h-0 flex-1 overflow-auto">
@@ -921,7 +990,13 @@ export const VisualWorkspace: React.FC = () => {
                     <h2 className="text-lg font-black text-white">{selected.type} {selected.itemName}</h2>
                   </div>
                 </div>
-                <span className={`rounded-md border px-2 py-1 text-xs font-bold ${statusClass(selected.status)}`}>{selected.status}<ChevronDown size={12} className="ml-1 inline" /></span>
+                <button
+                  onClick={() => updateSelectedMarkup({ status: selected.status === 'Field Verify' ? 'Monitor' : selected.status === 'Monitor' ? 'Complete' : 'Field Verify' })}
+                  className={`rounded-md border px-2 py-1 text-xs font-bold ${statusClass(selected.status)}`}
+                  title="Click to cycle status"
+                >
+                  {selected.status}<ChevronDown size={12} className="ml-1 inline" />
+                </button>
               </div>
 
               <div className="space-y-2 text-sm">
@@ -948,18 +1023,33 @@ export const VisualWorkspace: React.FC = () => {
               </div>
             </section>
 
+            <section className="border-b border-slate-800 p-4">
+              <div className="mb-3 text-xs font-black uppercase tracking-wide text-slate-300">Quick Edit</div>
+              <div className="grid grid-cols-2 gap-2">
+                <button onClick={() => updateSelectedMarkup({ priority: selected.priority === 'High' ? 'Medium' : selected.priority === 'Medium' ? 'Low' : 'High' })} className="rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-xs font-bold text-slate-200 hover:bg-slate-800">Cycle Priority</button>
+                <button onClick={() => updateSelectedMarkup({ status: selected.status === 'Field Verify' ? 'Monitor' : selected.status === 'Monitor' ? 'Complete' : 'Field Verify' })} className="rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-xs font-bold text-slate-200 hover:bg-slate-800">Cycle Status</button>
+              </div>
+              <input value={draftFieldValue} onChange={(event) => setDraftFieldValue(event.target.value)} placeholder="Update condition / note..." className="mt-2 w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-100 placeholder:text-slate-500" />
+              <button
+                onClick={() => {
+                  if (draftFieldValue.trim()) updateSelectedMarkup({ condition: draftFieldValue.trim(), notes: draftFieldValue.trim() });
+                  setDraftFieldValue('');
+                }}
+                className="mt-2 w-full rounded-md bg-blue-600 px-3 py-2 text-xs font-bold text-white hover:bg-blue-700"
+              >
+                Save Field Note
+              </button>
+            </section>
+
             <section className="border-b border-slate-800 p-3">
               {[
                 ['Linked Photos', linkedPhotos.length],
-                ['Linked Documents', 1],
+                ['Linked Documents', selectedDocuments.length],
                 ['Board Markups', relatedMarkupCount],
                 ['Linked Costs', linkedCostAmount ? 1 : 0],
               ].map(([label, count]) => (
                 <button key={label} onClick={() => selectLinkedCategory(label as string)} className="flex w-full items-center justify-between rounded-md px-2 py-2 text-sm text-slate-200 hover:bg-slate-900">
-                  <span className="flex items-center gap-2">
-                    <FileText size={14} className="text-slate-400" />
-                    {label}
-                  </span>
+                  <span className="flex items-center gap-2"><FileText size={14} className="text-slate-400" />{label}</span>
                   <span className="flex items-center gap-2 font-bold">{count}<ChevronRight size={14} /></span>
                 </button>
               ))}
@@ -968,15 +1058,12 @@ export const VisualWorkspace: React.FC = () => {
             <section className="border-b border-slate-800 p-4">
               <div className="mb-3 flex items-center justify-between">
                 <h3 className="text-xs font-black uppercase tracking-wide text-slate-300">Linked Photos ({linkedPhotos.length})</h3>
-                <button onClick={() => selectLinkedCategory('Linked Photos')}><Plus size={15} /></button>
+                <button onClick={attachFakePhoto}><Plus size={15} /></button>
               </div>
               <div className="space-y-2">
                 {linkedPhotos.slice(0, 2).map((photo) => (
                   <div key={photo.id} className="grid grid-cols-[86px_1fr] gap-3 rounded-md border border-slate-800 bg-[#111d29] p-2">
-                    <div className="relative h-16 overflow-hidden rounded">
-                      <PhotoSvg photo={photo} />
-                      <span className="absolute left-1 top-1 flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold text-white" style={{ backgroundColor: photo.color }}>{photo.id}</span>
-                    </div>
+                    <div className="relative h-16 overflow-hidden rounded"><PhotoSvg photo={photo} /></div>
                     <div className="min-w-0 text-xs">
                       <div className="truncate font-bold text-white">{photo.fileName}</div>
                       <div className="mt-1 text-slate-400">{photo.date}</div>
@@ -996,11 +1083,29 @@ export const VisualWorkspace: React.FC = () => {
               <div className="mt-4 text-xs text-slate-500">A. Morgan, May 12, 2025 9:15 AM</div>
             </section>
 
-            <section className="p-4">
+            <section className="border-b border-slate-800 p-4">
               <div className="mb-3 flex items-center justify-between">
-                <h3 className="text-xs font-black uppercase tracking-wide text-slate-300">Issue Details</h3>
-                <ChevronDown size={14} />
+                <h3 className="text-xs font-black uppercase tracking-wide text-slate-300">Comments ({selectedComments.length})</h3>
+                <MessageSquare size={14} className="text-slate-400" />
               </div>
+              <div className="space-y-2">
+                {selectedComments.slice(0, 3).map((comment) => (
+                  <div key={comment.id} className={`rounded-md border p-2 text-xs ${comment.resolved ? 'border-green-800 bg-green-950/30' : 'border-slate-800 bg-slate-900'}`}>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-bold text-white">{comment.author}</span>
+                      <button onClick={() => resolveComment(comment.id)} className="text-[10px] font-bold text-slate-400 hover:text-white">{comment.resolved ? 'Resolved' : 'Open'}</button>
+                    </div>
+                    <p className="mt-1 text-slate-300">{comment.body}</p>
+                    <div className="mt-1 text-[10px] text-slate-500">{comment.createdAt}</div>
+                  </div>
+                ))}
+              </div>
+              <textarea value={newComment} onChange={(event) => setNewComment(event.target.value)} placeholder={role === 'Client' ? 'Add client comment...' : 'Add engineering note or reply...'} className="mt-3 min-h-16 w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-100 placeholder:text-slate-500" />
+              <button onClick={addComment} className="mt-2 w-full rounded-md bg-slate-100 px-3 py-2 text-xs font-bold text-slate-900 hover:bg-white">Add Comment</button>
+            </section>
+
+            <section className="p-4">
+              <div className="mb-3 flex items-center justify-between"><h3 className="text-xs font-black uppercase tracking-wide text-slate-300">Issue Details</h3><ChevronDown size={14} /></div>
               <div className="space-y-3 text-sm">
                 {[
                   ['Issue Type', selected.condition.includes('Corrosion') ? 'Corrosion' : 'Section Loss'],
@@ -1019,6 +1124,70 @@ export const VisualWorkspace: React.FC = () => {
           </div>
         </aside>
       </div>
+
+      {activePanel !== 'none' && (
+        <div className="absolute inset-0 z-[80] flex items-center justify-center bg-black/55 p-6 backdrop-blur-sm">
+          <div className="w-full max-w-2xl overflow-hidden rounded-2xl border border-slate-700 bg-[#0b1620] shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-800 px-5 py-4">
+              <div>
+                <div className="text-xs font-black uppercase tracking-wide text-slate-400">
+                  {activePanel === 'report' ? 'Report Builder' : activePanel === 'export' ? 'Export Package' : 'Workspace Settings'}
+                </div>
+                <h2 className="mt-1 text-xl font-black text-white">
+                  {activePanel === 'report' ? 'Generate structural inspection report' : activePanel === 'export' ? 'Export project deliverables' : 'Workspace settings'}
+                </h2>
+              </div>
+              <button onClick={() => setActivePanel('none')} className="rounded-md p-2 text-slate-400 hover:bg-slate-900 hover:text-white"><X size={18} /></button>
+            </div>
+
+            <div className="p-5">
+              {activePanel === 'report' && (
+                <div className="space-y-3">
+                  <p className="text-sm text-slate-300">Create a report using selected items, photos, comments, issue details, and the markup schedule.</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button onClick={() => exportData('word')} className="rounded-lg bg-blue-600 px-4 py-3 text-sm font-bold text-white">Export Word Draft</button>
+                    <button onClick={() => exportData('pdf')} className="rounded-lg bg-slate-100 px-4 py-3 text-sm font-bold text-slate-950">Export PDF Text Draft</button>
+                  </div>
+                </div>
+              )}
+
+              {activePanel === 'export' && (
+                <div className="grid grid-cols-2 gap-3">
+                  <button onClick={() => exportData('pdf')} className="rounded-lg border border-slate-700 bg-slate-900 px-4 py-3 text-left text-sm font-bold text-white">Annotated PDF Package</button>
+                  <button onClick={() => exportData('word')} className="rounded-lg border border-slate-700 bg-slate-900 px-4 py-3 text-left text-sm font-bold text-white">Editable Word Report</button>
+                  <button onClick={() => exportData('csv')} className="rounded-lg border border-slate-700 bg-slate-900 px-4 py-3 text-left text-sm font-bold text-white">Issue Schedule CSV</button>
+                  <button onClick={() => showToast('ZIP export queued for production backend.')} className="rounded-lg border border-slate-700 bg-slate-900 px-4 py-3 text-left text-sm font-bold text-white">Full Package ZIP</button>
+                </div>
+              )}
+
+              {activePanel === 'settings' && (
+                <div className="space-y-3 text-sm text-slate-300">
+                  <div className="rounded-lg border border-slate-800 bg-slate-900 p-3">
+                    <div className="font-bold text-white">Current role</div>
+                    <p className="mt-1">Engineer can edit everything. Client can comment only.</p>
+                    <select value={role} onChange={(event) => setRole(event.target.value as UserRole)} className="mt-3 rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white">
+                      <option>Engineer</option>
+                      <option>Client</option>
+                    </select>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button onClick={attachFakePhoto} className="rounded-lg bg-blue-600 px-4 py-3 text-sm font-bold text-white">Attach Demo Photo</button>
+                    <button onClick={attachFakeDocument} className="rounded-lg bg-slate-100 px-4 py-3 text-sm font-bold text-slate-950">Attach Demo Document</button>
+                    <button onClick={resetDemoData} className="rounded-lg border border-red-800 bg-red-950/50 px-4 py-3 text-sm font-bold text-red-100">Reset Demo Data</button>
+                    <button onClick={() => setActivePanel('none')} className="rounded-lg border border-slate-700 bg-slate-900 px-4 py-3 text-sm font-bold text-white">Close</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {toastMessage && (
+        <div className="absolute bottom-12 left-1/2 z-[90] -translate-x-1/2 rounded-full border border-slate-700 bg-slate-950 px-5 py-2 text-sm font-bold text-white shadow-2xl">
+          {toastMessage}
+        </div>
+      )}
 
       <footer className="flex h-8 shrink-0 items-center justify-between border-t border-slate-800 bg-[#0b1520] px-4 text-xs text-slate-400">
         <span>{statusMessage}</span>

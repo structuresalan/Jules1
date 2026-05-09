@@ -1,27 +1,60 @@
-# Make Visual Workspace Buttons Work
+# Visual Workspace Full Working Prototype Foundation
 
-Replace this file:
+Replace/add these files:
 - src/pages/VisualWorkspace.tsx
+- supabase/visual_workspace_schema.sql
 
 Commit message:
-Make Visual Workspace controls interactive
+Make Visual Workspace a working prototype foundation
 
 What changed:
-- Toolbar buttons now select an active tool and update the status bar.
-- Workspace / Review / Report / Export tabs now have active state.
-- Board search filters the board tree.
-- Board folders expand/collapse.
-- Board items can be selected and update the active board tab.
-- Layer rows toggle on/off.
-- Photo cards select the related item/photo and update the inspector/Relationship Map.
-- Site Photos panel can collapse and reopen.
-- Inspector panel can collapse and reopen.
-- Linked count buttons in Inspector are now clickable:
-  - Linked Photos selects Photos node
-  - Linked Documents selects Document node
-  - Board Markups selects Board Markups node
-  - Linked Costs selects Cost node
-- Relationship Map remains the compact Blueprint system.
-- Renames Linked Markups to Board Markups for clarity.
-- Relationship zoom controls update the zoom readout.
-- Footer status text changes based on selected tool.
+- Adds local persistence through localStorage for:
+  - markups/items
+  - photos
+  - comments
+  - documents
+  - current role
+- Adds Engineer / Client role behavior:
+  - Engineer can edit everything
+  - Client can comment only
+- Toolbar buttons now perform prototype actions:
+  - Arrow / Cloud / Text / Box / Callout / Dimension / Distance / Angle / Area add new markups
+  - Photo attaches a demo photo
+  - File attaches a demo document
+  - Link focuses the Relationship Map
+  - Undo / Redo show prototype feedback
+- Report tab opens a report builder panel.
+- Export tab opens export options.
+- Export supports prototype downloads:
+  - PDF text draft
+  - Word .doc draft
+  - CSV issue schedule
+- Inspector now has working quick edits:
+  - cycle status
+  - cycle priority
+  - save condition/note
+- Comments now work:
+  - engineers and clients can add comments
+  - engineers can resolve/reopen comments
+- Linked count buttons work:
+  - Linked Photos
+  - Linked Documents
+  - Board Markups
+  - Linked Costs
+- Board tree, layers, panels, photos, schedule, relationship map stay interactive.
+- Adds Supabase SQL schema foundation with:
+  - projects
+  - project_members
+  - boards
+  - project_items
+  - markups
+  - site_photos
+  - documents
+  - comments
+  - cost_items
+  - relationships
+  - report_exports
+- Adds Row Level Security concept:
+  - owners/engineers edit
+  - clients can comment
+  - project members can read
