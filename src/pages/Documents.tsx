@@ -1356,10 +1356,10 @@ export const Documents: React.FC = () => {
               Width: {markerWidth}px
               <input
                 type="range"
-                min={markerStyle === 'Text' ? 60 : 50}
+                min={50}
                 max={240}
                 value={markerWidth}
-                onChange={(event) => setMarkerWidth(clampVisualDimension(Number(event.target.value), markerStyle === 'Text' ? 60 : 50, 240))}
+                onChange={(event) => setMarkerWidth(clampVisualDimension(Number(event.target.value), 50, 240))}
                 className="mt-1 w-full"
               />
             </label>
@@ -1367,10 +1367,35 @@ export const Documents: React.FC = () => {
               Height: {markerHeight}px
               <input
                 type="range"
-                min={markerStyle === 'Text' ? 24 : 30}
+                min={30}
                 max={160}
                 value={markerHeight}
-                onChange={(event) => setMarkerHeight(clampVisualDimension(Number(event.target.value), markerStyle === 'Text' ? 24 : 30, 160))}
+                onChange={(event) => setMarkerHeight(clampVisualDimension(Number(event.target.value), 30, 160))}
+                className="mt-1 w-full"
+              />
+            </label>
+          </div>
+        ) : markerStyle === 'Text' ? (
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            <label className="block text-xs font-semibold text-gray-600">
+              Text width: {markerWidth}px
+              <input
+                type="range"
+                min={60}
+                max={240}
+                value={markerWidth}
+                onChange={(event) => setMarkerWidth(clampVisualDimension(Number(event.target.value), 60, 240))}
+                className="mt-1 w-full"
+              />
+            </label>
+            <label className="block text-xs font-semibold text-gray-600">
+              Text height: {markerHeight}px
+              <input
+                type="range"
+                min={24}
+                max={160}
+                value={markerHeight}
+                onChange={(event) => setMarkerHeight(clampVisualDimension(Number(event.target.value), 24, 160))}
                 className="mt-1 w-full"
               />
             </label>
