@@ -425,8 +425,8 @@ export const VisualWorkspace: React.FC = () => {
       type: 'Location',
       count: 1,
       color: 'blue',
-      x: 34,
-      y: 72,
+      x: 30,
+      y: 48,
     },
     {
       id: 'item',
@@ -435,8 +435,8 @@ export const VisualWorkspace: React.FC = () => {
       type: 'Project Item',
       count: 1,
       color: 'red',
-      x: 236,
-      y: 60,
+      x: 262,
+      y: 38,
     },
     {
       id: 'photos',
@@ -445,8 +445,8 @@ export const VisualWorkspace: React.FC = () => {
       type: 'Photo Set',
       count: linkedPhotos.length,
       color: 'cyan',
-      x: 438,
-      y: 72,
+      x: 500,
+      y: 48,
     },
     {
       id: 'markups',
@@ -455,8 +455,8 @@ export const VisualWorkspace: React.FC = () => {
       type: 'Markup Group',
       count: relatedMarkupCount,
       color: 'amber',
-      x: 34,
-      y: 150,
+      x: 30,
+      y: 152,
     },
     {
       id: 'cost',
@@ -465,8 +465,8 @@ export const VisualWorkspace: React.FC = () => {
       type: 'Cost',
       count: 1,
       color: 'green',
-      x: 236,
-      y: 177,
+      x: 262,
+      y: 154,
     },
     {
       id: 'document',
@@ -475,8 +475,8 @@ export const VisualWorkspace: React.FC = () => {
       type: 'Document',
       count: 1,
       color: 'purple',
-      x: 438,
-      y: 150,
+      x: 500,
+      y: 152,
     },
   ];
 
@@ -647,7 +647,7 @@ export const VisualWorkspace: React.FC = () => {
             </div>
           </section>
 
-          <section className="grid min-h-0 grid-cols-[1.15fr_0.85fr] gap-1 border-t border-slate-800 bg-[#071019] p-1">
+          <section className="grid min-h-0 grid-cols-[0.95fr_1.05fr] gap-1 border-t border-slate-800 bg-[#071019] p-1">
             <div className="min-h-0 overflow-hidden rounded-md border border-slate-800 bg-[#0f1722]">
               <div className="flex h-10 items-center justify-between border-b border-slate-800 px-3 text-xs font-black uppercase tracking-wide text-slate-200">
                 Items / Markup Schedule
@@ -690,103 +690,96 @@ export const VisualWorkspace: React.FC = () => {
                 Relationship Map / Blueprint
                 <span className="text-[10px] font-semibold normal-case tracking-normal text-slate-400">Click nodes to inspect links</span>
               </div>
-              <div className="grid h-[248px] grid-cols-[minmax(0,1fr)_190px] bg-slate-50">
-                <div className="relative overflow-hidden">
-                  <svg className="absolute inset-0 h-full w-full">
-                    <defs>
-                      <pattern id="dots" width="18" height="18" patternUnits="userSpaceOnUse">
-                        <circle cx="1" cy="1" r="1" fill="#e2e8f0" />
-                      </pattern>
-                      <marker id="relArrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
-                        <path d="M0,0 L0,6 L7,3 z" fill="#334155" />
-                      </marker>
-                    </defs>
-                    <rect width="100%" height="100%" fill="url(#dots)" />
-                    {relationshipEdges.map((edge) => {
-                      const from = relationshipNodes.find((node) => node.id === edge.from);
-                      const to = relationshipNodes.find((node) => node.id === edge.to);
-                      if (!from || !to) return null;
 
-                      const x1 = from.x + 84;
-                      const y1 = from.y + 22;
-                      const x2 = to.x;
-                      const y2 = to.y + 22;
-                      const midX = (x1 + x2) / 2;
+<div className="relative h-[248px] overflow-hidden bg-slate-50">
+  <svg className="absolute inset-0 h-full w-full">
+    <defs>
+      <pattern id="dots" width="18" height="18" patternUnits="userSpaceOnUse">
+        <circle cx="1" cy="1" r="1" fill="#e2e8f0" />
+      </pattern>
+      <marker id="relArrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+        <path d="M0,0 L0,6 L7,3 z" fill="#334155" />
+      </marker>
+    </defs>
+    <rect width="100%" height="100%" fill="url(#dots)" />
+    {relationshipEdges.map((edge) => {
+      const from = relationshipNodes.find((node) => node.id === edge.from);
+      const to = relationshipNodes.find((node) => node.id === edge.to);
+      if (!from || !to) return null;
 
-                      return (
-                        <g key={`${edge.from}-${edge.to}`}>
-                          <path
-                            d={`M ${x1} ${y1} C ${midX} ${y1}, ${midX} ${y2}, ${x2} ${y2}`}
-                            fill="none"
-                            stroke="#334155"
-                            strokeWidth="2"
-                            markerEnd="url(#relArrow)"
-                          />
-                          <text x={midX - 24} y={(y1 + y2) / 2 - 6} fontSize="10" fontWeight="700" fill="#334155">
-                            {edge.label}
-                          </text>
-                        </g>
-                      );
-                    })}
-                  </svg>
+      const x1 = from.x + 118;
+      const y1 = from.y + 27;
+      const x2 = to.x;
+      const y2 = to.y + 27;
+      const midX = (x1 + x2) / 2;
 
-                  {relationshipNodes.map((node) => (
-                    <button
-                      key={node.id}
-                      onClick={() => setSelectedRelationshipNode(node.id)}
-                      className={`absolute w-[116px] rounded-md border px-2 py-2 text-center text-[11px] font-bold shadow-sm transition ${
-                        nodeTheme[node.color as keyof typeof nodeTheme]
-                      } ${selectedRelationshipNode === node.id ? 'ring-2 ring-slate-950 ring-offset-2' : 'hover:scale-[1.03]'}`}
-                      style={{ left: node.x, top: node.y }}
-                    >
-                      {node.id === 'item' && (
-                        <span className="absolute -top-4 left-1/2 flex h-6 w-6 -translate-x-1/2 items-center justify-center rounded-full border-2 border-white bg-red-500 text-xs text-white">
-                          {selected.id}
-                        </span>
-                      )}
-                      <span className="block leading-tight">{node.label}</span>
-                      <span className={`mt-1 block truncate text-[9px] ${node.color === 'red' ? 'text-red-50' : 'opacity-70'}`}>{node.type}</span>
-                    </button>
-                  ))}
+      return (
+        <g key={`${edge.from}-${edge.to}`}>
+          <path
+            d={`M ${x1} ${y1} C ${midX} ${y1}, ${midX} ${y2}, ${x2} ${y2}`}
+            fill="none"
+            stroke="#334155"
+            strokeWidth="2"
+            markerEnd="url(#relArrow)"
+          />
+          <rect x={midX - 33} y={(y1 + y2) / 2 - 18} width="66" height="16" rx="8" fill="white" stroke="#cbd5e1" />
+          <text x={midX} y={(y1 + y2) / 2 - 6} textAnchor="middle" fontSize="9" fontWeight="800" fill="#334155">
+            {edge.label}
+          </text>
+        </g>
+      );
+    })}
+  </svg>
 
-                  <div className="absolute bottom-3 right-3 flex items-center overflow-hidden rounded-md border border-slate-300 bg-white text-xs text-slate-800 shadow">
-                    <button className="px-3 py-2">−</button>
-                    <span className="border-x border-slate-300 px-3 py-2 font-bold">100%</span>
-                    <button className="px-3 py-2">+</button>
-                    <button className="border-l border-slate-300 px-3 py-2"><Maximize2 size={13} /></button>
-                  </div>
-                </div>
+  {relationshipNodes.map((node) => (
+    <button
+      key={node.id}
+      onClick={() => setSelectedRelationshipNode(node.id)}
+      className={`absolute w-[138px] rounded-lg border px-3 py-2 text-center text-[11px] font-black shadow-md transition ${
+        nodeTheme[node.color as keyof typeof nodeTheme]
+      } ${selectedRelationshipNode === node.id ? 'ring-2 ring-slate-950 ring-offset-2' : 'hover:scale-[1.03]'}`}
+      style={{ left: node.x, top: node.y }}
+    >
+      {node.id === 'item' && (
+        <span className="absolute -top-4 left-1/2 flex h-7 w-7 -translate-x-1/2 items-center justify-center rounded-full border-2 border-white bg-red-500 text-xs text-white">
+          {selected.id}
+        </span>
+      )}
+      <span className="block leading-tight">{node.label}</span>
+      <span className={`mt-1 block truncate text-[9px] ${node.color === 'red' ? 'text-red-50' : 'opacity-70'}`}>{node.type}</span>
+    </button>
+  ))}
 
-                <aside className="border-l border-slate-200 bg-white p-3 text-xs text-slate-700">
-                  <div className="mb-2 text-[10px] font-black uppercase tracking-wide text-slate-400">Blueprint Node</div>
-                  <div className="font-black text-slate-950">{selectedRelationship.label}</div>
-                  <div className="mt-1 text-slate-500">{selectedRelationship.type}</div>
+  <div className="absolute right-3 top-3 w-56 rounded-lg border border-slate-300 bg-white/95 p-3 text-xs text-slate-700 shadow-lg backdrop-blur">
+    <div className="text-[10px] font-black uppercase tracking-wide text-slate-400">Selected Blueprint Node</div>
+    <div className="mt-1 font-black text-slate-950">{selectedRelationship.label}</div>
+    <div className="mt-1 text-slate-500">{selectedRelationship.type}</div>
+    <div className="mt-3 grid grid-cols-2 gap-2">
+      <div className="rounded bg-slate-100 px-2 py-1">
+        <div className="text-[9px] font-bold uppercase text-slate-400">Links</div>
+        <div className="font-black">
+          {relationshipEdges.filter((edge) => edge.from === selectedRelationship.id || edge.to === selectedRelationship.id).length}
+        </div>
+      </div>
+      <div className="rounded bg-slate-100 px-2 py-1">
+        <div className="text-[9px] font-bold uppercase text-slate-400">Count</div>
+        <div className="font-black">{selectedRelationship.count}</div>
+      </div>
+    </div>
+    <div className="mt-2 rounded bg-slate-100 px-2 py-1">
+      <div className="text-[9px] font-bold uppercase text-slate-400">Details</div>
+      <div className="truncate font-bold">{selectedRelationship.subtitle}</div>
+    </div>
+  </div>
 
-                  <div className="mt-3 space-y-2">
-                    <div className="rounded-md bg-slate-100 px-2 py-1.5">
-                      <div className="text-[10px] font-bold uppercase text-slate-400">Connected To</div>
-                      <div className="font-bold text-slate-800">
-                        {relationshipEdges.filter((edge) => edge.from === selectedRelationship.id || edge.to === selectedRelationship.id).length} links
-                      </div>
-                    </div>
-                    <div className="rounded-md bg-slate-100 px-2 py-1.5">
-                      <div className="text-[10px] font-bold uppercase text-slate-400">Count</div>
-                      <div className="font-bold text-slate-800">{selectedRelationship.count}</div>
-                    </div>
-                    <div className="rounded-md bg-slate-100 px-2 py-1.5">
-                      <div className="text-[10px] font-bold uppercase text-slate-400">Details</div>
-                      <div className="font-bold text-slate-800">{selectedRelationship.subtitle}</div>
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={() => setSelectedRelationshipNode('item')}
-                    className="mt-3 w-full rounded-md bg-slate-900 px-3 py-2 font-bold text-white"
-                  >
-                    Center Item
-                  </button>
-                </aside>
-              </div>            </div>
+  <div className="absolute bottom-3 right-3 flex items-center overflow-hidden rounded-md border border-slate-300 bg-white text-xs text-slate-800 shadow">
+    <button className="px-3 py-2">−</button>
+    <span className="border-x border-slate-300 px-3 py-2 font-bold">100%</span>
+    <button className="px-3 py-2">+</button>
+    <button className="border-l border-slate-300 px-3 py-2"><Maximize2 size={13} /></button>
+  </div>
+</div>
+            </div>
           </section>
         </main>
 

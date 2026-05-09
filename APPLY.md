@@ -1,23 +1,16 @@
-# Implement Relationship Map Blueprints
+# Fix Cramped Relationship Map
 
 Replace this file:
 - src/pages/VisualWorkspace.tsx
 
 Commit message:
-Make Relationship Map interactive
+Improve Relationship Map layout
 
 What changed:
-- Keeps the Relationship Map as the compact Blueprint system instead of scrapping it.
-- Makes Relationship Map nodes data-driven from the selected markup/item.
-- Adds interactive Blueprint nodes:
-  - Plan Marker
-  - Project Item
-  - Site Photos
-  - Linked Markups
-  - Cost Item
-  - Document
-- Adds curved relationship wires with labels.
-- Clicking a node now shows node details in a Blueprint Node inspector inside the Relationship Map.
-- Clicking rows/photos/plan markers updates the selected item and relationship map.
-- Inspector linked counts now update from selected item data.
-- This creates the foundation for a future full-screen Blueprint Graph while keeping everything visible on the board page.
+- Gives Relationship Map / Blueprint more horizontal space in the bottom area.
+- Removes the internal right-side node inspector that was squeezing the node graph.
+- Replaces it with a compact floating Selected Blueprint Node card.
+- Spreads nodes farther apart.
+- Enlarges the node cards.
+- Keeps curved labeled wires.
+- Keeps the far-right Inspector as the main detail area.
