@@ -40,6 +40,16 @@ type UserRole = 'Engineer' | 'Client';
 type WorkspaceTab = 'Workspace' | 'Review' | 'Report' | 'Export';
 type PanelMode = 'none' | 'report' | 'export' | 'settings';
 
+interface MarkupGeometry {
+  x: number;
+  y: number;
+  width?: number;
+  height?: number;
+  x2?: number;
+  y2?: number;
+  points?: { x: number; y: number }[];
+}
+
 interface MarkupItem {
   id: number;
   color: string;
@@ -54,6 +64,8 @@ interface MarkupItem {
   section: string;
   notes: string;
   photoIds: number[];
+  toolType?: string;
+  geometry?: MarkupGeometry;
 }
 
 interface SitePhoto {
@@ -100,6 +112,8 @@ const initialMarkups: MarkupItem[] = [
     section: 'W16x26',
     notes: 'Seat angle connection shows heavy rust and section loss. Verify seat and bearing stiffener condition.',
     photoIds: [1, 4, 5],
+    toolType: 'Cloud',
+    geometry: { x: 74, y: 9, width: 9, height: 7 },
   },
   {
     id: 2,
@@ -115,6 +129,8 @@ const initialMarkups: MarkupItem[] = [
     section: 'W16x26',
     notes: 'Paint peeling and rust scale visible along bottom flange. Check bottom flange and web thickness.',
     photoIds: [2],
+    toolType: 'Cloud',
+    geometry: { x: 75, y: 30, width: 8, height: 6 },
   },
   {
     id: 3,
@@ -130,6 +146,8 @@ const initialMarkups: MarkupItem[] = [
     section: 'W16x26',
     notes: 'Section loss at midspan. Verify remaining thickness and repair requirements.',
     photoIds: [3],
+    toolType: 'Cloud',
+    geometry: { x: 64, y: 70, width: 10, height: 7 },
   },
   {
     id: 4,
@@ -282,7 +300,16 @@ const PhotoSvg: React.FC<{ photo: SitePhoto }> = ({ photo }) => {
   );
 };
 
-const FramingPlan: React.FC<{ onSelect: (id: number) => void; markups: MarkupItem[] }> = ({ onSelect, markups }) => {
+const FramingPlan: React.FC<{
+  onSelect: (id: number) => void;
+  markups: MarkupItem[];
+  selectedId: number;
+  activeTool: string;
+  draftGeometry: MarkupGeometry | null;
+  onPointerDown: (event: React.PointerEvent<SVGSVGElement>) => void;
+  onPointerMove: (event: React.PointerEvent<SVGSVGElement>) => void;
+  onPointerUp: (event: React.PointerEvent<SVGSVGElement>) => void;
+}> = ({ onSelect, markups, selectedId, activeTool, draftGeometry, onPointerDown, onPointerMove, onPointerUp }) => {
   const xs = [92, 214, 336, 458, 580, 702, 824];
   const ys = [76, 210, 344, 478];
 
@@ -291,7 +318,13 @@ const FramingPlan: React.FC<{ onSelect: (id: number) => void; markups: MarkupIte
   );
 
   return (
-    <svg viewBox="0 0 980 640" className="h-full w-full bg-white">
+    <svg
+      viewBox="0 0 980 640"
+      className={`h-full w-full bg-white ${activeTool !== 'Select' ? 'cursor-crosshair' : ''}`}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+    >
       <defs>
         <pattern id="paper" width="16" height="16" patternUnits="userSpaceOnUse">
           <rect width="16" height="16" fill="#ffffff" />
@@ -355,25 +388,86 @@ const FramingPlan: React.FC<{ onSelect: (id: number) => void; markups: MarkupIte
         <text x="431" y="592" fontWeight="700">180&apos;-0&quot;</text>
       </g>
 
-      {markups.slice(0, 3).map((item, index) => {
-        const markerColors = ['#ef4444', '#2563eb', '#16a34a'];
-        const x = [782, 792, 728][index] ?? 680;
-        const y = [102, 239, 520][index] ?? 390;
-        const markerEnd = ['url(#planArrowRed)', 'url(#planArrowBlue)', 'url(#planArrowGreen)'][index] ?? 'url(#planArrowRed)';
-        const boxX = [856, 874, 736][index] ?? 730;
-        const boxY = [58, 278, 558][index] ?? 440;
+      {markups.map((item, index) => {
+        const color = item.color;
+        const geometry = item.geometry ?? { x: [78, 80, 70][index] ?? 55, y: [12, 34, 74][index] ?? 45, width: 9, height: 7 };
+        const x = (geometry.x / 100) * 980;
+        const y = (geometry.y / 100) * 640;
+        const width = ((geometry.width ?? 8) / 100) * 980;
+        const height = ((geometry.height ?? 6) / 100) * 640;
+        const x2 = geometry.x2 !== undefined ? (geometry.x2 / 100) * 980 : x + width + 70;
+        const y2 = geometry.y2 !== undefined ? (geometry.y2 / 100) * 640 : y + height + 40;
+        const isSelected = selectedId === item.id;
+
+        if (item.toolType === 'Pen' && geometry.points?.length) {
+          return (
+            <g key={item.id} onClick={(event) => { event.stopPropagation(); onSelect(item.id); }} className="cursor-pointer">
+              <polyline points={geometry.points.map((point) => `${(point.x / 100) * 980},${(point.y / 100) * 640}`).join(' ')} fill="none" stroke={color} strokeWidth={isSelected ? 4 : 2.5} strokeLinecap="round" strokeLinejoin="round" />
+              <circle cx={(geometry.points[0].x / 100) * 980} cy={(geometry.points[0].y / 100) * 640} r="11" fill={color} />
+              <text x={(geometry.points[0].x / 100) * 980} y={(geometry.points[0].y / 100) * 640 + 4} textAnchor="middle" fontSize="11" fontWeight="700" fill="white">{item.id}</text>
+            </g>
+          );
+        }
+
+        if (item.toolType === 'Highlighter') {
+          return (
+            <g key={item.id} onClick={(event) => { event.stopPropagation(); onSelect(item.id); }} className="cursor-pointer">
+              <rect x={x} y={y} width={Math.max(width, 25)} height={Math.max(height, 16)} fill={color} opacity="0.23" stroke={color} strokeWidth={isSelected ? 3 : 1.5} />
+              <circle cx={x} cy={y} r="11" fill={color} opacity="0.95" />
+              <text x={x} y={y + 4} textAnchor="middle" fontSize="11" fontWeight="700" fill="white">{item.id}</text>
+            </g>
+          );
+        }
+
+        if (item.toolType === 'Distance' || item.toolType === 'Dimension') {
+          return (
+            <g key={item.id} onClick={(event) => { event.stopPropagation(); onSelect(item.id); }} className="cursor-pointer">
+              <line x1={x} y1={y} x2={x2} y2={y2} stroke={color} strokeWidth={isSelected ? 3 : 2} />
+              <circle cx={x} cy={y} r="5" fill={color} />
+              <circle cx={x2} cy={y2} r="5" fill={color} />
+              <rect x={(x + x2) / 2 - 42} y={(y + y2) / 2 - 14} width="84" height="24" rx="4" fill="white" stroke={color} />
+              <text x={(x + x2) / 2} y={(y + y2) / 2 + 3} textAnchor="middle" fontSize="10" fontWeight="800" fill={color}>{item.notes}</text>
+              <circle cx={x} cy={y - 18} r="11" fill={color} />
+              <text x={x} y={y - 14} textAnchor="middle" fontSize="11" fontWeight="700" fill="white">{item.id}</text>
+            </g>
+          );
+        }
+
+        if (item.toolType === 'Box' || item.toolType === 'Text' || item.toolType === 'Callout') {
+          return (
+            <g key={item.id} onClick={(event) => { event.stopPropagation(); onSelect(item.id); }} className="cursor-pointer">
+              <rect x={x} y={y} width={Math.max(width, 80)} height={Math.max(height, 36)} rx="4" fill="white" stroke={color} strokeWidth={isSelected ? 3 : 1.8} />
+              <circle cx={x} cy={y} r="12" fill={color} />
+              <text x={x} y={y + 5} textAnchor="middle" fontSize="12" fontWeight="700" fill="white">{item.id}</text>
+              <text x={x + 12} y={y + 20} fontSize="10" fontWeight="800" fill={color}>{item.condition.toUpperCase().slice(0, 24)}</text>
+            </g>
+          );
+        }
+
         return (
-          <g key={item.id} onClick={() => onSelect(item.id)} className="cursor-pointer">
-            <path d={`M${x - 32} ${y - 45}c24-14 66-11 78 6 12 17-1 35-33 31-31 12-63-2-62-19 0-8 7-14 17-18z`} fill="none" stroke={markerColors[index]} strokeWidth="2.5" strokeDasharray="5 4" />
-            <circle cx={x} cy={y} r="12" fill={markerColors[index]} />
-            <text x={x} y={y + 5} textAnchor="middle" fontSize="12" fontWeight="700" fill="white">{item.id}</text>
-            <line x1={x + 12} y1={y + 1} x2={boxX + 10} y2={boxY + 34} stroke={markerColors[index]} strokeWidth="2" markerEnd={markerEnd} />
-            <rect x={boxX} y={boxY} width="150" height="58" rx="4" fill="#fff" stroke={markerColors[index]} strokeWidth="1.6" />
-            <text x={boxX + 10} y={boxY + 20} fontSize="10" fontWeight="800" fill={markerColors[index]}>{item.condition.toUpperCase().slice(0, 22)}</text>
-            <text x={boxX + 10} y={boxY + 36} fontSize="10" fontWeight="800" fill={markerColors[index]}>FIELD VERIFY.</text>
+          <g key={item.id} onClick={(event) => { event.stopPropagation(); onSelect(item.id); }} className="cursor-pointer">
+            <path d={`M${x} ${y}c${width * 0.3}-${height * 0.8} ${width * 1.1}-${height * 0.6} ${width * 1.25} ${height * 0.05}c${width * 0.2} ${height * 0.7}-${width * 0.2} ${height * 1.2}-${width * 0.85} ${height * 1.05}c-${width * 0.6} ${height * 0.55}-${width * 1.25}-${height * 0.1}-${width * 1.15}-${height * 0.7}c${width * 0.05}-${height * 0.35} ${width * 0.25}-${height * 0.55} ${width * 0.45}-${height * 0.4}z`} fill="none" stroke={color} strokeWidth={isSelected ? 3.5 : 2.5} strokeDasharray="5 4" />
+            <circle cx={x + width * 0.52} cy={y + height + 18} r="12" fill={color} />
+            <text x={x + width * 0.52} y={y + height + 23} textAnchor="middle" fontSize="12" fontWeight="700" fill="white">{item.id}</text>
+            <line x1={x + width * 0.65} y1={y + height + 18} x2={x2} y2={y2} stroke={color} strokeWidth="2" markerEnd="url(#planArrowRed)" />
+            <rect x={x2} y={y2 - 32} width="156" height="58" rx="4" fill="#fff" stroke={color} strokeWidth="1.6" />
+            <text x={x2 + 10} y={y2 - 12} fontSize="10" fontWeight="800" fill={color}>{item.condition.toUpperCase().slice(0, 22)}</text>
+            <text x={x2 + 10} y={y2 + 4} fontSize="10" fontWeight="800" fill={color}>FIELD VERIFY.</text>
           </g>
         );
       })}
+
+      {draftGeometry && (
+        <g pointerEvents="none" opacity="0.75">
+          {activeTool === 'Pen' && draftGeometry.points?.length ? (
+            <polyline points={draftGeometry.points.map((point) => `${(point.x / 100) * 980},${(point.y / 100) * 640}`).join(' ')} fill="none" stroke="#0ea5e9" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+          ) : activeTool === 'Distance' || activeTool === 'Dimension' ? (
+            <line x1={(draftGeometry.x / 100) * 980} y1={(draftGeometry.y / 100) * 640} x2={((draftGeometry.x2 ?? draftGeometry.x) / 100) * 980} y2={((draftGeometry.y2 ?? draftGeometry.y) / 100) * 640} stroke="#0ea5e9" strokeWidth="3" />
+          ) : (
+            <rect x={(Math.min(draftGeometry.x, draftGeometry.x2 ?? draftGeometry.x) / 100) * 980} y={(Math.min(draftGeometry.y, draftGeometry.y2 ?? draftGeometry.y) / 100) * 640} width={(Math.abs((draftGeometry.x2 ?? draftGeometry.x) - draftGeometry.x) / 100) * 980} height={(Math.abs((draftGeometry.y2 ?? draftGeometry.y) - draftGeometry.y) / 100) * 640} fill={activeTool === 'Highlighter' ? '#0ea5e9' : 'none'} opacity={activeTool === 'Highlighter' ? 0.22 : 1} stroke="#0ea5e9" strokeWidth="3" strokeDasharray={activeTool === 'Cloud' ? '6 4' : undefined} />
+          )}
+        </g>
+      )}
     </svg>
   );
 };
@@ -408,6 +502,10 @@ export const VisualWorkspace: React.FC = () => {
     Reference: false,
   });
   const [zoomLevel, setZoomLevel] = useState(100);
+  const [planZoom, setPlanZoom] = useState(1);
+  const [draftGeometry, setDraftGeometry] = useState<MarkupGeometry | null>(null);
+  const [isDrawing, setIsDrawing] = useState(false);
+  const [showAllPhotos, setShowAllPhotos] = useState(false);
 
   useEffect(() => writeLocal('simplifystruct.visual.markups.v3', markups), [markups]);
   useEffect(() => writeLocal('simplifystruct.visual.photos.v3', photos), [photos]);
@@ -476,29 +574,6 @@ export const VisualWorkspace: React.FC = () => {
     if (!requireEngineer('edit this item')) return;
     setMarkups((current) => current.map((item) => (item.id === selected.id ? { ...item, ...updates } : item)));
     showToast('Item updated.');
-  };
-
-  const addBoardMarkup = (type: string) => {
-    if (!requireEngineer(`add ${type.toLowerCase()} markup`)) return;
-    const nextId = Math.max(...markups.map((item) => item.id)) + 1;
-    const newItem: MarkupItem = {
-      id: nextId,
-      color: '#0ea5e9',
-      type: type === 'Cloud' ? 'Beam' : type,
-      itemName: `NEW-${nextId}`,
-      location: 'Grid TBD',
-      status: 'Field Verify',
-      condition: `${type} markup added from toolbar`,
-      priority: 'Medium',
-      discipline: 'Structural',
-      dueDate: 'TBD',
-      section: 'TBD',
-      notes: `New ${type.toLowerCase()} markup. Add notes, photos, and issue details.`,
-      photoIds: [],
-    };
-    setMarkups((current) => [...current, newItem]);
-    selectMarkup(nextId, 'markups');
-    showToast(`${type} markup added.`);
   };
 
   const attachFakePhoto = () => {
@@ -623,10 +698,17 @@ export const VisualWorkspace: React.FC = () => {
 
   const handleToolClick = (label: string) => {
     setActiveTool(label);
-    if (['Arrow', 'Cloud', 'Text', 'Box', 'Callout', 'Dimension', 'Distance', 'Angle', 'Area'].includes(label)) addBoardMarkup(label);
+    setDraftGeometry(null);
+    setIsDrawing(false);
+
+    if (['Arrow', 'Cloud', 'Text', 'Box', 'Callout', 'Dimension', 'Distance', 'Angle', 'Area', 'Highlighter', 'Pen'].includes(label)) {
+      showToast(`${label} active. Click and drag on the plan.`);
+    }
     if (label === 'Photo') attachFakePhoto();
     if (label === 'File') attachFakeDocument();
     if (label === 'Link') setSelectedRelationshipNode('item');
+    if (label === 'Fit') setPlanZoom(1);
+    if (label === 'Zoom' || label === 'Zoom Area') setPlanZoom((value) => Math.min(2, Number((value + 0.15).toFixed(2))));
     if (label === 'Undo') showToast('Undo is tracked locally in this prototype.');
     if (label === 'Redo') showToast('Redo is tracked locally in this prototype.');
     if (label === 'More') setActivePanel('settings');
@@ -638,8 +720,9 @@ export const VisualWorkspace: React.FC = () => {
     }
     if (label === 'Eraser') {
       if (!requireEngineer('delete markups')) return;
+      const fallback = markups.find((item) => item.id !== selected.id)?.id ?? 1;
       setMarkups((current) => current.filter((item) => item.id !== selected.id));
-      setSelectedId(markups.find((item) => item.id !== selected.id)?.id ?? 1);
+      setSelectedId(fallback);
       showToast('Selected markup removed.');
     }
   };
@@ -652,6 +735,120 @@ export const VisualWorkspace: React.FC = () => {
     if (activeTool === 'Distance' || activeTool === 'Dimension' || activeTool === 'Area') return `${activeTool} tool active. Pick points on the board to record measurement markup.`;
     return `${activeTool} tool active. Use the board canvas to place or edit this markup.`;
   })();
+
+  const pointFromPointer = (event: React.PointerEvent<SVGSVGElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    return {
+      x: Math.max(0, Math.min(100, ((event.clientX - rect.left) / rect.width) * 100)),
+      y: Math.max(0, Math.min(100, ((event.clientY - rect.top) / rect.height) * 100)),
+    };
+  };
+
+  const createMarkupFromGeometry = (tool: string, geometry: MarkupGeometry) => {
+    if (!requireEngineer(`add ${tool.toLowerCase()} markup`)) {
+      setDraftGeometry(null);
+      setIsDrawing(false);
+      return;
+    }
+
+    const nextId = Math.max(0, ...markups.map((item) => item.id)) + 1;
+    const width = Math.abs((geometry.x2 ?? geometry.x) - geometry.x);
+    const height = Math.abs((geometry.y2 ?? geometry.y) - geometry.y);
+
+    if (tool === 'Distance' || tool === 'Dimension') {
+      const dx = (geometry.x2 ?? geometry.x) - geometry.x;
+      const dy = (geometry.y2 ?? geometry.y) - geometry.y;
+      const fakeFeet = Math.max(1, Math.round(Math.sqrt(dx * dx + dy * dy) * 1.8));
+      const measurementGeometry: MarkupGeometry = { x: geometry.x, y: geometry.y, x2: geometry.x2, y2: geometry.y2 };
+      setMarkups((current) => [
+        ...current,
+        {
+          id: nextId,
+          color: '#0ea5e9',
+          type: 'Measurement',
+          itemName: `M${nextId}`,
+          location: 'Measured on board',
+          status: 'Field Verify',
+          condition: `${tool} measurement`,
+          priority: 'Medium',
+          discipline: 'Structural',
+          dueDate: 'TBD',
+          section: 'Measurement',
+          notes: `${fakeFeet}'-0"`,
+          photoIds: [],
+          toolType: tool,
+          geometry: measurementGeometry,
+        },
+      ]);
+      setSelectedId(nextId);
+      setSelectedRelationshipNode('markups');
+      setDraftGeometry(null);
+      setIsDrawing(false);
+      showToast(`${tool} added.`);
+      return;
+    }
+
+    const normalized: MarkupGeometry = tool === 'Pen'
+      ? geometry
+      : {
+          ...geometry,
+          x: Math.min(geometry.x, geometry.x2 ?? geometry.x),
+          y: Math.min(geometry.y, geometry.y2 ?? geometry.y),
+          width: width || geometry.width || 4,
+          height: height || geometry.height || 4,
+        };
+
+    setMarkups((current) => [
+      ...current,
+      {
+        id: nextId,
+        color: tool === 'Highlighter' ? '#eab308' : '#0ea5e9',
+        type: tool === 'Cloud' ? 'Beam' : tool,
+        itemName: `N${nextId}`,
+        location: 'Marked on board',
+        status: 'Field Verify',
+        condition: tool === 'Highlighter' ? 'Highlighted review area' : `${tool} markup`,
+        priority: 'Medium',
+        discipline: 'Structural',
+        dueDate: 'TBD',
+        section: 'TBD',
+        notes: tool === 'Pen' ? 'Freehand field sketch' : `${tool} note created from board markup.`,
+        photoIds: [],
+        toolType: tool,
+        geometry: normalized,
+      },
+    ]);
+    setSelectedId(nextId);
+    setSelectedRelationshipNode('markups');
+    setDraftGeometry(null);
+    setIsDrawing(false);
+    showToast(`${tool} markup added.`);
+  };
+
+  const handlePlanPointerDown = (event: React.PointerEvent<SVGSVGElement>) => {
+    if (activeTool === 'Select') return;
+    if (['Photo', 'File', 'Link', 'Undo', 'Redo', 'More', 'Color', 'Eraser', 'Layers', 'Scale', 'Grid', 'Snap', 'Zoom', 'Fit', 'Zoom Area'].includes(activeTool)) return;
+    event.preventDefault();
+    const point = pointFromPointer(event);
+    setIsDrawing(true);
+    setDraftGeometry(activeTool === 'Pen' ? { ...point, points: [point] } : { ...point, x2: point.x, y2: point.y });
+  };
+
+  const handlePlanPointerMove = (event: React.PointerEvent<SVGSVGElement>) => {
+    if (!isDrawing || !draftGeometry) return;
+    const point = pointFromPointer(event);
+    setDraftGeometry((current) => {
+      if (!current) return current;
+      if (activeTool === 'Pen') return { ...current, points: [...(current.points ?? []), point] };
+      return { ...current, x2: point.x, y2: point.y };
+    });
+  };
+
+  const handlePlanPointerUp = () => {
+    if (!isDrawing || !draftGeometry) return;
+    createMarkupFromGeometry(activeTool, draftGeometry);
+  };
+
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col overflow-hidden bg-[#071019] text-slate-100">
@@ -829,8 +1026,19 @@ export const VisualWorkspace: React.FC = () => {
           </div>
 
           <section className="min-h-0 overflow-hidden bg-slate-200 p-2">
-            <div className="relative mx-auto h-full overflow-hidden rounded-md border border-slate-500 bg-white shadow-2xl">
-              <FramingPlan onSelect={(id) => selectMarkup(id)} markups={markups} />
+            <div className="relative mx-auto h-full overflow-auto rounded-md border border-slate-500 bg-white shadow-2xl">
+              <div style={{ transform: `scale(${planZoom})`, transformOrigin: 'top center' }} className="h-full w-full">
+                <FramingPlan
+                  onSelect={(id) => selectMarkup(id)}
+                  markups={markups}
+                  selectedId={selectedId}
+                  activeTool={activeTool}
+                  draftGeometry={draftGeometry}
+                  onPointerDown={handlePlanPointerDown}
+                  onPointerMove={handlePlanPointerMove}
+                  onPointerUp={handlePlanPointerUp}
+                />
+              </div>
             </div>
           </section>
 
@@ -984,7 +1192,13 @@ export const VisualWorkspace: React.FC = () => {
                 </div>
               </button>
             ))}
-            <button onClick={() => setSelectedRelationshipNode('photos')} className="mt-1 w-full rounded-md border border-slate-700 bg-slate-900 px-4 py-3 text-sm font-bold text-slate-200 hover:bg-slate-800">
+            <button
+              onClick={() => {
+                setSelectedRelationshipNode('photos');
+                setShowAllPhotos(true);
+              }}
+              className="mt-1 w-full rounded-md border border-slate-700 bg-slate-900 px-4 py-3 text-sm font-bold text-slate-200 hover:bg-slate-800"
+            >
               View all photos ({photos.length})
             </button>
           </div>
@@ -1168,6 +1382,43 @@ export const VisualWorkspace: React.FC = () => {
         </aside>
       </div>
 
+      {showAllPhotos && (
+        <div className="absolute inset-0 z-[80] flex items-center justify-center bg-black/55 p-6 backdrop-blur-sm">
+          <div className="max-h-[86vh] w-full max-w-5xl overflow-hidden rounded-2xl border border-slate-700 bg-[#0b1620] shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-800 px-5 py-4">
+              <div>
+                <div className="text-xs font-black uppercase tracking-wide text-slate-400">Photo Library</div>
+                <h2 className="mt-1 text-xl font-black text-white">All Site Photos</h2>
+              </div>
+              <button onClick={() => setShowAllPhotos(false)} className="rounded-md p-2 text-slate-400 hover:bg-slate-900 hover:text-white"><X size={18} /></button>
+            </div>
+            <div className="grid max-h-[70vh] grid-cols-1 gap-4 overflow-auto p-5 md:grid-cols-3">
+              {photos.map((photo) => (
+                <button
+                  key={photo.id}
+                  onClick={() => {
+                    selectMarkup(photo.itemId ?? 1, 'photos');
+                    setActivePhotoId(photo.id);
+                    setShowAllPhotos(false);
+                  }}
+                  className="overflow-hidden rounded-xl border border-slate-800 bg-slate-900 text-left shadow hover:border-blue-500"
+                >
+                  <div className="relative h-40">
+                    <PhotoSvg photo={photo} />
+                    <span className="absolute left-3 top-3 flex h-8 w-8 items-center justify-center rounded-full border-2 border-white text-sm font-black text-white shadow" style={{ backgroundColor: photo.color }}>{photo.id}</span>
+                  </div>
+                  <div className="p-3 text-xs">
+                    <div className="font-bold text-white">{photo.fileName}</div>
+                    <div className="mt-1 text-slate-400">{photo.caption}</div>
+                    <div className="mt-1 text-slate-500">{photo.grid} - {photo.date}</div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {activePanel !== 'none' && (
         <div className="absolute inset-0 z-[80] flex items-center justify-center bg-black/55 p-6 backdrop-blur-sm">
           <div className="w-full max-w-2xl overflow-hidden rounded-2xl border border-slate-700 bg-[#0b1620] shadow-2xl">
@@ -1234,7 +1485,7 @@ export const VisualWorkspace: React.FC = () => {
 
       <footer className="flex h-8 shrink-0 items-center justify-between border-t border-slate-800 bg-[#0b1520] px-4 text-xs text-slate-400">
         <span>{statusMessage}</span>
-        <span className="hidden lg:inline">X: 152&apos;-3 1/2&quot; &nbsp;&nbsp; Y: 47&apos;-6 3/4&quot; &nbsp;&nbsp; | &nbsp;&nbsp; Zoom: {zoomLevel}% &nbsp;&nbsp; | &nbsp;&nbsp; Grid: 1&apos;-0&quot; &nbsp;&nbsp; <span className="text-green-400">● Online</span></span>
+        <span className="hidden lg:inline">X: 152&apos;-3 1/2&quot; &nbsp;&nbsp; Y: 47&apos;-6 3/4&quot; &nbsp;&nbsp; | &nbsp;&nbsp; Plan: {Math.round(planZoom * 100)}% / Map: {zoomLevel}% &nbsp;&nbsp; | &nbsp;&nbsp; Grid: 1&apos;-0&quot; &nbsp;&nbsp; <span className="text-green-400">● Online</span></span>
       </footer>
     </div>
   );

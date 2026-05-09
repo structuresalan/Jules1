@@ -1,25 +1,24 @@
-# Simplify Visual Workspace Controls
+# Make Visual Workspace Board Tools Work
 
 Replace this file:
 - src/pages/VisualWorkspace.tsx
 
 Commit message:
-Simplify Visual Workspace inspector controls
+Make Visual Workspace board tools interactive
 
 What changed:
-- Removes the extra Quick Edit section.
-- Keeps the UI visually the same.
-- Makes existing Inspector fields work directly:
-  - click Status to cycle Field Verify / Monitor / Complete
-  - click Priority to cycle High / Medium / Low
-  - click Condition to edit condition/note
-  - click Notes or pencil to edit note
-- Keeps Engineer / Client behavior:
-  - Engineer can edit
-  - Client can comment only
-- Makes a few existing toolbar controls act without adding new UI:
-  - Color cycles selected markup color
-  - Eraser removes selected markup
-  - More opens settings
-  - Scale/Grid/Snap/Layers show feedback
-- Does not add new visible sections or extra complexity.
+- Keeps the same UI.
+- Makes plan tools work directly on the board:
+  - Cloud: click-drag to draw a review cloud/note
+  - Arrow: click-drag to create a callout-style note
+  - Box: click-drag to create a boxed markup
+  - Text / Callout: click-drag to create a note box
+  - Highlighter: click-drag to highlight a region
+  - Pen: click-drag to sketch a freehand line
+  - Distance / Dimension: click-drag two points to create a measurement
+- New markups get numbered automatically.
+- Clicking a markup selects it and updates the Inspector, schedule, photos, and Relationship Map.
+- Zoom / Zoom Area zooms into the plan.
+- Fit resets plan zoom.
+- View all photos opens a photo library modal.
+- No new clutter or extra panels added.
