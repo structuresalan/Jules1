@@ -336,304 +336,304 @@ Call Log:
             - generic [ref=e513]: NO VISIBLE DISTRESS
             - generic [ref=e514]: FIELD VERIFY.
         - generic:
-          - button "Annotation 1" [ref=e515] [cursor=pointer]
-          - button "Annotation 2" [ref=e516] [cursor=pointer]
-          - button "Annotation 3" [ref=e517] [cursor=pointer]
-          - button "Annotation 4" [ref=e518] [cursor=pointer]
-          - button "Annotation 5" [ref=e519] [cursor=pointer]
-      - generic [ref=e520]:
-        - generic [ref=e521]:
-          - generic [ref=e522]:
+          - button "Annotation 1"
+          - button "Annotation 2"
+          - button "Annotation 3"
+          - button "Annotation 4"
+          - button "Annotation 5"
+      - generic [ref=e515]:
+        - generic [ref=e516]:
+          - generic [ref=e517]:
             - text: Items / Markup Schedule
-            - img [ref=e523]
-          - table [ref=e526]:
-            - rowgroup [ref=e527]:
-              - row "ID Type Item Name Location Status Condition Priority Discipline Due Date" [ref=e528]:
-                - columnheader "ID" [ref=e529]
-                - columnheader "Type" [ref=e530]
-                - columnheader "Item Name" [ref=e531]
-                - columnheader "Location" [ref=e532]
-                - columnheader "Status" [ref=e533]
-                - columnheader "Condition" [ref=e534]
-                - columnheader "Priority" [ref=e535]
-                - columnheader "Discipline" [ref=e536]
-                - columnheader "Due Date" [ref=e537]
-            - rowgroup [ref=e538]:
-              - row "1 Beam B12 Grid 6 / A-B Field Verify Corrosion at seat connection High Structural May 26, 2025" [ref=e539] [cursor=pointer]:
-                - cell "1" [ref=e540]: "1"
-                - cell "Beam" [ref=e542]
-                - cell "B12" [ref=e543]
-                - cell "Grid 6 / A-B" [ref=e544]
-                - cell "Field Verify" [ref=e545]
-                - cell "Corrosion at seat connection" [ref=e546]
-                - cell "High" [ref=e547]
-                - cell "Structural" [ref=e548]
-                - cell "May 26, 2025" [ref=e549]
-              - row "2 Beam B18 Grid 6 / B-C Field Verify Paint peeling, rust scale Medium Structural May 26, 2025" [ref=e550] [cursor=pointer]:
-                - cell "2" [ref=e551]: "2"
-                - cell "Beam" [ref=e553]
-                - cell "B18" [ref=e554]
-                - cell "Grid 6 / B-C" [ref=e555]
-                - cell "Field Verify" [ref=e556]
-                - cell "Paint peeling, rust scale" [ref=e557]
-                - cell "Medium" [ref=e558]
-                - cell "Structural" [ref=e559]
-                - cell "May 26, 2025" [ref=e560]
-              - row "3 Beam B31 Grid 5 / C-D Field Verify Section loss at midspan High Structural May 26, 2025" [ref=e561] [cursor=pointer]:
-                - cell "3" [ref=e562]: "3"
-                - cell "Beam" [ref=e564]
-                - cell "B31" [ref=e565]
-                - cell "Grid 5 / C-D" [ref=e566]
-                - cell "Field Verify" [ref=e567]
-                - cell "Section loss at midspan" [ref=e568]
-                - cell "High" [ref=e569]
-                - cell "Structural" [ref=e570]
-                - cell "May 26, 2025" [ref=e571]
-              - row "4 Column C16 Grid 5 / B-C Monitor Surface rust Low Structural Jun 10, 2025" [ref=e572] [cursor=pointer]:
-                - cell "4" [ref=e573]: "4"
-                - cell "Column" [ref=e575]
-                - cell "C16" [ref=e576]
-                - cell "Grid 5 / B-C" [ref=e577]
-                - cell "Monitor" [ref=e578]
-                - cell "Surface rust" [ref=e579]
-                - cell "Low" [ref=e580]
-                - cell "Structural" [ref=e581]
-                - cell "Jun 10, 2025" [ref=e582]
-              - row "5 Beam B7 Grid 2 / A-B Complete No visible distress Low Structural —" [ref=e583] [cursor=pointer]:
-                - cell "5" [ref=e584]: "5"
-                - cell "Beam" [ref=e586]
-                - cell "B7" [ref=e587]
-                - cell "Grid 2 / A-B" [ref=e588]
-                - cell "Complete" [ref=e589]
-                - cell "No visible distress" [ref=e590]
-                - cell "Low" [ref=e591]
-                - cell "Structural" [ref=e592]
-                - cell "—" [ref=e593]
-          - generic [ref=e594]: 1–5 of 5 items
-        - generic [ref=e595]:
-          - generic [ref=e596]:
+            - img [ref=e518]
+          - table [ref=e521]:
+            - rowgroup [ref=e522]:
+              - row "ID Type Item Name Location Status Condition Priority Discipline Due Date" [ref=e523]:
+                - columnheader "ID" [ref=e524]
+                - columnheader "Type" [ref=e525]
+                - columnheader "Item Name" [ref=e526]
+                - columnheader "Location" [ref=e527]
+                - columnheader "Status" [ref=e528]
+                - columnheader "Condition" [ref=e529]
+                - columnheader "Priority" [ref=e530]
+                - columnheader "Discipline" [ref=e531]
+                - columnheader "Due Date" [ref=e532]
+            - rowgroup [ref=e533]:
+              - row "1 Beam B12 Grid 6 / A-B Field Verify Corrosion at seat connection High Structural May 26, 2025" [ref=e534] [cursor=pointer]:
+                - cell "1" [ref=e535]: "1"
+                - cell "Beam" [ref=e537]
+                - cell "B12" [ref=e538]
+                - cell "Grid 6 / A-B" [ref=e539]
+                - cell "Field Verify" [ref=e540]
+                - cell "Corrosion at seat connection" [ref=e541]
+                - cell "High" [ref=e542]
+                - cell "Structural" [ref=e543]
+                - cell "May 26, 2025" [ref=e544]
+              - row "2 Beam B18 Grid 6 / B-C Field Verify Paint peeling, rust scale Medium Structural May 26, 2025" [ref=e545] [cursor=pointer]:
+                - cell "2" [ref=e546]: "2"
+                - cell "Beam" [ref=e548]
+                - cell "B18" [ref=e549]
+                - cell "Grid 6 / B-C" [ref=e550]
+                - cell "Field Verify" [ref=e551]
+                - cell "Paint peeling, rust scale" [ref=e552]
+                - cell "Medium" [ref=e553]
+                - cell "Structural" [ref=e554]
+                - cell "May 26, 2025" [ref=e555]
+              - row "3 Beam B31 Grid 5 / C-D Field Verify Section loss at midspan High Structural May 26, 2025" [ref=e556] [cursor=pointer]:
+                - cell "3" [ref=e557]: "3"
+                - cell "Beam" [ref=e559]
+                - cell "B31" [ref=e560]
+                - cell "Grid 5 / C-D" [ref=e561]
+                - cell "Field Verify" [ref=e562]
+                - cell "Section loss at midspan" [ref=e563]
+                - cell "High" [ref=e564]
+                - cell "Structural" [ref=e565]
+                - cell "May 26, 2025" [ref=e566]
+              - row "4 Column C16 Grid 5 / B-C Monitor Surface rust Low Structural Jun 10, 2025" [ref=e567] [cursor=pointer]:
+                - cell "4" [ref=e568]: "4"
+                - cell "Column" [ref=e570]
+                - cell "C16" [ref=e571]
+                - cell "Grid 5 / B-C" [ref=e572]
+                - cell "Monitor" [ref=e573]
+                - cell "Surface rust" [ref=e574]
+                - cell "Low" [ref=e575]
+                - cell "Structural" [ref=e576]
+                - cell "Jun 10, 2025" [ref=e577]
+              - row "5 Beam B7 Grid 2 / A-B Complete No visible distress Low Structural —" [ref=e578] [cursor=pointer]:
+                - cell "5" [ref=e579]: "5"
+                - cell "Beam" [ref=e581]
+                - cell "B7" [ref=e582]
+                - cell "Grid 2 / A-B" [ref=e583]
+                - cell "Complete" [ref=e584]
+                - cell "No visible distress" [ref=e585]
+                - cell "Low" [ref=e586]
+                - cell "Structural" [ref=e587]
+                - cell "—" [ref=e588]
+          - generic [ref=e589]: 1–5 of 5 items
+        - generic [ref=e590]:
+          - generic [ref=e591]:
             - text: Relationship Map / Blueprint
-            - generic [ref=e597]: Click nodes to inspect links
-          - generic [ref=e598]:
-            - img [ref=e599]:
-              - generic [ref=e604]: refers to
-              - generic [ref=e608]: has
-              - generic [ref=e612]: impacts
-              - generic [ref=e616]: relates
-              - generic [ref=e620]: referenced by
-            - 'button "Plan Marker #1 Location" [ref=e621] [cursor=pointer]':
-              - generic [ref=e622]: "Plan Marker #1"
-              - generic [ref=e623]: Location
-            - button "1 Beam B12 Project Item" [ref=e624] [cursor=pointer]:
-              - generic [ref=e625]: "1"
-              - generic [ref=e626]: Beam B12
-              - generic [ref=e627]: Project Item
-            - button "Site Photos (3) Photo Set" [ref=e628] [cursor=pointer]:
-              - generic [ref=e629]: Site Photos (3)
-              - generic [ref=e630]: Photo Set
-            - button "Board Markups (1) Board Annotations" [ref=e631] [cursor=pointer]:
-              - generic [ref=e632]: Board Markups (1)
-              - generic [ref=e633]: Board Annotations
-            - button "Cost Item C-102 Cost" [ref=e634] [cursor=pointer]:
-              - generic [ref=e635]: Cost Item C-102
-              - generic [ref=e636]: Cost
-            - button "Document S-2.3 Document" [ref=e637] [cursor=pointer]:
-              - generic [ref=e638]: Document S-2.3
-              - generic [ref=e639]: Document
-            - generic [ref=e640]:
-              - generic [ref=e641]: Selected Blueprint Node
-              - generic [ref=e642]: Beam B12
-              - generic [ref=e643]: Project Item
-              - generic [ref=e644]:
-                - generic [ref=e645]:
-                  - generic [ref=e646]: Links
-                  - generic [ref=e647]: "4"
-                - generic [ref=e648]:
-                  - generic [ref=e649]: Count
-                  - generic [ref=e650]: "1"
-              - generic [ref=e651]:
-                - generic [ref=e652]: Details
-                - generic [ref=e653]: W16x26
-            - generic [ref=e654]:
-              - button "−" [ref=e655] [cursor=pointer]
-              - generic [ref=e656]: 100%
-              - button "+" [ref=e657] [cursor=pointer]
-              - button [ref=e658] [cursor=pointer]:
-                - img [ref=e659]
-    - complementary [ref=e664]:
-      - generic [ref=e665]:
-        - heading "Site Photos" [level=2] [ref=e666]
-        - generic [ref=e667]:
-          - button "Filter linked photos" [ref=e668] [cursor=pointer]:
-            - img [ref=e669]
-          - button "Collapse photos panel" [ref=e671] [cursor=pointer]:
-            - img [ref=e672]
-      - generic [ref=e675]:
-        - button "1 P101_0456.JPG May 11, 2025 Grid 6 / A-B" [ref=e676] [cursor=pointer]:
-          - generic [ref=e677]:
-            - img [ref=e678]
-            - generic [ref=e695]: "1"
-          - generic [ref=e696]:
-            - generic [ref=e697]:
-              - generic [ref=e698]: P101_0456.JPG
-              - generic [ref=e699]: May 11, 2025
-            - generic [ref=e700]: Grid 6 / A-B
-        - button "2 P101_0461.JPG May 11, 2025 Grid 6 / B-C" [ref=e701] [cursor=pointer]:
-          - generic [ref=e702]:
-            - img [ref=e703]
-            - generic [ref=e720]: "2"
-          - generic [ref=e721]:
-            - generic [ref=e722]:
-              - generic [ref=e723]: P101_0461.JPG
-              - generic [ref=e724]: May 11, 2025
-            - generic [ref=e725]: Grid 6 / B-C
-        - button "3 P101_0468.JPG May 11, 2025 Grid 5 / C-D" [ref=e726] [cursor=pointer]:
-          - generic [ref=e727]:
-            - img [ref=e728]
-            - generic [ref=e745]: "3"
-          - generic [ref=e746]:
-            - generic [ref=e747]:
-              - generic [ref=e748]: P101_0468.JPG
-              - generic [ref=e749]: May 11, 2025
-            - generic [ref=e750]: Grid 5 / C-D
-        - button "View all photos (5)" [ref=e751] [cursor=pointer]
-    - complementary [ref=e752]:
-      - generic [ref=e753]:
-        - heading "Inspector" [level=2] [ref=e754]
-        - button [ref=e755] [cursor=pointer]:
-          - img [ref=e756]
-      - generic [ref=e759]:
-        - generic [ref=e760]:
-          - generic [ref=e761]:
-            - generic [ref=e762]:
-              - generic [ref=e763]: "1"
-              - heading "Beam B12" [level=2] [ref=e765]
-            - button "Field Verify" [ref=e766] [cursor=pointer]:
+            - generic [ref=e592]: Click nodes to inspect links
+          - generic [ref=e593]:
+            - img [ref=e594]:
+              - generic [ref=e599]: refers to
+              - generic [ref=e603]: has
+              - generic [ref=e607]: impacts
+              - generic [ref=e611]: relates
+              - generic [ref=e615]: referenced by
+            - 'button "Plan Marker #1 Location" [ref=e616] [cursor=pointer]':
+              - generic [ref=e617]: "Plan Marker #1"
+              - generic [ref=e618]: Location
+            - button "1 Beam B12 Project Item" [ref=e619] [cursor=pointer]:
+              - generic [ref=e620]: "1"
+              - generic [ref=e621]: Beam B12
+              - generic [ref=e622]: Project Item
+            - button "Site Photos (3) Photo Set" [ref=e623] [cursor=pointer]:
+              - generic [ref=e624]: Site Photos (3)
+              - generic [ref=e625]: Photo Set
+            - button "Board Markups (1) Board Annotations" [ref=e626] [cursor=pointer]:
+              - generic [ref=e627]: Board Markups (1)
+              - generic [ref=e628]: Board Annotations
+            - button "Cost Item C-102 Cost" [ref=e629] [cursor=pointer]:
+              - generic [ref=e630]: Cost Item C-102
+              - generic [ref=e631]: Cost
+            - button "Document S-2.3 Document" [ref=e632] [cursor=pointer]:
+              - generic [ref=e633]: Document S-2.3
+              - generic [ref=e634]: Document
+            - generic [ref=e635]:
+              - generic [ref=e636]: Selected Blueprint Node
+              - generic [ref=e637]: Beam B12
+              - generic [ref=e638]: Project Item
+              - generic [ref=e639]:
+                - generic [ref=e640]:
+                  - generic [ref=e641]: Links
+                  - generic [ref=e642]: "4"
+                - generic [ref=e643]:
+                  - generic [ref=e644]: Count
+                  - generic [ref=e645]: "1"
+              - generic [ref=e646]:
+                - generic [ref=e647]: Details
+                - generic [ref=e648]: W16x26
+            - generic [ref=e649]:
+              - button "−" [ref=e650] [cursor=pointer]
+              - generic [ref=e651]: 100%
+              - button "+" [ref=e652] [cursor=pointer]
+              - button [ref=e653] [cursor=pointer]:
+                - img [ref=e654]
+    - complementary [ref=e659]:
+      - generic [ref=e660]:
+        - heading "Site Photos" [level=2] [ref=e661]
+        - generic [ref=e662]:
+          - button "Filter linked photos" [ref=e663] [cursor=pointer]:
+            - img [ref=e664]
+          - button "Collapse photos panel" [ref=e666] [cursor=pointer]:
+            - img [ref=e667]
+      - generic [ref=e670]:
+        - button "1 P101_0456.JPG May 11, 2025 Grid 6 / A-B" [ref=e671] [cursor=pointer]:
+          - generic [ref=e672]:
+            - img [ref=e673]
+            - generic [ref=e690]: "1"
+          - generic [ref=e691]:
+            - generic [ref=e692]:
+              - generic [ref=e693]: P101_0456.JPG
+              - generic [ref=e694]: May 11, 2025
+            - generic [ref=e695]: Grid 6 / A-B
+        - button "2 P101_0461.JPG May 11, 2025 Grid 6 / B-C" [ref=e696] [cursor=pointer]:
+          - generic [ref=e697]:
+            - img [ref=e698]
+            - generic [ref=e715]: "2"
+          - generic [ref=e716]:
+            - generic [ref=e717]:
+              - generic [ref=e718]: P101_0461.JPG
+              - generic [ref=e719]: May 11, 2025
+            - generic [ref=e720]: Grid 6 / B-C
+        - button "3 P101_0468.JPG May 11, 2025 Grid 5 / C-D" [ref=e721] [cursor=pointer]:
+          - generic [ref=e722]:
+            - img [ref=e723]
+            - generic [ref=e740]: "3"
+          - generic [ref=e741]:
+            - generic [ref=e742]:
+              - generic [ref=e743]: P101_0468.JPG
+              - generic [ref=e744]: May 11, 2025
+            - generic [ref=e745]: Grid 5 / C-D
+        - button "View all photos (5)" [ref=e746] [cursor=pointer]
+    - complementary [ref=e747]:
+      - generic [ref=e748]:
+        - heading "Inspector" [level=2] [ref=e749]
+        - button [ref=e750] [cursor=pointer]:
+          - img [ref=e751]
+      - generic [ref=e754]:
+        - generic [ref=e755]:
+          - generic [ref=e756]:
+            - generic [ref=e757]:
+              - generic [ref=e758]: "1"
+              - heading "Beam B12" [level=2] [ref=e760]
+            - button "Field Verify" [ref=e761] [cursor=pointer]:
               - text: Field Verify
-              - img [ref=e767]
-          - generic [ref=e769]:
-            - generic [ref=e770]:
-              - generic [ref=e771]: Item Name
-              - generic [ref=e772]: Beam B12
-            - generic [ref=e773]:
-              - generic [ref=e774]: Type
-              - generic [ref=e775]: Steel Beam
-            - generic [ref=e776]:
-              - generic [ref=e777]: Status
-              - button "Field Verify" [ref=e779] [cursor=pointer]
-            - generic [ref=e780]:
-              - generic [ref=e781]: Section
-              - generic [ref=e782]: W16x26
-            - generic [ref=e783]:
-              - generic [ref=e784]: Location
-              - generic [ref=e785]: Grid 6 / A-B
-            - generic [ref=e786]:
-              - generic [ref=e787]: Elevation
-              - generic [ref=e788]: +14&apos;-0&quot; (T.O.S.)
-            - generic [ref=e789]:
-              - generic [ref=e790]: Condition
-              - button "Corrosion at seat connection" [ref=e792] [cursor=pointer]
-            - generic [ref=e793]:
-              - generic [ref=e794]: Priority
-              - button "High" [ref=e796] [cursor=pointer]
-            - generic [ref=e797]:
-              - generic [ref=e798]: Discipline
-              - generic [ref=e799]: Structural
-            - generic [ref=e800]:
-              - generic [ref=e801]: Created By
-              - generic [ref=e802]: A. Morgan
+              - img [ref=e762]
+          - generic [ref=e764]:
+            - generic [ref=e765]:
+              - generic [ref=e766]: Item Name
+              - generic [ref=e767]: Beam B12
+            - generic [ref=e768]:
+              - generic [ref=e769]: Type
+              - generic [ref=e770]: Steel Beam
+            - generic [ref=e771]:
+              - generic [ref=e772]: Status
+              - button "Field Verify" [ref=e774] [cursor=pointer]
+            - generic [ref=e775]:
+              - generic [ref=e776]: Section
+              - generic [ref=e777]: W16x26
+            - generic [ref=e778]:
+              - generic [ref=e779]: Location
+              - generic [ref=e780]: Grid 6 / A-B
+            - generic [ref=e781]:
+              - generic [ref=e782]: Elevation
+              - generic [ref=e783]: +14&apos;-0&quot; (T.O.S.)
+            - generic [ref=e784]:
+              - generic [ref=e785]: Condition
+              - button "Corrosion at seat connection" [ref=e787] [cursor=pointer]
+            - generic [ref=e788]:
+              - generic [ref=e789]: Priority
+              - button "High" [ref=e791] [cursor=pointer]
+            - generic [ref=e792]:
+              - generic [ref=e793]: Discipline
+              - generic [ref=e794]: Structural
+            - generic [ref=e795]:
+              - generic [ref=e796]: Created By
+              - generic [ref=e797]: A. Morgan
+            - generic [ref=e798]:
+              - generic [ref=e799]: Date
+              - generic [ref=e800]: May 12, 2025
+        - generic [ref=e801]:
+          - button "Linked Photos 3" [ref=e802] [cursor=pointer]:
             - generic [ref=e803]:
-              - generic [ref=e804]: Date
-              - generic [ref=e805]: May 12, 2025
-        - generic [ref=e806]:
-          - button "Linked Photos 3" [ref=e807] [cursor=pointer]:
-            - generic [ref=e808]:
-              - img [ref=e809]
+              - img [ref=e804]
               - text: Linked Photos
-            - generic [ref=e812]:
+            - generic [ref=e807]:
               - text: "3"
-              - img [ref=e813]
-          - button "Linked Documents 2" [ref=e815] [cursor=pointer]:
-            - generic [ref=e816]:
-              - img [ref=e817]
+              - img [ref=e808]
+          - button "Linked Documents 2" [ref=e810] [cursor=pointer]:
+            - generic [ref=e811]:
+              - img [ref=e812]
               - text: Linked Documents
-            - generic [ref=e820]:
+            - generic [ref=e815]:
               - text: "2"
-              - img [ref=e821]
-          - button "Board Markups 1" [ref=e823] [cursor=pointer]:
-            - generic [ref=e824]:
-              - img [ref=e825]
+              - img [ref=e816]
+          - button "Board Markups 1" [ref=e818] [cursor=pointer]:
+            - generic [ref=e819]:
+              - img [ref=e820]
               - text: Board Markups
-            - generic [ref=e828]:
+            - generic [ref=e823]:
               - text: "1"
-              - img [ref=e829]
-          - button "Linked Costs 1" [ref=e831] [cursor=pointer]:
-            - generic [ref=e832]:
-              - img [ref=e833]
+              - img [ref=e824]
+          - button "Linked Costs 1" [ref=e826] [cursor=pointer]:
+            - generic [ref=e827]:
+              - img [ref=e828]
               - text: Linked Costs
-            - generic [ref=e836]:
+            - generic [ref=e831]:
               - text: "1"
-              - img [ref=e837]
-        - generic [ref=e839]:
-          - generic [ref=e840]:
-            - heading "Linked Photos (3)" [level=3] [ref=e841]
-            - button [ref=e842] [cursor=pointer]:
-              - img [ref=e843]
-          - generic [ref=e844]:
-            - generic [ref=e845]:
-              - img [ref=e847]
-              - generic [ref=e864]:
-                - generic [ref=e865]: P101_0456.JPG
-                - generic [ref=e866]: May 11, 2025
-                - generic [ref=e867]: Grid 6 / A-B
-            - generic [ref=e868]:
-              - img [ref=e870]
-              - generic [ref=e887]:
-                - generic [ref=e888]: P101_0457.JPG
-                - generic [ref=e889]: May 11, 2025
-                - generic [ref=e890]: Grid 6 / A-B
-        - generic [ref=e891]:
-          - generic [ref=e892]:
-            - heading "Notes" [level=3] [ref=e893]
-            - button "Edit note" [ref=e894] [cursor=pointer]:
-              - img [ref=e895]
-          - button "Seat angle connection shows heavy rust and section loss. Verify seat and bearing stiffener condition." [ref=e897] [cursor=pointer]
-          - generic [ref=e898]: A. Morgan, May 12, 2025 9:15 AM
-        - generic [ref=e899]:
+              - img [ref=e832]
+        - generic [ref=e834]:
+          - generic [ref=e835]:
+            - heading "Linked Photos (3)" [level=3] [ref=e836]
+            - button [ref=e837] [cursor=pointer]:
+              - img [ref=e838]
+          - generic [ref=e839]:
+            - generic [ref=e840]:
+              - img [ref=e842]
+              - generic [ref=e859]:
+                - generic [ref=e860]: P101_0456.JPG
+                - generic [ref=e861]: May 11, 2025
+                - generic [ref=e862]: Grid 6 / A-B
+            - generic [ref=e863]:
+              - img [ref=e865]
+              - generic [ref=e882]:
+                - generic [ref=e883]: P101_0457.JPG
+                - generic [ref=e884]: May 11, 2025
+                - generic [ref=e885]: Grid 6 / A-B
+        - generic [ref=e886]:
+          - generic [ref=e887]:
+            - heading "Notes" [level=3] [ref=e888]
+            - button "Edit note" [ref=e889] [cursor=pointer]:
+              - img [ref=e890]
+          - button "Seat angle connection shows heavy rust and section loss. Verify seat and bearing stiffener condition." [ref=e892] [cursor=pointer]
+          - generic [ref=e893]: A. Morgan, May 12, 2025 9:15 AM
+        - generic [ref=e894]:
+          - generic [ref=e895]:
+            - heading "Comments (1)" [level=3] [ref=e896]
+            - img [ref=e897]
           - generic [ref=e900]:
-            - heading "Comments (1)" [level=3] [ref=e901]
-            - img [ref=e902]
-          - generic [ref=e905]:
-            - generic [ref=e906]:
-              - generic [ref=e907]: A. Morgan
-              - button "Open" [ref=e908] [cursor=pointer]
-            - paragraph [ref=e909]: Verify seat angle thickness and bearing stiffener condition during follow-up visit.
-            - generic [ref=e910]: May 12, 2025 9:15 AM
-          - textbox "Add engineering note or reply..." [ref=e911]
-          - button "Add Comment" [ref=e912] [cursor=pointer]
-        - generic [ref=e913]:
-          - generic [ref=e914]:
-            - heading "Issue Details" [level=3] [ref=e915]
-            - img [ref=e916]
-          - generic [ref=e918]:
-            - generic [ref=e919]:
-              - generic [ref=e920]: Issue Type
-              - generic [ref=e921]: Corrosion
-            - generic [ref=e922]:
-              - generic [ref=e923]: Severity
-              - generic [ref=e924]: Severe
-            - generic [ref=e925]:
-              - generic [ref=e926]: Recommendation
-              - generic [ref=e927]: Repair
-            - generic [ref=e928]:
-              - generic [ref=e929]: Recommended Action
-              - generic [ref=e930]: Grind, repair, prime and repaint
-            - generic [ref=e931]:
-              - generic [ref=e932]: Due Date
-              - generic [ref=e933]: May 26, 2025
-  - contentinfo [ref=e934]:
-    - generic [ref=e935]: Text tool active. Use the board canvas to place or edit this markup.
-    - generic [ref=e936]: "X: 152'-3 1/2\" Y: 47'-6 3/4\" | Plan: 100% / Map: 100% | Grid: 1'-0\" ● Online"
+            - generic [ref=e901]:
+              - generic [ref=e902]: A. Morgan
+              - button "Open" [ref=e903] [cursor=pointer]
+            - paragraph [ref=e904]: Verify seat angle thickness and bearing stiffener condition during follow-up visit.
+            - generic [ref=e905]: May 12, 2025 9:15 AM
+          - textbox "Add engineering note or reply..." [ref=e906]
+          - button "Add Comment" [ref=e907] [cursor=pointer]
+        - generic [ref=e908]:
+          - generic [ref=e909]:
+            - heading "Issue Details" [level=3] [ref=e910]
+            - img [ref=e911]
+          - generic [ref=e913]:
+            - generic [ref=e914]:
+              - generic [ref=e915]: Issue Type
+              - generic [ref=e916]: Corrosion
+            - generic [ref=e917]:
+              - generic [ref=e918]: Severity
+              - generic [ref=e919]: Severe
+            - generic [ref=e920]:
+              - generic [ref=e921]: Recommendation
+              - generic [ref=e922]: Repair
+            - generic [ref=e923]:
+              - generic [ref=e924]: Recommended Action
+              - generic [ref=e925]: Grind, repair, prime and repaint
+            - generic [ref=e926]:
+              - generic [ref=e927]: Due Date
+              - generic [ref=e928]: May 26, 2025
+  - contentinfo [ref=e929]:
+    - generic [ref=e930]: Text tool active. Use the board canvas to place or edit this markup.
+    - generic [ref=e931]: "X: 152'-3 1/2\" Y: 47'-6 3/4\" | Plan: 100% / Map: 100% | Grid: 1'-0\" ● Online"
 ```
 
 # Test source
