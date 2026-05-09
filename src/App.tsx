@@ -13,6 +13,7 @@ import { Documents } from './pages/Documents';
 import { VariablesProvider } from './context/VariablesContext';
 import { ProjectHome } from './pages/ProjectHome';
 import { SettingsPage } from './pages/SettingsPage';
+import { VisualWorkspace } from './pages/VisualWorkspace';
 import { applyWebsiteStyleSettings, getWebsiteStyleSettings } from './utils/websiteStyle';
 import './styles/websiteTheme.css';
 
@@ -53,6 +54,7 @@ const AppContent = () => {
         <Route path="concrete" element={<ConcreteDesign />} />
         <Route path="loads" element={<Loads />} />
         <Route path="documents" element={<Documents />} />
+        <Route path="visual-workspace" element={<VisualWorkspace />} />
         <Route path="variables" element={<Variables />} />
         <Route path="settings" element={<SettingsPage />} />
       </Route>
@@ -62,12 +64,14 @@ const AppContent = () => {
       <Route path="/workspace/concrete" element={<Navigate to="/concrete" replace />} />
       <Route path="/workspace/loads" element={<Navigate to="/loads" replace />} />
       <Route path="/workspace/documents" element={<Navigate to="/documents" replace />} />
+      <Route path="/workspace/visual" element={<Navigate to="/visual-workspace" replace />} />
       <Route path="/workspace/variables" element={<Navigate to="/variables" replace />} />
       <Route path="/quick" element={<Navigate to="/dashboard" replace />} />
       <Route path="/quick/steel" element={<Navigate to="/steel" replace />} />
       <Route path="/quick/concrete" element={<Navigate to="/concrete" replace />} />
       <Route path="/quick/loads" element={<Navigate to="/loads" replace />} />
       <Route path="/quick/documents" element={<Navigate to="/documents" replace />} />
+      <Route path="/quick/visual" element={<Navigate to="/visual-workspace" replace />} />
       <Route path="/quick/variables" element={<Navigate to="/variables" replace />} />
 
       <Route path="*" element={<Navigate to="/" replace />} />

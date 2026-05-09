@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
-import { Home, Frame, Layers, Wind, Database, Settings, LogOut, Menu, FolderOpen, FileText, ArrowLeft } from 'lucide-react';
+import { Home, Frame, Layers, Wind, Database, Settings, LogOut, Menu, FolderOpen, FileText, ArrowLeft, Network } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { DisclaimerModal } from '../components/DisclaimerModal';
 import simplifyStructLogo from '../assets/simplifystruct-logo.png';
@@ -109,6 +109,7 @@ export const MainLayout: React.FC = () => {
     { to: '/concrete', icon: <Layers size={18} />, label: 'Concrete Design' },
     { to: '/loads', icon: <Wind size={18} />, label: 'Loads' },
     { to: '/documents', icon: <FileText size={18} />, label: 'Documents' },
+    { to: '/visual-workspace', icon: <Network size={18} />, label: 'Visual Workspace' },
     { to: '/variables', icon: <Database size={18} />, label: 'Variables' },
   ];
 
