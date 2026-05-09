@@ -322,7 +322,7 @@ const FramingPlan: React.FC<{
     <text x={(x1 + x2) / 2} y={y1 - 8} textAnchor="middle" fontSize="8.5" fontWeight="700" fill="#111827">{label}</text>
   );
 
-  const selectionHandles = (item: MarkupItem, geometry: MarkupGeometry, x: number, y: number, width: number, height: number) => {
+  const selectionHandles = (item: MarkupItem, x: number, y: number, width: number, height: number) => {
     if (selectedId !== item.id || item.toolType === 'Distance' || item.toolType === 'Dimension' || item.toolType === 'Pen') return null;
     const safeWidth = Math.max(width, 38);
     const safeHeight = Math.max(height, 26);
@@ -488,7 +488,7 @@ const FramingPlan: React.FC<{
               <rect x={x} y={y} width={Math.max(width, 25)} height={Math.max(height, 16)} fill={color} opacity="0.23" stroke={color} strokeWidth={isSelected ? 3 : 1.5} />
               <circle cx={x} cy={y} r="11" fill={color} opacity="0.95" />
               <text x={x} y={y + 4} textAnchor="middle" fontSize="11" fontWeight="700" fill="white">{item.id}</text>
-              {selectionHandles(item, geometry, x, y, Math.max(width, 25), Math.max(height, 16))}
+              {selectionHandles(item, x, y, Math.max(width, 25), Math.max(height, 16))}
             </g>
           );
         }
@@ -532,7 +532,7 @@ const FramingPlan: React.FC<{
               <circle cx={x - 12} cy={y - 10} r="12" fill={color} />
               <text x={x - 12} y={y - 5} textAnchor="middle" fontSize="12" fontWeight="700" fill="white">{item.id}</text>
               <text x={x + 8} y={y} fontSize={geometry.fontSize ?? 18} fontFamily={geometry.fontFamily ?? 'Arial'} fontWeight="800" fill={color}>{item.condition}</text>
-              {selectionHandles(item, geometry, x - 8, y - 24, Math.max(width, 120), Math.max(height, 44))}
+              {selectionHandles(item, x - 8, y - 24, Math.max(width, 120), Math.max(height, 44))}
             </g>
           );
         }
@@ -553,7 +553,7 @@ const FramingPlan: React.FC<{
               <circle cx={x} cy={y} r="12" fill={color} />
               <text x={x} y={y + 5} textAnchor="middle" fontSize="12" fontWeight="700" fill="white">{item.id}</text>
               <text x={x + 12} y={y + 20} fontSize="10" fontWeight="800" fill={color}>{item.condition.toUpperCase().slice(0, 24)}</text>
-              {selectionHandles(item, geometry, x, y, Math.max(width, 80), Math.max(height, 36))}
+              {selectionHandles(item, x, y, Math.max(width, 80), Math.max(height, 36))}
             </g>
           );
         }
@@ -576,7 +576,7 @@ const FramingPlan: React.FC<{
             <rect x={x2} y={y2 - 32} width="156" height="58" rx="4" fill="#fff" stroke={color} strokeWidth="1.6" />
             <text x={x2 + 10} y={y2 - 12} fontSize="10" fontWeight="800" fill={color}>{item.condition.toUpperCase().slice(0, 22)}</text>
             <text x={x2 + 10} y={y2 + 4} fontSize="10" fontWeight="800" fill={color}>FIELD VERIFY.</text>
-            {selectionHandles(item, geometry, x, y, Math.max(width, 70), Math.max(height, 46))}
+            {selectionHandles(item, x, y, Math.max(width, 70), Math.max(height, 46))}
           </g>
         );
       })}
