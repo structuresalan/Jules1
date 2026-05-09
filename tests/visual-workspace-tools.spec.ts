@@ -8,11 +8,12 @@ async function openWorkspace(page: Page) {
 }
 
 async function annotationCount(page: Page) {
-  return page.locator('[data-testid^="annotation-"]').count();
+  return page.locator('[data-testid^="annotation-"][data-tool-type]').count();
 }
 
 async function dragOnCanvas(page: Page, start: { x: number; y: number }, end: { x: number; y: number }) {
-  const canvas = page.getByTestId('plan-canvas');
+  const layer = page.getByTestId('plan-event-layer');
+  const canvas = (await layer.count()) ? layer : page.getByTestId('plan-canvas');
   const box = await canvas.boundingBox();
   if (!box) throw new Error('plan canvas not visible');
 
@@ -37,7 +38,7 @@ test.describe('Visual Workspace toolbar behavior', () => {
   test('Select only selects an annotation and does not move it on click', async ({ page }) => {
     await page.getByTestId('tool-select').click();
 
-    const annotation = page.getByTestId('annotation-1');
+    const annotation = page.getByTestId('annotation-hit-1');
     const before = await getBox(annotation);
 
     await annotation.click({ position: { x: 10, y: 10 }, force: true });
@@ -81,7 +82,7 @@ test.describe('Visual Workspace toolbar behavior', () => {
     await page.getByTestId('tool-eraser').click();
     await expect(page.getByTestId('status-message')).toHaveAttribute('data-active-tool', 'Eraser');
 
-    await page.getByTestId('annotation-1').click({ force: true });
+    await page.getByTestId('annotation-hit-1').click({ force: true });
 
     await expect.poll(() => annotationCount(page)).toBe(before - 1);
     await expect(page.getByTestId('plan-canvas')).toBeVisible();
@@ -116,7 +117,7 @@ test.describe('Visual Workspace toolbar behavior', () => {
     await expect(transform).toHaveAttribute('data-plan-zoom', '1');
 
     await page.getByTestId('tool-zoom').click();
-    const canvas = page.getByTestId('plan-canvas');
+    const canvas = page.getByTestId('plan-event-layer');
     const box = await canvas.boundingBox();
     if (!box) throw new Error('plan canvas not visible');
 
@@ -132,7 +133,7 @@ test.describe('Visual Workspace toolbar behavior', () => {
 
   test('Color opens palette and changes selected annotation color', async ({ page }) => {
     await page.getByTestId('tool-select').click();
-    await page.getByTestId('annotation-1').click();
+    await page.getByTestId('annotation-hit-1').click();
 
     await page.getByTestId('tool-color').click();
     await expect(page.getByTestId('active-panel-title')).toContainText('Choose markup color');

@@ -1,16 +1,20 @@
-# Fix Visual Workspace QA Canvas Events
+# Fix SVG Interaction Layer for QA and Board Tools
 
 Replace/add these files:
 - src/pages/VisualWorkspace.tsx
 - tests/visual-workspace-tools.spec.ts
 
 Commit message:
-Fix Visual Workspace QA canvas event handling
+Fix SVG interaction layer for Visual Workspace tools
 
 What changed:
-- The Playwright report showed tests were reaching the Visual Workspace, but SVG background elements intercepted clicks/drags.
-- Updates the plan SVG to use pointer capture/capture-phase pointer handlers.
-- Adds wheel handling directly on the SVG canvas so Zoom tests and real mouse wheel zoom are more reliable.
-- Adds deterministic localStorage clearing before each QA test.
-- Forces annotation clicks in tests where SVG group bounding boxes include transparent areas.
-- Keeps the QA route /qa/visual-workspace from the previous package.
+- Third Playwright report showed the SVG background still intercepted clicks and drawing events.
+- Makes static plan geometry non-interactive.
+- Adds a transparent plan event layer for drawing, panning, and zooming modes.
+- Adds dedicated transparent annotation hit targets:
+  - annotation-hit-1
+  - annotation-hit-2
+  - etc.
+- Updates tests to count only real annotation groups, not hit targets.
+- Updates tests to use annotation hit targets for reliable selection/erasing.
+- Updates canvas drag tests to use the event layer.
