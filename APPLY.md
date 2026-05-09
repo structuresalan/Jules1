@@ -1,15 +1,32 @@
-# Visual Marker Instant Preview and Drag Offset
+# Visual Map AutoCAD + PDF Annotator Measurement Tools
 
 Replace this file:
 - src/pages/Documents.tsx
 
 Commit message:
-Improve visual marker preview and dragging
+Add AutoCAD style visual map measurements
 
 What changed:
-- Pending markers now render as the actual selected marker style before pressing Save Marker.
-- If you choose Arrow, Box, Cloud, Text, or a stamp preset, the pending marker preview updates immediately.
-- Pending marker preview uses selected status, size, label display, arrow length, width, and height.
-- Dragging no longer snaps the marker anchor to the middle of the cursor.
-- Dragging preserves the offset between where you grabbed the marker and the marker's anchor point.
-- This should feel more like PDF annotation tools: click/hold anywhere on the marker and it moves naturally.
+- Removes the Review tab.
+- Adds an AutoCAD-like fixed ribbon tab view:
+  - Home
+  - Markup
+  - Documents
+  - Measure
+  - View
+  - Settings
+- The ribbon has a fixed height so the plan/photo board no longer jumps when switching tabs.
+- Removes separate action banners that pushed the board down.
+- Adds reference-scale measurement:
+  - choose Reference
+  - enter known length in feet
+  - click two points
+- Adds measurement tools:
+  - Length
+  - Perimeter
+  - Area
+- Measurements use the reference scale when available.
+- Without a reference scale, measurements show board-percent units.
+- Adds pending measurement point preview.
+- Adds a small visual board thumbnail to marker hover cards with a dot showing marker location.
+- Keeps marker dropdown, stamp dropdown, arrow stretching, marker resizing, and direct marker dragging.

@@ -31,7 +31,8 @@ import {
 } from '../utils/projectDocuments';
 
 type DocumentsView = 'list' | 'visual';
-type VisualBoardTab = 'Markup' | 'Documents' | 'Measure' | 'View' | 'Review' | 'Settings';
+type VisualBoardTab = 'Home' | 'Markup' | 'Documents' | 'Measure' | 'View' | 'Settings';
+type VisualMeasureTool = 'Reference' | 'Length' | 'Perimeter' | 'Area';
 type VisualBoardKind = 'Plan' | 'Elevation' | 'Site Photo' | 'Other';
 type VisualMarkerStyle = 'Pin' | 'Arrow' | 'Box' | 'Cloud' | 'Text';
 type VisualMarkerDirection = 'Up' | 'Down' | 'Left' | 'Right';
@@ -72,11 +73,18 @@ interface VisualMarker {
   updatedAt: string;
 }
 
+interface VisualPoint {
+  xPercent: number;
+  yPercent: number;
+}
+
 interface VisualMeasurement {
   id: string;
   projectId: string;
   boardId: string;
   label: string;
+  measurementType?: VisualMeasureTool;
+  points?: VisualPoint[];
   x1Percent: number;
   y1Percent: number;
   x2Percent: number;
@@ -284,10 +292,68 @@ const getBoardPrimaryStatus = (boardId: string, markers: VisualMarker[]): Visual
   return 'Unknown';
 };
 
-const distanceBetweenPercentPoints = (measurement: Pick<VisualMeasurement, 'x1Percent' | 'y1Percent' | 'x2Percent' | 'y2Percent'>) => {
-  const dx = measurement.x2Percent - measurement.x1Percent;
-  const dy = measurement.y2Percent - measurement.y1Percent;
+
+const getMeasurementPoints = (measurement: VisualMeasurement): VisualPoint[] => {
+  if (measurement.points && measurement.points.length >= 2) return measurement.points;
+
+  return [
+    { xPercent: measurement.x1Percent, yPercent: measurement.y1Percent },
+    { xPercent: measurement.x2Percent, yPercent: measurement.y2Percent },
+  ];
+};
+
+const getMeasurementType = (measurement: VisualMeasurement): VisualMeasureTool => measurement.measurementType || 'Length';
+
+const getPointDistance = (a: VisualPoint, b: VisualPoint) => {
+  const dx = b.xPercent - a.xPercent;
+  const dy = b.yPercent - a.yPercent;
   return Math.sqrt(dx * dx + dy * dy);
+};
+
+const getPolylineLength = (points: VisualPoint[], closed = false) => {
+  if (points.length < 2) return 0;
+
+  let total = 0;
+  for (let index = 1; index < points.length; index += 1) {
+    total += getPointDistance(points[index - 1], points[index]);
+  }
+
+  if (closed && points.length > 2) {
+    total += getPointDistance(points[points.length - 1], points[0]);
+  }
+
+  return total;
+};
+
+const getPolygonArea = (points: VisualPoint[]) => {
+  if (points.length < 3) return 0;
+
+  let sum = 0;
+  points.forEach((point, index) => {
+    const nextPoint = points[(index + 1) % points.length];
+    sum += point.xPercent * nextPoint.yPercent - nextPoint.xPercent * point.yPercent;
+  });
+
+  return Math.abs(sum) / 2;
+};
+
+const getPointCentroid = (points: VisualPoint[]) => {
+  if (!points.length) return { xPercent: 50, yPercent: 50 };
+
+  return {
+    xPercent: points.reduce((sum, point) => sum + point.xPercent, 0) / points.length,
+    yPercent: points.reduce((sum, point) => sum + point.yPercent, 0) / points.length,
+  };
+};
+
+const formatScaledLength = (lengthPercent: number, scaleFtPerPercent?: number) => {
+  if (!scaleFtPerPercent) return `${lengthPercent.toFixed(1)}% board`;
+  return `${(lengthPercent * scaleFtPerPercent).toFixed(2)} ft`;
+};
+
+const formatScaledArea = (areaPercentSq: number, scaleFtPerPercent?: number) => {
+  if (!scaleFtPerPercent) return `${areaPercentSq.toFixed(1)}%² board`;
+  return `${(areaPercentSq * scaleFtPerPercent * scaleFtPerPercent).toFixed(2)} sf`;
 };
 
 const escapeCsvCell = (value: string | number | null | undefined) => {
@@ -524,7 +590,8 @@ export const Documents: React.FC = () => {
   const [draggingMarkerId, setDraggingMarkerId] = useState<string | null>(null);
   const [hoverVisualMarker, setHoverVisualMarker] = useState<VisualMarker | null>(null);
   const [isMeasuring, setIsMeasuring] = useState(false);
-  const [pendingMeasurePoint, setPendingMeasurePoint] = useState<{ xPercent: number; yPercent: number } | null>(null);
+  const [measureTool, setMeasureTool] = useState<VisualMeasureTool>('Length');
+  const [pendingMeasurePoints, setPendingMeasurePoints] = useState<VisualPoint[]>([]);
   const [measurementActualLength, setMeasurementActualLength] = useState('');
   const [visibleStatuses, setVisibleStatuses] = useState<Record<VisualMarkerStatus, boolean>>({
     Pass: true,
@@ -559,6 +626,17 @@ export const Documents: React.FC = () => {
     () => (selectedBoard ? visualMeasurements.filter((measurement) => measurement.boardId === selectedBoard.id) : []),
     [selectedBoard, visualMeasurements],
   );
+  const selectedBoardReferenceScale = useMemo(() => {
+    const reference = selectedBoardMeasurements.find(
+      (measurement) => getMeasurementType(measurement) === 'Reference' && measurement.actualLengthFt && measurement.actualLengthFt > 0,
+    );
+    if (!reference?.actualLengthFt) return undefined;
+
+    const percentLength = getPolylineLength(getMeasurementPoints(reference));
+    if (!percentLength) return undefined;
+
+    return reference.actualLengthFt / percentLength;
+  }, [selectedBoardMeasurements]);
   const selectedMarker = useMemo(
     () => selectedBoardMarkers.find((marker) => marker.id === selectedMarkerId) ?? null,
     [selectedBoardMarkers, selectedMarkerId],
@@ -902,43 +980,72 @@ export const Documents: React.FC = () => {
     setIsAddingMarker(false);
   };
 
+  const saveMeasurementFromPoints = (points: VisualPoint[]) => {
+    if (!activeProject || !selectedBoard || points.length < 2) return;
+
+    const actualLength = Number(measurementActualLength);
+    const now = new Date().toISOString();
+    const measurementType = measureTool;
+    const firstPoint = points[0];
+    const lastPoint = points[points.length - 1];
+
+    const measurement: VisualMeasurement = {
+      id: makeVisualMeasurementId(),
+      projectId: activeProject.id,
+      boardId: selectedBoard.id,
+      label: `${measurementType[0]}-${selectedBoardMeasurements.length + 1}`,
+      measurementType,
+      points,
+      x1Percent: firstPoint.xPercent,
+      y1Percent: firstPoint.yPercent,
+      x2Percent: lastPoint.xPercent,
+      y2Percent: lastPoint.yPercent,
+      actualLengthFt: measurementType === 'Reference' && Number.isFinite(actualLength) && actualLength > 0 ? actualLength : undefined,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    writeAllVisualMeasurements([measurement, ...getAllVisualMeasurements()]);
+    setPendingMeasurePoints([]);
+    setIsMeasuring(false);
+    setMeasurementActualLength('');
+    refreshVisualMeasurements();
+  };
+
+  const finishOpenMeasurement = () => {
+    if (measureTool === 'Perimeter' && pendingMeasurePoints.length >= 2) {
+      saveMeasurementFromPoints(pendingMeasurePoints);
+    }
+
+    if (measureTool === 'Area' && pendingMeasurePoints.length >= 3) {
+      saveMeasurementFromPoints(pendingMeasurePoints);
+    }
+  };
+
   const handleBoardMeasureClick = (clientX: number, clientY: number) => {
     if (!activeProject || !selectedBoard || !isMeasuring) return;
 
     const point = getBoardCanvasPercentFromClientPoint(clientX, clientY);
     if (!point) return;
 
-    if (!pendingMeasurePoint) {
-      setPendingMeasurePoint(point);
+    const nextPoints = [...pendingMeasurePoints, point];
+
+    if (measureTool === 'Reference' || measureTool === 'Length') {
+      if (nextPoints.length >= 2) {
+        saveMeasurementFromPoints(nextPoints.slice(0, 2));
+        return;
+      }
+
+      setPendingMeasurePoints(nextPoints);
       return;
     }
 
-    const actualLength = Number(measurementActualLength);
-    const now = new Date().toISOString();
-    const measurement: VisualMeasurement = {
-      id: makeVisualMeasurementId(),
-      projectId: activeProject.id,
-      boardId: selectedBoard.id,
-      label: `M-${selectedBoardMeasurements.length + 1}`,
-      x1Percent: pendingMeasurePoint.xPercent,
-      y1Percent: pendingMeasurePoint.yPercent,
-      x2Percent: point.xPercent,
-      y2Percent: point.yPercent,
-      actualLengthFt: Number.isFinite(actualLength) && actualLength > 0 ? actualLength : undefined,
-      createdAt: now,
-      updatedAt: now,
-    };
-
-    writeAllVisualMeasurements([measurement, ...getAllVisualMeasurements()]);
-    setPendingMeasurePoint(null);
-    setIsMeasuring(false);
-    setMeasurementActualLength('');
-    refreshVisualMeasurements();
+    setPendingMeasurePoints(nextPoints);
   };
 
   const cancelMeasurement = () => {
     setIsMeasuring(false);
-    setPendingMeasurePoint(null);
+    setPendingMeasurePoints([]);
     setMeasurementActualLength('');
   };
 
@@ -1703,7 +1810,7 @@ export const Documents: React.FC = () => {
           onClick={() => {
             setSelectedBoardId(null);
             setSelectedMarkerId(null);
-            setActiveVisualBoardTab('Markup');
+            setActiveVisualBoardTab('Home');
             cancelPendingMarker();
           }}
           className="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
@@ -1733,16 +1840,16 @@ export const Documents: React.FC = () => {
             </div>
           </div>
 
-          <div className="border-b border-gray-200 bg-slate-50">
-            <div className="flex min-w-max gap-1 overflow-x-auto px-3 pt-3">
-              {(['Markup', 'Documents', 'Measure', 'View', 'Review', 'Settings'] as VisualBoardTab[]).map((tab) => (
+          <div className="border-b border-slate-800 bg-slate-950 text-slate-100">
+            <div className="flex min-w-max gap-1 overflow-x-auto px-3 pt-2">
+              {(['Home', 'Markup', 'Documents', 'Measure', 'View', 'Settings'] as VisualBoardTab[]).map((tab) => (
                 <button
                   key={tab}
                   onClick={() => setActiveVisualBoardTab(tab)}
                   className={`rounded-t-md border px-4 py-2 text-xs font-bold transition-colors ${
                     activeVisualBoardTab === tab
-                      ? 'border-gray-200 border-b-white bg-white text-blue-700'
-                      : 'border-transparent text-gray-500 hover:bg-white hover:text-gray-900'
+                      ? 'border-slate-700 border-b-slate-900 bg-slate-900 text-white'
+                      : 'border-transparent text-slate-400 hover:bg-slate-900 hover:text-white'
                   }`}
                 >
                   {tab}
@@ -1750,7 +1857,31 @@ export const Documents: React.FC = () => {
               ))}
             </div>
 
-            <div className="border-t border-gray-200 bg-white px-4 py-3">
+            <div className="min-h-[118px] border-t border-slate-800 bg-slate-900 px-4 py-3 text-slate-100">
+              {activeVisualBoardTab === 'Home' && (
+                <div className="flex h-full flex-wrap items-start gap-4 text-sm text-slate-200">
+                  <div className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2">
+                    <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Board</div>
+                    <div className="mt-1 font-semibold text-white">{selectedBoard.kind} • {selectedBoard.imageName}</div>
+                  </div>
+                  <div className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2">
+                    <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Reference scale</div>
+                    <div className="mt-1 font-semibold text-white">
+                      {selectedBoardReferenceScale ? `${selectedBoardReferenceScale.toFixed(3)} ft / board %` : 'Not set'}
+                    </div>
+                  </div>
+                  <button
+                    onClick={exportMarkerScheduleCsv}
+                    className="rounded-lg border border-blue-400/40 bg-blue-500/15 px-3 py-2 text-xs font-semibold text-blue-100 hover:bg-blue-500/25"
+                  >
+                    Export marker schedule
+                  </button>
+                  <span className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-xs text-slate-300">
+                    AutoCAD/PDF style workspace: Markup, Documents, Measure, View, and Settings stay in a fixed ribbon so the board does not jump.
+                  </span>
+                </div>
+              )}
+
               {activeVisualBoardTab === 'Markup' && (
                 <div className="flex flex-wrap items-center gap-2">
                   <button
@@ -1856,11 +1987,25 @@ export const Documents: React.FC = () => {
               )}
 
               {activeVisualBoardTab === 'Measure' && (
-                <div className="flex flex-wrap items-center gap-2 text-sm text-gray-600">
+                <div className="flex h-full flex-wrap items-start gap-2 text-sm text-slate-200">
+                  <select
+                    value={measureTool}
+                    onChange={(event) => {
+                      setMeasureTool(event.target.value as VisualMeasureTool);
+                      setPendingMeasurePoints([]);
+                      setIsMeasuring(false);
+                    }}
+                    className="rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-sm font-semibold text-white"
+                  >
+                    <option>Reference</option>
+                    <option>Length</option>
+                    <option>Perimeter</option>
+                    <option>Area</option>
+                  </select>
                   <button
                     onClick={() => {
                       setIsMeasuring(true);
-                      setPendingMeasurePoint(null);
+                      setPendingMeasurePoints([]);
                       setIsAddingMarker(false);
                       setMovingMarkerId(null);
                     }}
@@ -1869,25 +2014,36 @@ export const Documents: React.FC = () => {
                     }`}
                   >
                     <MousePointer2 size={16} />
-                    {isMeasuring ? 'Click two points on the board' : 'Measure Length'}
+                    {isMeasuring ? `Click ${measureTool} points` : `Start ${measureTool}`}
                   </button>
-                  <input
-                    value={measurementActualLength}
-                    onChange={(event) => setMeasurementActualLength(event.target.value)}
-                    className="w-36 rounded border border-gray-300 px-3 py-2 text-sm"
-                    placeholder="Actual ft optional"
-                  />
-                  {(isMeasuring || pendingMeasurePoint) && (
+                  {measureTool === 'Reference' && (
+                    <input
+                      value={measurementActualLength}
+                      onChange={(event) => setMeasurementActualLength(event.target.value)}
+                      className="w-40 rounded border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white"
+                      placeholder="Known length ft"
+                    />
+                  )}
+                  {(measureTool === 'Perimeter' || measureTool === 'Area') && pendingMeasurePoints.length > 0 && (
                     <button
-                      onClick={cancelMeasurement}
-                      className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+                      onClick={finishOpenMeasurement}
+                      disabled={measureTool === 'Area' ? pendingMeasurePoints.length < 3 : pendingMeasurePoints.length < 2}
+                      className="rounded-md border border-green-400/40 bg-green-500/15 px-3 py-2 text-sm font-semibold text-green-100 hover:bg-green-500/25 disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                      Cancel measure
+                      Finish {measureTool} ({pendingMeasurePoints.length} pts)
                     </button>
                   )}
-                  <span className="text-xs text-gray-500">
-                    Click point 1, then point 2. Enter a known actual length if you want the measurement labeled in feet.
-                  </span>
+                  {(isMeasuring || pendingMeasurePoints.length > 0) && (
+                    <button
+                      onClick={cancelMeasurement}
+                      className="rounded-md border border-slate-600 bg-slate-800 px-3 py-2 text-sm font-semibold text-slate-100 hover:bg-slate-700"
+                    >
+                      Cancel
+                    </button>
+                  )}
+                  <div className="max-w-2xl rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-xs text-slate-300">
+                    <strong className="text-white">Reference:</strong> click two known points and enter length in feet. Then Length, Perimeter, and Area report real dimensions. Without a reference, measurements use board-percent units.
+                  </div>
                 </div>
               )}
 
@@ -1919,20 +2075,6 @@ export const Documents: React.FC = () => {
                       {status}
                     </label>
                   ))}
-                </div>
-              )}
-
-              {activeVisualBoardTab === 'Review' && (
-                <div className="flex flex-wrap items-center gap-2 text-sm text-gray-600">
-                  <span className="font-semibold text-gray-900">Review schedule:</span>
-                  <span>{selectedBoardMarkers.length} marker{selectedBoardMarkers.length === 1 ? '' : 's'}</span>
-                  <button
-                    onClick={exportMarkerScheduleCsv}
-                    className="rounded border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100"
-                  >
-                    Export marker schedule CSV
-                  </button>
-                  <span className="text-xs text-gray-500">Use this as a calculation index tied to the visual board.</span>
                 </div>
               )}
 
@@ -2005,44 +2147,73 @@ export const Documents: React.FC = () => {
                   {visibleBoardMarkers.map((marker) => renderVisualMarkerButton(marker))}
 
                   {selectedBoardMeasurements.map((measurement) => {
-                    const lengthPercent = distanceBetweenPercentPoints(measurement);
+                    const points = getMeasurementPoints(measurement);
+                    const measurementType = getMeasurementType(measurement);
+                    const isArea = measurementType === 'Area';
+                    const isPerimeter = measurementType === 'Perimeter';
+                    const isReference = measurementType === 'Reference';
+                    const centroid = getPointCentroid(points);
+                    const lengthPercent = getPolylineLength(points, isPerimeter || isArea);
+                    const areaPercentSq = getPolygonArea(points);
+                    const label = isArea
+                      ? formatScaledArea(areaPercentSq, selectedBoardReferenceScale)
+                      : isReference && measurement.actualLengthFt
+                        ? `${measurement.actualLengthFt.toFixed(2)} ft reference`
+                        : formatScaledLength(lengthPercent, selectedBoardReferenceScale);
+
                     return (
-                      <button
-                        key={measurement.id}
-                        type="button"
-                        onClick={() => handleDeleteMeasurement(measurement.id)}
-                        className="absolute z-10 bg-transparent p-0"
-                        style={{ left: 0, top: 0, width: '100%', height: '100%', pointerEvents: 'none' }}
-                        title="Click measurement in list to delete"
-                      >
-                        <svg className="absolute inset-0 h-full w-full overflow-visible" style={{ pointerEvents: 'none' }}>
-                          <line
-                            x1={`${measurement.x1Percent}%`}
-                            y1={`${measurement.y1Percent}%`}
-                            x2={`${measurement.x2Percent}%`}
-                            y2={`${measurement.y2Percent}%`}
+                      <svg key={measurement.id} className="pointer-events-none absolute inset-0 z-10 h-full w-full overflow-visible">
+                        {isArea && (
+                          <polygon
+                            points={points.map((point) => `${point.xPercent},${point.yPercent}`).join(' ')}
+                            fill="rgba(124, 58, 237, 0.12)"
                             stroke="#7c3aed"
-                            strokeWidth="2"
-                            strokeDasharray="5 4"
+                            strokeWidth="0.25"
+                            vectorEffect="non-scaling-stroke"
                           />
-                          <circle cx={`${measurement.x1Percent}%`} cy={`${measurement.y1Percent}%`} r="4" fill="#7c3aed" />
-                          <circle cx={`${measurement.x2Percent}%`} cy={`${measurement.y2Percent}%`} r="4" fill="#7c3aed" />
-                          <text
-                            x={`${(measurement.x1Percent + measurement.x2Percent) / 2}%`}
-                            y={`${(measurement.y1Percent + measurement.y2Percent) / 2}%`}
-                            fill="#5b21b6"
-                            fontSize="12"
-                            fontWeight="700"
-                            paintOrder="stroke"
-                            stroke="white"
-                            strokeWidth="3"
-                          >
-                            {measurement.actualLengthFt ? `${measurement.actualLengthFt.toFixed(2)} ft` : `${lengthPercent.toFixed(1)}%`}
-                          </text>
-                        </svg>
-                      </button>
+                        )}
+                        <polyline
+                          points={`${points.map((point) => `${point.xPercent},${point.yPercent}`).join(' ')}${(isPerimeter || isArea) && points.length > 2 ? ` ${points[0].xPercent},${points[0].yPercent}` : ''}`}
+                          fill="none"
+                          stroke={isReference ? '#f59e0b' : '#7c3aed'}
+                          strokeWidth="0.35"
+                          strokeDasharray={isReference ? '1.2 0.8' : '1.4 0.9'}
+                          vectorEffect="non-scaling-stroke"
+                        />
+                        {points.map((point, pointIndex) => (
+                          <circle key={`${measurement.id}-${pointIndex}`} cx={`${point.xPercent}%`} cy={`${point.yPercent}%`} r="4" fill={isReference ? '#f59e0b' : '#7c3aed'} />
+                        ))}
+                        <text
+                          x={`${centroid.xPercent}%`}
+                          y={`${centroid.yPercent}%`}
+                          fill={isReference ? '#92400e' : '#5b21b6'}
+                          fontSize="12"
+                          fontWeight="700"
+                          paintOrder="stroke"
+                          stroke="white"
+                          strokeWidth="3"
+                        >
+                          {measurementType}: {label}
+                        </text>
+                      </svg>
                     );
                   })}
+
+                  {pendingMeasurePoints.length > 0 && (
+                    <svg className="pointer-events-none absolute inset-0 z-20 h-full w-full overflow-visible">
+                      <polyline
+                        points={pendingMeasurePoints.map((point) => `${point.xPercent},${point.yPercent}`).join(' ')}
+                        fill="none"
+                        stroke="#0ea5e9"
+                        strokeWidth="0.35"
+                        strokeDasharray="1 0.8"
+                        vectorEffect="non-scaling-stroke"
+                      />
+                      {pendingMeasurePoints.map((point, index) => (
+                        <circle key={`pending-${index}`} cx={`${point.xPercent}%`} cy={`${point.yPercent}%`} r="4" fill="#0ea5e9" />
+                      ))}
+                    </svg>
+                  )}
 
                   {pendingMarkerPoint && getPendingPreviewMarker() && renderVisualMarkerButton(getPendingPreviewMarker()!)}
                 </div>
@@ -2079,52 +2250,38 @@ export const Documents: React.FC = () => {
               {activeVisualBoardTab === 'Measure' && (
                 <div className="mt-4 rounded-lg border border-gray-200 bg-white p-3">
                   <h4 className="text-xs font-bold uppercase tracking-wide text-gray-500">Measurements</h4>
+                  <div className="mt-2 rounded border border-blue-100 bg-blue-50 p-2 text-[11px] text-blue-800">
+                    Reference scale: {selectedBoardReferenceScale ? `${selectedBoardReferenceScale.toFixed(3)} ft / board %` : 'Not set'}
+                  </div>
                   {selectedBoardMeasurements.length === 0 ? (
-                    <p className="mt-2 text-sm text-gray-500">No measurements yet. Use Measure Length, then click two points.</p>
+                    <p className="mt-2 text-sm text-gray-500">No measurements yet. Set a reference, then measure length, perimeter, or area.</p>
                   ) : (
                     <div className="mt-2 space-y-2">
-                      {selectedBoardMeasurements.map((measurement) => (
-                        <div key={measurement.id} className="rounded border border-gray-200 bg-gray-50 p-2 text-xs">
-                          <div className="font-bold text-gray-900">{measurement.label}</div>
-                          <div className="mt-1 text-gray-500">
-                            {measurement.actualLengthFt ? `${measurement.actualLengthFt.toFixed(2)} ft` : `${distanceBetweenPercentPoints(measurement).toFixed(1)}% board distance`}
+                      {selectedBoardMeasurements.map((measurement) => {
+                        const points = getMeasurementPoints(measurement);
+                        const measurementType = getMeasurementType(measurement);
+                        const isClosedMeasurement = measurementType === 'Perimeter';
+                        const value = measurementType === 'Area'
+                          ? formatScaledArea(getPolygonArea(points), selectedBoardReferenceScale)
+                          : measurementType === 'Reference' && measurement.actualLengthFt
+                            ? `${measurement.actualLengthFt.toFixed(2)} ft reference`
+                            : formatScaledLength(getPolylineLength(points, isClosedMeasurement), selectedBoardReferenceScale);
+
+                        return (
+                          <div key={measurement.id} className="rounded border border-gray-200 bg-gray-50 p-2 text-xs">
+                            <div className="font-bold text-gray-900">{measurement.label} • {measurementType}</div>
+                            <div className="mt-1 text-gray-500">{value}</div>
+                            <button
+                              onClick={() => handleDeleteMeasurement(measurement.id)}
+                              className="mt-2 rounded border border-red-200 bg-red-50 px-2 py-1 text-[11px] font-semibold text-red-700 hover:bg-red-100"
+                            >
+                              Delete measurement
+                            </button>
                           </div>
-                          <button
-                            onClick={() => handleDeleteMeasurement(measurement.id)}
-                            className="mt-2 rounded border border-red-200 bg-red-50 px-2 py-1 text-[11px] font-semibold text-red-700 hover:bg-red-100"
-                          >
-                            Delete measurement
-                          </button>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
-                </div>
-              )}
-
-              {activeVisualBoardTab === 'Review' && (
-                <div className="mt-4 rounded-lg border border-gray-200 bg-white p-3">
-                  <h4 className="text-xs font-bold uppercase tracking-wide text-gray-500">Marker Schedule</h4>
-                  <div className="mt-2 max-h-72 overflow-auto">
-                    <table className="w-full text-left text-[11px]">
-                      <thead className="text-gray-500">
-                        <tr>
-                          <th className="py-1">Marker</th>
-                          <th className="py-1">Status</th>
-                          <th className="py-1">Docs</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {selectedBoardMarkers.map((marker) => (
-                          <tr key={marker.id} className="border-t border-gray-100">
-                            <td className="py-1 font-semibold">{marker.label}</td>
-                            <td className="py-1">{normalizeMarkerStatus(marker.status)}</td>
-                            <td className="py-1">{getMarkerDocuments(marker, documents).length}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
                 </div>
               )}
 
@@ -2388,7 +2545,7 @@ export const Documents: React.FC = () => {
                     onClick={() => {
                       setSelectedBoardId(board.id);
                       setSelectedMarkerId(null);
-                      setActiveVisualBoardTab('Markup');
+                      setActiveVisualBoardTab('Home');
                       cancelPendingMarker();
                     }}
                     className="group block w-full text-left"
@@ -2553,6 +2710,15 @@ export const Documents: React.FC = () => {
             <div className="mt-1 text-gray-500">
               {hoverVisualMarkerPrimaryDocument?.name ?? 'Document not found'}{hoverVisualMarkerDocuments.length > 1 ? ` + ${hoverVisualMarkerDocuments.length - 1} more` : ''}
             </div>
+            {selectedBoard && (
+              <div className="relative mt-2 h-24 overflow-hidden rounded border border-gray-200 bg-gray-100">
+                <img src={selectedBoard.imageDataUrl} alt={`${selectedBoard.name} thumbnail`} className="h-full w-full object-cover opacity-80" />
+                <span
+                  className="absolute h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-blue-600 shadow"
+                  style={{ left: `${hoverVisualMarker.xPercent}%`, top: `${hoverVisualMarker.yPercent}%` }}
+                />
+              </div>
+            )}
             <div className="mt-2 flex items-center gap-2 text-[11px]">
               <span className={`rounded-full border px-2 py-0.5 font-bold ${markerStatusClasses(normalizeMarkerStatus(hoverVisualMarker.status))}`}>
                 {markerStatusLabel(normalizeMarkerStatus(hoverVisualMarker.status))}
