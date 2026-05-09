@@ -312,14 +312,58 @@ const FramingPlan: React.FC<{
   onPointerMove: (event: React.PointerEvent<SVGSVGElement>) => void;
   onPointerUp: (event: React.PointerEvent<SVGSVGElement>) => void;
   onMoveStart: (id: number, point: { x: number; y: number }) => void;
+  onResizeStart: (id: number, handle: 'se', point: { x: number; y: number }) => void;
   showGrid: boolean;
-}> = ({ onSelect, markups, selectedId, activeTool, draftGeometry, onPointerDown, onPointerMove, onPointerUp, onMoveStart, showGrid }) => {
+}> = ({ onSelect, markups, selectedId, activeTool, draftGeometry, onPointerDown, onPointerMove, onPointerUp, onMoveStart, onResizeStart, showGrid }) => {
   const xs = [92, 214, 336, 458, 580, 702, 824];
   const ys = [76, 210, 344, 478];
 
   const beamLabel = (x1: number, y1: number, x2: number, label: string) => (
     <text x={(x1 + x2) / 2} y={y1 - 8} textAnchor="middle" fontSize="8.5" fontWeight="700" fill="#111827">{label}</text>
   );
+
+  const selectionHandles = (item: MarkupItem, geometry: MarkupGeometry, x: number, y: number, width: number, height: number) => {
+    if (selectedId !== item.id || item.toolType === 'Distance' || item.toolType === 'Dimension' || item.toolType === 'Pen') return null;
+    const safeWidth = Math.max(width, 38);
+    const safeHeight = Math.max(height, 26);
+
+    return (
+      <g pointerEvents="all">
+        <rect x={x - 6} y={y - 6} width={safeWidth + 12} height={safeHeight + 12} fill="none" stroke="#0f172a" strokeWidth="2" strokeDasharray="5 4" />
+        {[
+          [x - 6, y - 6],
+          [x + safeWidth + 6, y - 6],
+          [x - 6, y + safeHeight + 6],
+          [x + safeWidth + 6, y + safeHeight + 6],
+        ].map(([handleX, handleY], handleIndex) => (
+          <rect
+            key={handleIndex}
+            x={handleX - 4}
+            y={handleY - 4}
+            width="8"
+            height="8"
+            fill="white"
+            stroke="#0f172a"
+            strokeWidth="1.5"
+          />
+        ))}
+        <rect
+          x={x + safeWidth + 2}
+          y={y + safeHeight + 2}
+          width="14"
+          height="14"
+          rx="3"
+          fill="#0f172a"
+          className="cursor-se-resize"
+          onPointerDown={(event) => {
+            event.stopPropagation();
+            onSelect(item.id);
+            onResizeStart(item.id, 'se', { x: event.clientX, y: event.clientY });
+          }}
+        />
+      </g>
+    );
+  };
 
   return (
     <svg
@@ -328,6 +372,7 @@ const FramingPlan: React.FC<{
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
+      onPointerLeave={onPointerUp}
     >
       <defs>
         <pattern id="paper" width="16" height="16" patternUnits="userSpaceOnUse">
@@ -443,6 +488,7 @@ const FramingPlan: React.FC<{
               <rect x={x} y={y} width={Math.max(width, 25)} height={Math.max(height, 16)} fill={color} opacity="0.23" stroke={color} strokeWidth={isSelected ? 3 : 1.5} />
               <circle cx={x} cy={y} r="11" fill={color} opacity="0.95" />
               <text x={x} y={y + 4} textAnchor="middle" fontSize="11" fontWeight="700" fill="white">{item.id}</text>
+              {selectionHandles(item, geometry, x, y, Math.max(width, 25), Math.max(height, 16))}
             </g>
           );
         }
@@ -486,6 +532,7 @@ const FramingPlan: React.FC<{
               <circle cx={x - 12} cy={y - 10} r="12" fill={color} />
               <text x={x - 12} y={y - 5} textAnchor="middle" fontSize="12" fontWeight="700" fill="white">{item.id}</text>
               <text x={x + 8} y={y} fontSize={geometry.fontSize ?? 18} fontFamily={geometry.fontFamily ?? 'Arial'} fontWeight="800" fill={color}>{item.condition}</text>
+              {selectionHandles(item, geometry, x - 8, y - 24, Math.max(width, 120), Math.max(height, 44))}
             </g>
           );
         }
@@ -506,6 +553,7 @@ const FramingPlan: React.FC<{
               <circle cx={x} cy={y} r="12" fill={color} />
               <text x={x} y={y + 5} textAnchor="middle" fontSize="12" fontWeight="700" fill="white">{item.id}</text>
               <text x={x + 12} y={y + 20} fontSize="10" fontWeight="800" fill={color}>{item.condition.toUpperCase().slice(0, 24)}</text>
+              {selectionHandles(item, geometry, x, y, Math.max(width, 80), Math.max(height, 36))}
             </g>
           );
         }
@@ -528,6 +576,7 @@ const FramingPlan: React.FC<{
             <rect x={x2} y={y2 - 32} width="156" height="58" rx="4" fill="#fff" stroke={color} strokeWidth="1.6" />
             <text x={x2 + 10} y={y2 - 12} fontSize="10" fontWeight="800" fill={color}>{item.condition.toUpperCase().slice(0, 22)}</text>
             <text x={x2 + 10} y={y2 + 4} fontSize="10" fontWeight="800" fill={color}>FIELD VERIFY.</text>
+            {selectionHandles(item, geometry, x, y, Math.max(width, 70), Math.max(height, 46))}
           </g>
         );
       })}
@@ -581,7 +630,8 @@ export const VisualWorkspace: React.FC = () => {
   const [draftGeometry, setDraftGeometry] = useState<MarkupGeometry | null>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [showAllPhotos, setShowAllPhotos] = useState(false);
-  const [moveState, setMoveState] = useState<{ id: number; startClient: { x: number; y: number }; original: MarkupGeometry } | null>(null);
+  const [moveState, setMoveState] = useState<{ id: number; startClient: { x: number; y: number }; original: MarkupGeometry; didMove?: boolean } | null>(null);
+  const [resizeState, setResizeState] = useState<{ id: number; startClient: { x: number; y: number }; original: MarkupGeometry } | null>(null);
   const [undoStack, setUndoStack] = useState<MarkupItem[][]>([]);
   const [redoStack, setRedoStack] = useState<MarkupItem[][]>([]);
   const [scaleReference, setScaleReference] = useState<{ points?: MarkupGeometry; feet?: number } | null>(null);
@@ -594,6 +644,32 @@ export const VisualWorkspace: React.FC = () => {
   useEffect(() => writeLocal('simplifystruct.visual.comments.v3', comments), [comments]);
   useEffect(() => writeLocal('simplifystruct.visual.documents.v3', documents), [documents]);
   useEffect(() => writeLocal('simplifystruct.visual.role.v3', role), [role]);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setDraftGeometry(null);
+        setIsDrawing(false);
+        setMoveState(null);
+        setResizeState(null);
+        setActiveTool('Select');
+        return;
+      }
+
+      if ((event.key === 'Delete' || event.key === 'Backspace') && activeTool === 'Select') {
+        const currentSelected = markups.find((item) => item.id === selectedId);
+        if (!currentSelected) return;
+        if (!requireEngineer('delete markups')) return;
+        const fallback = markups.find((item) => item.id !== currentSelected.id)?.id ?? 1;
+        applyMarkups((current) => current.filter((item) => item.id !== currentSelected.id));
+        setSelectedId(fallback);
+        showToast('Selected markup deleted.');
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [activeTool, markups, selectedId, role]);
 
   const selected = useMemo(() => markups.find((item) => item.id === selectedId) ?? markups[0], [markups, selectedId]);
   const linkedPhotos = useMemo(() => photos.filter((photo) => selected.photoIds.includes(photo.id)), [photos, selected]);
@@ -847,7 +923,7 @@ export const VisualWorkspace: React.FC = () => {
   };
 
   const statusMessage = (() => {
-    if (activeTool === 'Select') return 'Select active. Click a plan tag, schedule row, photo, or Blueprint node to inspect linked information.';
+    if (activeTool === 'Select') return 'Select active. Click a markup to select it, drag it to move, drag the black handle to resize, Delete removes it, Esc cancels.';
     if (activeTool === 'Cloud') return 'Cloud tool active. Drag around a region to create a review cloud linked to the selected item.';
     if (activeTool === 'Photo') return 'Photo tool active. Click a plan item to attach or view site photos.';
     if (activeTool === 'Link') return 'Link tool active. Select a plan marker, photo, cost, or document to connect it to the item.';
@@ -873,6 +949,26 @@ export const VisualWorkspace: React.FC = () => {
     return {
       x: Math.max(0, Math.min(100, ((event.clientX - rect.left) / rect.width) * 100)),
       y: Math.max(0, Math.min(100, ((event.clientY - rect.top) / rect.height) * 100)),
+    };
+  };
+
+  const clientToSvgPercent = (svg: SVGSVGElement, clientPoint: { x: number; y: number }) => {
+    const ctm = svg.getScreenCTM();
+    if (ctm) {
+      const point = svg.createSVGPoint();
+      point.x = clientPoint.x;
+      point.y = clientPoint.y;
+      const svgPoint = point.matrixTransform(ctm.inverse());
+      return {
+        x: Math.max(0, Math.min(100, (svgPoint.x / 980) * 100)),
+        y: Math.max(0, Math.min(100, (svgPoint.y / 640) * 100)),
+      };
+    }
+
+    const rect = svg.getBoundingClientRect();
+    return {
+      x: Math.max(0, Math.min(100, ((clientPoint.x - rect.left) / rect.width) * 100)),
+      y: Math.max(0, Math.min(100, ((clientPoint.y - rect.top) / rect.height) * 100)),
     };
   };
 
@@ -990,10 +1086,28 @@ export const VisualWorkspace: React.FC = () => {
   };
 
   const handlePlanPointerMove = (event: React.PointerEvent<SVGSVGElement>) => {
+    if (resizeState) {
+      const currentPoint = pointFromPointer(event);
+      const startSvg = clientToSvgPercent(event.currentTarget, resizeState.startClient);
+      const dx = currentPoint.x - startSvg.x;
+      const dy = currentPoint.y - startSvg.y;
+      setMarkups((current) => current.map((item) => item.id === resizeState.id ? {
+        ...item,
+        geometry: {
+          ...resizeState.original,
+          width: Math.max(1.5, (resizeState.original.width ?? 4) + dx),
+          height: Math.max(1.5, (resizeState.original.height ?? 4) + dy),
+        },
+      } : item));
+      return;
+    }
+
     if (moveState) {
-      const rect = event.currentTarget.getBoundingClientRect();
-      const dx = ((event.clientX - moveState.startClient.x) / rect.width) * 100 / planZoom;
-      const dy = ((event.clientY - moveState.startClient.y) / rect.height) * 100 / planZoom;
+      const currentPoint = pointFromPointer(event);
+      const startSvg = clientToSvgPercent(event.currentTarget, moveState.startClient);
+      const dx = currentPoint.x - startSvg.x;
+      const dy = currentPoint.y - startSvg.y;
+      setMoveState((current) => current ? { ...current, didMove: true } : current);
       setMarkups((current) => current.map((item) => item.id === moveState.id ? { ...item, geometry: { ...moveState.original, x: moveState.original.x + dx, y: moveState.original.y + dy } } : item));
       return;
     }
@@ -1012,10 +1126,19 @@ export const VisualWorkspace: React.FC = () => {
   };
 
   const handlePlanPointerUp = () => {
-    if (moveState) {
+    if (resizeState) {
       pushHistory();
+      setResizeState(null);
+      showToast('Markup resized.');
+      return;
+    }
+
+    if (moveState) {
+      if (moveState.didMove) {
+        pushHistory();
+        showToast('Markup moved.');
+      }
       setMoveState(null);
-      showToast('Markup moved.');
       return;
     }
 
@@ -1028,6 +1151,13 @@ export const VisualWorkspace: React.FC = () => {
     const item = markups.find((candidate) => candidate.id === id);
     if (!item?.geometry) return;
     setMoveState({ id, startClient: clientPoint, original: item.geometry });
+  };
+
+  const handleResizeStart = (id: number, _handle: 'se', clientPoint: { x: number; y: number }) => {
+    if (activeTool !== 'Select') return;
+    const item = markups.find((candidate) => candidate.id === id);
+    if (!item?.geometry) return;
+    setResizeState({ id, startClient: clientPoint, original: item.geometry });
   };
 
 
@@ -1219,6 +1349,7 @@ export const VisualWorkspace: React.FC = () => {
                   onPointerMove={handlePlanPointerMove}
                   onPointerUp={handlePlanPointerUp}
                   onMoveStart={handleMoveStart}
+                  onResizeStart={handleResizeStart}
                   showGrid={enabledLayers['Plan Grid']}
                 />
               </div>
