@@ -280,7 +280,7 @@ const PhotoSvg: React.FC<{ photo: SitePhoto; compact?: boolean }> = ({ photo }) 
   );
 };
 
-const FramingPlan: React.FC<{ selectedId: number; onSelect: (id: number) => void }> = ({ selectedId, onSelect }) => {
+const FramingPlan: React.FC<{ onSelect: (id: number) => void }> = ({ onSelect }) => {
   const xs = [92, 214, 336, 458, 580, 702, 824];
   const ys = [76, 210, 344, 478];
   const beamLabel = (x1: number, y1: number, x2: number, y2: number, label: string) => {
@@ -454,7 +454,7 @@ export const VisualWorkspace: React.FC = () => {
           {toolGroups.map((group) => (
             <div key={group.label} className="flex flex-col justify-between px-2">
               <div className="flex gap-1">
-                {group.tools.map(([label, Icon], index) => (
+                {group.tools.map(([label, Icon]) => (
                   <button
                     key={label}
                     className={`flex min-w-[52px] flex-col items-center gap-1 rounded-md px-2 py-2 text-[11px] font-semibold transition ${
@@ -550,7 +550,7 @@ export const VisualWorkspace: React.FC = () => {
 
           <section className="min-h-0 overflow-hidden bg-slate-200 p-2">
             <div className="relative mx-auto h-full overflow-hidden rounded-md border border-slate-500 bg-white shadow-2xl">
-              <FramingPlan selectedId={selectedId} onSelect={setSelectedId} />
+              <FramingPlan onSelect={setSelectedId} />
             </div>
           </section>
 
