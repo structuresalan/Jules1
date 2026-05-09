@@ -592,6 +592,8 @@ export const Documents: React.FC = () => {
   const [isMeasuring, setIsMeasuring] = useState(false);
   const [measureTool, setMeasureTool] = useState<VisualMeasureTool>('Length');
   const [pendingMeasurePoints, setPendingMeasurePoints] = useState<VisualPoint[]>([]);
+  const [hoverMarkerPreviewPoint, setHoverMarkerPreviewPoint] = useState<VisualPoint | null>(null);
+  const [isPlacingMarkerDrag, setIsPlacingMarkerDrag] = useState(false);
   const [measurementActualLength, setMeasurementActualLength] = useState('');
   const [visibleStatuses, setVisibleStatuses] = useState<Record<VisualMarkerStatus, boolean>>({
     Pass: true,
@@ -607,6 +609,7 @@ export const Documents: React.FC = () => {
   const boardCanvasRef = useRef<HTMLDivElement | null>(null);
   const latestVisualMarkersRef = useRef<VisualMarker[]>([]);
   const dragOffsetRef = useRef<{ xPercent: number; yPercent: number }>({ xPercent: 0, yPercent: 0 });
+  const placingMarkerStartRef = useRef<{ point: VisualPoint; clientX: number; clientY: number } | null>(null);
   const [newBoardKind, setNewBoardKind] = useState<VisualBoardKind>('Plan');
   const [uploadMessage, setUploadMessage] = useState('');
 
@@ -948,6 +951,38 @@ export const Documents: React.FC = () => {
     };
   }, [draggingMarkerId]);
 
+  const preparePendingMarkerAtPoint = (point: VisualPoint) => {
+    setPendingMarkerPoint(point);
+    setMarkerLabel((current) => current || `M${selectedBoardMarkers.length + 1}`);
+    setMarkerDocumentIds((current) => (current.length > 0 ? current : documents[0]?.id ? [documents[0].id] : []));
+    setMarkerNotes((current) => current);
+    setSelectedMarkerId(null);
+    setEditingMarkerId(null);
+  };
+
+  const updateMarkerShapeFromDrag = (start: { point: VisualPoint; clientX: number; clientY: number }, clientX: number, clientY: number) => {
+    const dx = clientX - start.clientX;
+    const dy = clientY - start.clientY;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+
+    if (markerStyle === 'Arrow') {
+      setMarkerArrowLength(clampVisualDimension(Math.max(40, distance), 40, 180));
+
+      if (Math.abs(dx) >= Math.abs(dy)) {
+        setMarkerDirection(dx >= 0 ? 'Right' : 'Left');
+      } else {
+        setMarkerDirection(dy >= 0 ? 'Down' : 'Up');
+      }
+
+      return;
+    }
+
+    if (markerStyle === 'Box' || markerStyle === 'Cloud' || markerStyle === 'Text') {
+      setMarkerWidth(clampVisualDimension(Math.abs(dx), markerStyle === 'Text' ? 60 : 50, 240));
+      setMarkerHeight(clampVisualDimension(Math.abs(dy), markerStyle === 'Text' ? 24 : 30, 160));
+    }
+  };
+
   const handleBoardImageClick = (event: React.MouseEvent<HTMLImageElement>) => {
     if (!selectedBoard) return;
     if (!isAddingMarker && !movingMarkerId) return;
@@ -963,21 +998,57 @@ export const Documents: React.FC = () => {
       return;
     }
 
-    setPendingMarkerPoint({ xPercent, yPercent });
-    setMarkerLabel((current) => current || `M${selectedBoardMarkers.length + 1}`);
-    setMarkerDocumentIds(documents[0]?.id ? [documents[0].id] : []);
-    setMarkerNotes('');
-    setMarkerStyle('Arrow');
-    setMarkerDirection('Right');
-    setMarkerStatus('Unknown');
-    setMarkerSize('Medium');
-    setMarkerLabelVisibility('Always');
-    setMarkerArrowLength(82);
-    setMarkerWidth(104);
-    setMarkerHeight(56);
-    setSelectedMarkerId(null);
-    setEditingMarkerId(null);
+    preparePendingMarkerAtPoint({ xPercent, yPercent });
     setIsAddingMarker(false);
+    setHoverMarkerPreviewPoint(null);
+  };
+
+  const handleBoardImageMouseMove = (event: React.MouseEvent<HTMLImageElement>) => {
+    const point = getBoardCanvasPercentFromClientPoint(event.clientX, event.clientY);
+    if (!point) return;
+
+    if (isPlacingMarkerDrag && placingMarkerStartRef.current) {
+      updateMarkerShapeFromDrag(placingMarkerStartRef.current, event.clientX, event.clientY);
+      return;
+    }
+
+    if (isAddingMarker && !pendingMarkerPoint && !isMeasuring && !movingMarkerId) {
+      setHoverMarkerPreviewPoint(point);
+    }
+  };
+
+  const handleBoardImageMouseDown = (event: React.MouseEvent<HTMLImageElement>) => {
+    if (event.button !== 0) return;
+
+    if (!selectedBoard || !isAddingMarker || isMeasuring || movingMarkerId) return;
+
+    const point = getBoardCanvasPercentFromClientPoint(event.clientX, event.clientY);
+    if (!point) return;
+
+    event.preventDefault();
+    preparePendingMarkerAtPoint(point);
+    setHoverMarkerPreviewPoint(null);
+    setIsPlacingMarkerDrag(true);
+    placingMarkerStartRef.current = { point, clientX: event.clientX, clientY: event.clientY };
+  };
+
+  const handleBoardImageMouseUp = (event: React.MouseEvent<HTMLImageElement>) => {
+    if (!isPlacingMarkerDrag) return;
+
+    if (placingMarkerStartRef.current) {
+      updateMarkerShapeFromDrag(placingMarkerStartRef.current, event.clientX, event.clientY);
+    }
+
+    placingMarkerStartRef.current = null;
+    setIsPlacingMarkerDrag(false);
+    setIsAddingMarker(false);
+    setHoverMarkerPreviewPoint(null);
+  };
+
+  const handleBoardImageMouseLeave = () => {
+    if (!isPlacingMarkerDrag) {
+      setHoverMarkerPreviewPoint(null);
+    }
   };
 
   const saveMeasurementFromPoints = (points: VisualPoint[]) => {
@@ -1104,6 +1175,9 @@ export const Documents: React.FC = () => {
     setEditingMarkerId(null);
     setMovingMarkerId(null);
     setDraggingMarkerId(null);
+    setHoverMarkerPreviewPoint(null);
+    setIsPlacingMarkerDrag(false);
+    placingMarkerStartRef.current = null;
     cancelMeasurement();
   };
 
@@ -1554,7 +1628,8 @@ export const Documents: React.FC = () => {
   );
 
   const getPendingPreviewMarker = (): VisualMarker | null => {
-    if (!activeProject || !selectedBoard || !pendingMarkerPoint) return null;
+    const previewPoint = pendingMarkerPoint ?? hoverMarkerPreviewPoint;
+    if (!activeProject || !selectedBoard || !previewPoint) return null;
 
     const now = new Date().toISOString();
 
@@ -1566,8 +1641,8 @@ export const Documents: React.FC = () => {
       documentIds: markerDocumentIds,
       label: markerLabel.trim() || (selectedStampPreset || markerStyle),
       notes: markerNotes,
-      xPercent: pendingMarkerPoint.xPercent,
-      yPercent: pendingMarkerPoint.yPercent,
+      xPercent: previewPoint.xPercent,
+      yPercent: previewPoint.yPercent,
       style: markerStyle,
       direction: markerDirection,
       status: markerStatus,
@@ -1903,7 +1978,14 @@ export const Documents: React.FC = () => {
                   </button>
                   <select
                     value={markerStyle}
-                    onChange={(event) => setMarkerStyle(event.target.value as VisualMarkerStyle)}
+                    onChange={(event) => {
+                      setMarkerStyle(event.target.value as VisualMarkerStyle);
+                      setIsAddingMarker(true);
+                      setPendingMarkerPoint(null);
+                      setSelectedMarkerId(null);
+                      setEditingMarkerId(null);
+                      setMovingMarkerId(null);
+                    }}
                     className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-700"
                     title="Marker type"
                   >
@@ -1954,7 +2036,7 @@ export const Documents: React.FC = () => {
                     <option>VOID</option>
                   </select>
                   <span className="rounded-md border border-blue-100 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700">
-                    Drag markers directly. Use Edit to stretch arrows or resize box/cloud/text markers.
+                    Select a marker type, then click-drag on the board: arrows stretch, boxes/clouds/text resize. Drag existing markers directly.
                   </span>
                   {(isAddingMarker || pendingMarkerPoint || movingMarkerId) && (
                     <button
@@ -2134,14 +2216,19 @@ export const Documents: React.FC = () => {
                     src={selectedBoard.imageDataUrl}
                     alt={selectedBoard.name}
                     onClick={(event) => {
+                      if (isPlacingMarkerDrag) return;
                       if (isMeasuring) {
                         handleBoardMeasureClick(event.clientX, event.clientY);
                         return;
                       }
                       handleBoardImageClick(event);
                     }}
+                    onMouseDown={handleBoardImageMouseDown}
+                    onMouseMove={handleBoardImageMouseMove}
+                    onMouseUp={handleBoardImageMouseUp}
+                    onMouseLeave={handleBoardImageMouseLeave}
                     draggable={false}
-                    className={`max-h-[68vh] max-w-full object-contain ${isAddingMarker || movingMarkerId || isMeasuring ? 'cursor-crosshair' : draggingMarkerId ? 'cursor-grabbing' : ''}`}
+                    className={`max-h-[68vh] max-w-full object-contain ${isAddingMarker || movingMarkerId || isMeasuring ? 'cursor-crosshair' : draggingMarkerId || isPlacingMarkerDrag ? 'cursor-grabbing' : ''}`}
                   />
 
                   {visibleBoardMarkers.map((marker) => renderVisualMarkerButton(marker))}
@@ -2215,7 +2302,7 @@ export const Documents: React.FC = () => {
                     </svg>
                   )}
 
-                  {pendingMarkerPoint && getPendingPreviewMarker() && renderVisualMarkerButton(getPendingPreviewMarker()!)}
+                  {(pendingMarkerPoint || hoverMarkerPreviewPoint) && getPendingPreviewMarker() && renderVisualMarkerButton(getPendingPreviewMarker()!)}
                 </div>
               </div>
             </div>
