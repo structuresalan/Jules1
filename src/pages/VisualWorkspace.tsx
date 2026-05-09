@@ -368,7 +368,9 @@ const FramingPlan: React.FC<{
   return (
     <svg
       viewBox="0 0 980 640"
-      className={`h-full w-full bg-white ${activeTool !== 'Select' ? 'cursor-crosshair' : ''}`}
+      className={`h-full w-full select-none bg-white ${activeTool !== 'Select' ? 'cursor-crosshair' : ''}`}
+      style={{ userSelect: 'none', WebkitUserSelect: 'none', touchAction: 'none' }}
+      onMouseDown={(event) => event.preventDefault()}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
@@ -630,8 +632,8 @@ export const VisualWorkspace: React.FC = () => {
   const [draftGeometry, setDraftGeometry] = useState<MarkupGeometry | null>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [showAllPhotos, setShowAllPhotos] = useState(false);
-  const [moveState, setMoveState] = useState<{ id: number; startClient: { x: number; y: number }; original: MarkupGeometry; didMove?: boolean } | null>(null);
-  const [resizeState, setResizeState] = useState<{ id: number; startClient: { x: number; y: number }; original: MarkupGeometry } | null>(null);
+  const [moveState, setMoveState] = useState<{ id: number; startClient: { x: number; y: number }; original: MarkupGeometry; didMove?: boolean; started?: boolean; before: MarkupItem[] } | null>(null);
+  const [resizeState, setResizeState] = useState<{ id: number; startClient: { x: number; y: number }; original: MarkupGeometry; before: MarkupItem[] } | null>(null);
   const [undoStack, setUndoStack] = useState<MarkupItem[][]>([]);
   const [redoStack, setRedoStack] = useState<MarkupItem[][]>([]);
   const [scaleReference, setScaleReference] = useState<{ points?: MarkupGeometry; feet?: number } | null>(null);
@@ -1077,7 +1079,11 @@ export const VisualWorkspace: React.FC = () => {
   };
 
   const handlePlanPointerDown = (event: React.PointerEvent<SVGSVGElement>) => {
-    if (activeTool === 'Select') return;
+    if (activeTool === 'Select') {
+      setDraftGeometry(null);
+      setIsDrawing(false);
+      return;
+    }
     if (['Photo', 'File', 'Link', 'Undo', 'Redo', 'More', 'Color', 'Eraser', 'Layers', 'Grid', 'Snap', 'Zoom', 'Fit', 'Zoom Area'].includes(activeTool)) return;
     event.preventDefault();
     const point = pointFromPointer(event);
@@ -1087,6 +1093,9 @@ export const VisualWorkspace: React.FC = () => {
 
   const handlePlanPointerMove = (event: React.PointerEvent<SVGSVGElement>) => {
     if (resizeState) {
+      const pixelDistance = Math.hypot(event.clientX - resizeState.startClient.x, event.clientY - resizeState.startClient.y);
+      if (pixelDistance < 4) return;
+
       const currentPoint = pointFromPointer(event);
       const startSvg = clientToSvgPercent(event.currentTarget, resizeState.startClient);
       const dx = currentPoint.x - startSvg.x;
@@ -1103,11 +1112,14 @@ export const VisualWorkspace: React.FC = () => {
     }
 
     if (moveState) {
+      const pixelDistance = Math.hypot(event.clientX - moveState.startClient.x, event.clientY - moveState.startClient.y);
+      if (pixelDistance < 6 && !moveState.started) return;
+
       const currentPoint = pointFromPointer(event);
       const startSvg = clientToSvgPercent(event.currentTarget, moveState.startClient);
       const dx = currentPoint.x - startSvg.x;
       const dy = currentPoint.y - startSvg.y;
-      setMoveState((current) => current ? { ...current, didMove: true } : current);
+      setMoveState((current) => current ? { ...current, didMove: true, started: true } : current);
       setMarkups((current) => current.map((item) => item.id === moveState.id ? { ...item, geometry: { ...moveState.original, x: moveState.original.x + dx, y: moveState.original.y + dy } } : item));
       return;
     }
@@ -1127,7 +1139,8 @@ export const VisualWorkspace: React.FC = () => {
 
   const handlePlanPointerUp = () => {
     if (resizeState) {
-      pushHistory();
+      setUndoStack((current) => [...current.slice(-19), resizeState.before]);
+      setRedoStack([]);
       setResizeState(null);
       showToast('Markup resized.');
       return;
@@ -1135,7 +1148,8 @@ export const VisualWorkspace: React.FC = () => {
 
     if (moveState) {
       if (moveState.didMove) {
-        pushHistory();
+        setUndoStack((current) => [...current.slice(-19), moveState.before]);
+        setRedoStack([]);
         showToast('Markup moved.');
       }
       setMoveState(null);
@@ -1150,14 +1164,14 @@ export const VisualWorkspace: React.FC = () => {
     if (activeTool !== 'Select') return;
     const item = markups.find((candidate) => candidate.id === id);
     if (!item?.geometry) return;
-    setMoveState({ id, startClient: clientPoint, original: item.geometry });
+    setMoveState({ id, startClient: clientPoint, original: item.geometry, before: markups });
   };
 
   const handleResizeStart = (id: number, _handle: 'se', clientPoint: { x: number; y: number }) => {
     if (activeTool !== 'Select') return;
     const item = markups.find((candidate) => candidate.id === id);
     if (!item?.geometry) return;
-    setResizeState({ id, startClient: clientPoint, original: item.geometry });
+    setResizeState({ id, startClient: clientPoint, original: item.geometry, before: markups });
   };
 
 
