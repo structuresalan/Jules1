@@ -390,7 +390,6 @@ export const VisualWorkspace: React.FC = () => {
   const [activeTool, setActiveTool] = useState('Select');
   const [activePanel, setActivePanel] = useState<PanelMode>('none');
   const [newComment, setNewComment] = useState('');
-  const [draftFieldValue, setDraftFieldValue] = useState('');
   const [toastMessage, setToastMessage] = useState('');
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({ '03 - Structural': true, 'Photos & Documents': true });
   const [activeBoard, setActiveBoard] = useState('Level 2 Framing Plan');
@@ -630,6 +629,19 @@ export const VisualWorkspace: React.FC = () => {
     if (label === 'Link') setSelectedRelationshipNode('item');
     if (label === 'Undo') showToast('Undo is tracked locally in this prototype.');
     if (label === 'Redo') showToast('Redo is tracked locally in this prototype.');
+    if (label === 'More') setActivePanel('settings');
+    if (label === 'Scale' || label === 'Grid' || label === 'Snap' || label === 'Layers') showToast(`${label} toggled for this prototype.`);
+    if (label === 'Color') {
+      const colors = ['#ef4444', '#2563eb', '#16a34a', '#eab308', '#8b5cf6'];
+      const currentIndex = Math.max(0, colors.indexOf(selected.color));
+      updateSelectedMarkup({ color: colors[(currentIndex + 1) % colors.length] });
+    }
+    if (label === 'Eraser') {
+      if (!requireEngineer('delete markups')) return;
+      setMarkups((current) => current.filter((item) => item.id !== selected.id));
+      setSelectedId(markups.find((item) => item.id !== selected.id)?.id ?? 1);
+      showToast('Selected markup removed.');
+    }
   };
 
   const statusMessage = (() => {
@@ -808,7 +820,10 @@ export const VisualWorkspace: React.FC = () => {
         <main className="grid min-h-0 grid-rows-[36px_minmax(0,1fr)_292px] bg-[#111827]">
           <div className="flex items-center gap-1 border-b border-slate-800 bg-[#0f1722] px-3">
             <div className="flex h-full items-center gap-3 rounded-t-lg bg-white px-4 text-xs font-bold text-slate-950">
-              {activeBoard} <X size={13} className="text-slate-500" />
+              {activeBoard}
+              <button onClick={() => setActiveBoard('Level 2 Framing Plan')} title="Reset active board">
+                <X size={13} className="text-slate-500" />
+              </button>
             </div>
             <button onClick={() => setActivePanel('settings')} className="ml-2 text-slate-400 hover:text-white"><Plus size={17} /></button>
           </div>
@@ -1016,29 +1031,40 @@ export const VisualWorkspace: React.FC = () => {
                   <div key={label} className="grid grid-cols-[112px_1fr] items-center gap-2">
                     <div className="text-xs font-medium text-slate-400">{label}</div>
                     <div className="font-semibold text-slate-100">
-                      {label === 'Priority' ? <span className={`rounded px-2 py-1 text-[11px] font-bold ${priorityClass(value as Priority)}`}>{value}</span> : value}
+                      {label === 'Status' ? (
+                        <button
+                          onClick={() => updateSelectedMarkup({ status: selected.status === 'Field Verify' ? 'Monitor' : selected.status === 'Monitor' ? 'Complete' : 'Field Verify' })}
+                          className={`rounded px-2 py-1 text-[11px] font-bold ${lightStatusClass(selected.status)}`}
+                          title="Click to cycle status"
+                        >
+                          {value}
+                        </button>
+                      ) : label === 'Priority' ? (
+                        <button
+                          onClick={() => updateSelectedMarkup({ priority: selected.priority === 'High' ? 'Medium' : selected.priority === 'Medium' ? 'Low' : 'High' })}
+                          className={`rounded px-2 py-1 text-[11px] font-bold ${priorityClass(value as Priority)}`}
+                          title="Click to cycle priority"
+                        >
+                          {value}
+                        </button>
+                      ) : label === 'Condition' ? (
+                        <button
+                          onClick={() => {
+                            const nextCondition = window.prompt('Update condition', selected.condition);
+                            if (nextCondition?.trim()) updateSelectedMarkup({ condition: nextCondition.trim(), notes: nextCondition.trim() });
+                          }}
+                          className="text-left font-semibold text-slate-100 underline decoration-slate-600 underline-offset-4 hover:text-white"
+                          title="Click to edit condition"
+                        >
+                          {value}
+                        </button>
+                      ) : (
+                        value
+                      )}
                     </div>
                   </div>
                 ))}
               </div>
-            </section>
-
-            <section className="border-b border-slate-800 p-4">
-              <div className="mb-3 text-xs font-black uppercase tracking-wide text-slate-300">Quick Edit</div>
-              <div className="grid grid-cols-2 gap-2">
-                <button onClick={() => updateSelectedMarkup({ priority: selected.priority === 'High' ? 'Medium' : selected.priority === 'Medium' ? 'Low' : 'High' })} className="rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-xs font-bold text-slate-200 hover:bg-slate-800">Cycle Priority</button>
-                <button onClick={() => updateSelectedMarkup({ status: selected.status === 'Field Verify' ? 'Monitor' : selected.status === 'Monitor' ? 'Complete' : 'Field Verify' })} className="rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-xs font-bold text-slate-200 hover:bg-slate-800">Cycle Status</button>
-              </div>
-              <input value={draftFieldValue} onChange={(event) => setDraftFieldValue(event.target.value)} placeholder="Update condition / note..." className="mt-2 w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-100 placeholder:text-slate-500" />
-              <button
-                onClick={() => {
-                  if (draftFieldValue.trim()) updateSelectedMarkup({ condition: draftFieldValue.trim(), notes: draftFieldValue.trim() });
-                  setDraftFieldValue('');
-                }}
-                className="mt-2 w-full rounded-md bg-blue-600 px-3 py-2 text-xs font-bold text-white hover:bg-blue-700"
-              >
-                Save Field Note
-              </button>
             </section>
 
             <section className="border-b border-slate-800 p-3">
@@ -1077,9 +1103,26 @@ export const VisualWorkspace: React.FC = () => {
             <section className="border-b border-slate-800 p-4">
               <div className="mb-3 flex items-center justify-between">
                 <h3 className="text-xs font-black uppercase tracking-wide text-slate-300">Notes</h3>
-                <PenLine size={14} className="text-slate-400" />
+                <button
+                  onClick={() => {
+                    const nextNote = window.prompt('Update note', selected.notes);
+                    if (nextNote?.trim()) updateSelectedMarkup({ notes: nextNote.trim() });
+                  }}
+                  title="Edit note"
+                >
+                  <PenLine size={14} className="text-slate-400" />
+                </button>
               </div>
-              <p className="text-sm leading-relaxed text-slate-200">{selected.notes}</p>
+              <button
+                onClick={() => {
+                  const nextNote = window.prompt('Update note', selected.notes);
+                  if (nextNote?.trim()) updateSelectedMarkup({ notes: nextNote.trim() });
+                }}
+                className="text-left text-sm leading-relaxed text-slate-200 hover:text-white"
+                title="Click to edit note"
+              >
+                {selected.notes}
+              </button>
               <div className="mt-4 text-xs text-slate-500">A. Morgan, May 12, 2025 9:15 AM</div>
             </section>
 
