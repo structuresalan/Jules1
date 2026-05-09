@@ -1419,7 +1419,44 @@ export const VisualWorkspace: React.FC = () => {
           </div>
 
           <section data-testid="plan-section" className="min-h-0 overflow-hidden bg-slate-200 p-2">
-            <div data-testid="plan-viewport" className="relative mx-auto h-full overflow-auto rounded-md border border-slate-500 bg-white shadow-2xl">
+            <div
+              data-testid="plan-viewport"
+              className="relative mx-auto h-full overflow-auto rounded-md border border-slate-500 bg-white shadow-2xl"
+              onWheel={(event) => {
+                if (activeTool !== 'Zoom' && activeTool !== 'Zoom Area') return;
+                event.preventDefault();
+                setPlanZoom((value) => {
+                  const next = event.deltaY < 0 ? value + 0.1 : value - 0.1;
+                  return Math.max(0.5, Math.min(3, Number(next.toFixed(2))));
+                });
+              }}
+            >
+              <div
+                data-testid="plan-event-layer"
+                className={`absolute inset-0 z-20 ${activeTool !== 'Select' && activeTool !== 'Eraser' ? 'cursor-crosshair' : 'pointer-events-none'}`}
+                style={{ pointerEvents: activeTool !== 'Select' && activeTool !== 'Eraser' ? 'auto' : 'none' }}
+                onPointerDown={(event) => {
+                  const svg = document.querySelector('[data-testid="plan-canvas"]') as SVGSVGElement | null;
+                  if (!svg) return;
+                  const syntheticEvent = {
+                    ...event,
+                    currentTarget: svg,
+                    target: svg,
+                  } as unknown as React.PointerEvent<SVGSVGElement>;
+                  handlePlanPointerDown(syntheticEvent);
+                }}
+                onPointerMove={(event) => {
+                  const svg = document.querySelector('[data-testid="plan-canvas"]') as SVGSVGElement | null;
+                  if (!svg) return;
+                  const syntheticEvent = {
+                    ...event,
+                    currentTarget: svg,
+                    target: svg,
+                  } as unknown as React.PointerEvent<SVGSVGElement>;
+                  handlePlanPointerMove(syntheticEvent);
+                }}
+                onPointerUp={() => handlePlanPointerUp()}
+              />
               <div
                 data-testid="plan-transform"
                 data-plan-zoom={planZoom}
@@ -1451,6 +1488,34 @@ export const VisualWorkspace: React.FC = () => {
                   onWheelZoom={handleWheelZoom}
                   showGrid={enabledLayers['Plan Grid']}
                 />
+              </div>
+
+              <div className="pointer-events-none absolute inset-0 z-30">
+                {markups.map((item) => {
+                  const geometry = item.geometry ?? { x: 50, y: 50, width: 8, height: 6 };
+                  const left = `${geometry.x}%`;
+                  const top = `${geometry.y}%`;
+                  const width = `${Math.max(4, geometry.width ?? 8)}%`;
+                  const height = `${Math.max(4, geometry.height ?? 6)}%`;
+
+                  return (
+                    <button
+                      key={`hit-${item.id}`}
+                      data-testid={`annotation-hit-${item.id}`}
+                      aria-label={`Annotation ${item.id}`}
+                      className="pointer-events-auto absolute rounded border border-transparent bg-transparent"
+                      style={{ left, top, width, height }}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        if (activeTool === 'Eraser') {
+                          handleEraseMarkup(item.id);
+                          return;
+                        }
+                        selectMarkup(item.id);
+                      }}
+                    />
+                  );
+                })}
               </div>
             </div>
           </section>

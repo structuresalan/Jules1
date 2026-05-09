@@ -13,15 +13,31 @@ async function annotationCount(page: Page) {
 
 async function dragOnCanvas(page: Page, start: { x: number; y: number }, end: { x: number; y: number }) {
   const layer = page.getByTestId('plan-event-layer');
-  const canvas = (await layer.count()) ? layer : page.getByTestId('plan-canvas');
-  const box = await canvas.boundingBox();
+  const canvas = page.getByTestId('plan-canvas');
+  const target = (await layer.count()) ? layer : canvas;
+  const box = await target.boundingBox();
   if (!box) throw new Error('plan canvas not visible');
 
   await page.mouse.move(box.x + start.x, box.y + start.y);
   await page.mouse.down();
   await page.mouse.move(box.x + end.x, box.y + end.y, { steps: 12 });
   await page.mouse.up();
-  await page.waitForTimeout(150);
+  await page.waitForTimeout(250);
+}
+
+async function clickAnnotation(page: Page, id: number) {
+  const hit = page.getByTestId(`annotation-hit-${id}`);
+  if (await hit.count()) {
+    await hit.click({ force: true });
+    return;
+  }
+  await page.getByTestId(`annotation-${id}`).click({ force: true });
+}
+
+async function annotationLocator(page: Page, id: number) {
+  const hit = page.getByTestId(`annotation-hit-${id}`);
+  if (await hit.count()) return hit;
+  return page.getByTestId(`annotation-${id}`);
 }
 
 async function getBox(locator: Locator) {
@@ -38,10 +54,10 @@ test.describe('Visual Workspace toolbar behavior', () => {
   test('Select only selects an annotation and does not move it on click', async ({ page }) => {
     await page.getByTestId('tool-select').click();
 
-    const annotation = page.getByTestId('annotation-hit-1');
+    const annotation = await annotationLocator(page, 1);
     const before = await getBox(annotation);
 
-    await annotation.click({ position: { x: 10, y: 10 }, force: true });
+    await clickAnnotation(page, 1);
     await expect(page.getByTestId('inspector-title')).toContainText(/B12|N1|Text|Beam/);
 
     const after = await getBox(annotation);
@@ -82,7 +98,7 @@ test.describe('Visual Workspace toolbar behavior', () => {
     await page.getByTestId('tool-eraser').click();
     await expect(page.getByTestId('status-message')).toHaveAttribute('data-active-tool', 'Eraser');
 
-    await page.getByTestId('annotation-hit-1').click({ force: true });
+    await clickAnnotation(page, 1);
 
     await expect.poll(() => annotationCount(page)).toBe(before - 1);
     await expect(page.getByTestId('plan-canvas')).toBeVisible();
@@ -117,7 +133,8 @@ test.describe('Visual Workspace toolbar behavior', () => {
     await expect(transform).toHaveAttribute('data-plan-zoom', '1');
 
     await page.getByTestId('tool-zoom').click();
-    const canvas = page.getByTestId('plan-event-layer');
+    const layer = page.getByTestId('plan-event-layer');
+    const canvas = (await layer.count()) ? layer : page.getByTestId('plan-canvas');
     const box = await canvas.boundingBox();
     if (!box) throw new Error('plan canvas not visible');
 
