@@ -77,6 +77,15 @@ async function getBox(locator: Locator) {
   return box;
 }
 
+async function expectNoPageErrors(page: Page, action: () => Promise<void>) {
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  await action();
+  await page.waitForTimeout(150);
+  expect(errors).toEqual([]);
+  await expect(page.locator('body')).toBeVisible();
+}
+
 test.describe('Visual Workspace toolbar behavior', () => {
   test.beforeEach(async ({ page }) => {
     await openWorkspace(page);
@@ -203,5 +212,124 @@ test.describe('Visual Workspace toolbar behavior', () => {
 
     await expect.poll(() => annotationCount(page)).toBe(before);
     await expect(page.getByTestId('status-message')).toHaveAttribute('data-active-tool', 'Distance');
+  });
+});
+
+const toolbarButtons = [
+  ['tool-select', 'Select'],
+  ['tool-pan', 'Pan'],
+  ['tool-zoom', 'Zoom'],
+  ['tool-fit', 'Fit'],
+  ['tool-zoom-area', 'Zoom Area'],
+  ['tool-arrow', 'Arrow'],
+  ['tool-cloud', 'Cloud'],
+  ['tool-text', 'Text'],
+  ['tool-box', 'Box'],
+  ['tool-callout', 'Callout'],
+  ['tool-dimension', 'Dimension'],
+  ['tool-distance', 'Distance'],
+  ['tool-angle', 'Angle'],
+  ['tool-area', 'Area'],
+  ['tool-note', 'Note'],
+  ['tool-photo', 'Photo'],
+  ['tool-file', 'File'],
+  ['tool-link', 'Link'],
+  ['tool-highlighter', 'Highlighter'],
+  ['tool-pen', 'Pen'],
+  ['tool-eraser', 'Eraser'],
+  ['tool-color', 'Color'],
+  ['tool-layers', 'Layers'],
+  ['tool-scale', 'Scale'],
+  ['tool-grid', 'Grid'],
+  ['tool-snap', 'Snap'],
+  ['tool-undo', 'Undo'],
+  ['tool-redo', 'Redo'],
+  ['tool-more', 'More'],
+] as const;
+
+const namedWorkspaceButtons = [
+  'Workspace',
+  'Review',
+  'Report',
+  'Export',
+  'Add board',
+  'Reset active board',
+  'Filter linked photos',
+  'Collapse photos panel',
+  'View all photos (5)',
+  'Linked Photos 3',
+  'Linked Documents 2',
+  'Board Markups 1',
+  'Linked Costs 1',
+  'Edit note',
+  'Add Comment',
+  '01 - General',
+  '02 - Architectural',
+  '03 - Structural',
+  'Level 2 Framing Plan',
+  'Roof Framing Plan',
+  'South Elevation',
+  'East Elevation',
+  'Typical Sections',
+  '04 - MEP',
+  '05 - Site',
+  '06 - Inspections',
+  'Photos & Documents',
+  'Site Photo Set',
+] as const;
+
+test.describe('Visual Workspace pressable control coverage', () => {
+  for (const [testId, label] of toolbarButtons) {
+    test(`toolbar button ${label} is pressable without crashing`, async ({ page }) => {
+      await openWorkspace(page);
+      await expectNoPageErrors(page, async () => {
+        await page.getByTestId(testId).click({ force: true });
+      });
+      await expect(page.getByTestId('status-message')).toBeVisible();
+    });
+  }
+
+  for (const label of namedWorkspaceButtons) {
+    test(`workspace button ${label} is pressable without crashing`, async ({ page }) => {
+      await openWorkspace(page);
+      await expectNoPageErrors(page, async () => {
+        await page.getByRole('button', { name: label }).first().click({ force: true });
+      });
+      await expect(page.locator('body')).toBeVisible();
+    });
+  }
+
+  test('all visible toolbar buttons expose test ids so missing tools are obvious', async ({ page }) => {
+    await openWorkspace(page);
+    for (const [testId] of toolbarButtons) {
+      await expect(page.getByTestId(testId), `${testId} should exist`).toBeVisible();
+    }
+  });
+
+  test('primary modal and panel buttons open the expected panels', async ({ page }) => {
+    await openWorkspace(page);
+
+    await page.getByTestId('tool-color').click();
+    await expect(page.getByTestId('active-panel-title')).toContainText('Choose markup color');
+    await page.getByTestId('close-active-panel').click();
+
+    await page.getByTestId('tool-scale').click();
+    await expect(page.getByTestId('active-panel-title')).toContainText('Workspace settings');
+    await page.getByTestId('close-active-panel').click();
+
+    await page.getByTestId('tool-note').click();
+    await expect(page.getByTestId('active-panel-title')).toContainText('Add note');
+    await page.getByTestId('close-active-panel').click();
+
+    await page.getByTestId('tool-file').click();
+    await expect(page.getByTestId('active-panel-title')).toContainText('Attach document');
+    await page.getByTestId('close-active-panel').click();
+
+    await page.getByRole('button', { name: 'Report' }).click();
+    await expect(page.getByTestId('active-panel-title')).toContainText('Generate structural inspection report');
+    await page.getByTestId('close-active-panel').click();
+
+    await page.getByRole('button', { name: 'Export' }).click();
+    await expect(page.getByTestId('active-panel-title')).toContainText('Export project deliverables');
   });
 });
