@@ -42,6 +42,7 @@ interface Markup {
   color: string;
   strokeWidth: number;
   fontSize: number;
+  opacity: number;
   priority: Priority;
   status: MarkupStatus;
   layerId: string;
@@ -133,9 +134,9 @@ const BOARD_TREE: BoardItem[] = [
 ];
 
 const SEED: Markup[] = [
-  { id: 's1', type: 'cloud', number: 1, points: [{ x: 560, y: 100 }, { x: 760, y: 180 }], text: 'B12 - Corrosion at seat connection, field verify section loss.', color: '#ef4444', strokeWidth: 2, fontSize: 14, priority: 'high',   status: 'field-verify', layerId: 'l1', createdAt: '2025-05-12T00:00:00Z' },
-  { id: 's2', type: 'cloud', number: 2, points: [{ x: 600, y: 210 }, { x: 800, y: 290 }], text: 'B18 - Paint peeling and rust scale, check bottom flange.',      color: '#3b82f6', strokeWidth: 2, fontSize: 14, priority: 'medium', status: 'field-verify', layerId: 'l1', createdAt: '2025-05-12T00:00:00Z' },
-  { id: 's3', type: 'cloud', number: 3, points: [{ x: 560, y: 360 }, { x: 760, y: 440 }], text: 'B31 - Section loss at midspan, verify remaining thickness.',     color: '#22c55e', strokeWidth: 2, fontSize: 14, priority: 'high',   status: 'field-verify', layerId: 'l1', createdAt: '2025-05-12T00:00:00Z' },
+  { id: 's1', type: 'cloud', number: 1, points: [{ x: 560, y: 100 }, { x: 760, y: 180 }], text: 'B12 - Corrosion at seat connection, field verify section loss.', color: '#ef4444', strokeWidth: 2, fontSize: 14, opacity: 1, priority: 'high',   status: 'field-verify', layerId: 'l1', createdAt: '2025-05-12T00:00:00Z' },
+  { id: 's2', type: 'cloud', number: 2, points: [{ x: 600, y: 210 }, { x: 800, y: 290 }], text: 'B18 - Paint peeling and rust scale, check bottom flange.',      color: '#3b82f6', strokeWidth: 2, fontSize: 14, opacity: 1, priority: 'medium', status: 'field-verify', layerId: 'l1', createdAt: '2025-05-12T00:00:00Z' },
+  { id: 's3', type: 'cloud', number: 3, points: [{ x: 560, y: 360 }, { x: 760, y: 440 }], text: 'B31 - Section loss at midspan, verify remaining thickness.',     color: '#22c55e', strokeWidth: 2, fontSize: 14, opacity: 1, priority: 'high',   status: 'field-verify', layerId: 'l1', createdAt: '2025-05-12T00:00:00Z' },
 ];
 
 const TOOL_NAMES: Partial<Record<Tool, string>> = {
@@ -338,7 +339,7 @@ export function VisualWorkspace() {
       const m: Markup = {
         id: genId(), type: 'image', number: counter,
         points: [{ x: cx - w / 2, y: cy - h / 2 }, { x: cx + w / 2, y: cy + h / 2 }],
-        text: '', color: '#ffffff', strokeWidth: 1, fontSize: 14,
+        text: '', color: '#ffffff', strokeWidth: 1, fontSize: 14, opacity: 1,
         priority: 'low', status: 'open', layerId: 'l4',
         createdAt: new Date().toISOString(),
         imageData: src,
@@ -574,7 +575,7 @@ export function VisualWorkspace() {
       if (pts.length < 2) return;
       const m: Markup = {
         id: genId(), type: t, number: counter, points: pts,
-        text: '', color: col, strokeWidth: t === 'highlighter' ? 14 : 2, fontSize: 14,
+        text: '', color: col, strokeWidth: t === 'highlighter' ? 14 : 2, fontSize: 14, opacity: 1,
         priority: 'medium', status: 'open', layerId: 'l1',
         createdAt: new Date().toISOString(),
       };
@@ -610,7 +611,7 @@ export function VisualWorkspace() {
     const m: Markup = {
       id: genId(), type: mtype, number: counter,
       points: [start, cur], text: defaultText, color: col,
-      strokeWidth: 2, fontSize: 14, priority: 'medium', status: 'open', layerId: 'l1',
+      strokeWidth: 2, fontSize: 14, opacity: 1, priority: 'medium', status: 'open', layerId: 'l1',
       createdAt: new Date().toISOString(),
     };
     updateMarkups(activeBoardId, prev => [...prev, m]);
@@ -675,7 +676,6 @@ export function VisualWorkspace() {
     const isSel  = m.id === selectedId;
     const stroke = isSel ? '#3b82f6' : m.color;
     const sw     = m.strokeWidth / zoom;
-    const filt   = isSel ? 'drop-shadow(0 0 5px rgba(59,130,246,0.7))' : undefined;
     const b      = mkBounds(m);
     const bx = b.x, by = b.y, bw = Math.max(b.w, 1), bh = Math.max(b.h, 1);
     const hitPad = 10 / zoom;
@@ -692,12 +692,12 @@ export function VisualWorkspace() {
     let shape: React.ReactNode = null;
 
     if (m.type === 'box') {
-      shape = <rect {...tp} key={m.id} x={bx} y={by} width={bw} height={bh} fill="none" stroke={stroke} strokeWidth={sw} style={{ filter: filt }} />;
+      shape = <rect {...tp} key={m.id} x={bx} y={by} width={bw} height={bh} fill="none" stroke={stroke} strokeWidth={sw} />;
 
     } else if (m.type === 'arrow') {
       const mid = `ah-${m.id}`, ms = 8 / zoom;
       shape = (
-        <g key={m.id} {...tp} style={{ filter: filt }}>
+        <g key={m.id} {...tp}>
           <defs>
             <marker id={mid} markerWidth={ms * 3} markerHeight={ms * 3} refX={ms * 2.5} refY={ms * 1.5} orient="auto" markerUnits="userSpaceOnUse">
               <polygon points={`0 0,${ms * 3} ${ms * 1.5},0 ${ms * 3}`} fill={stroke} />
@@ -708,13 +708,13 @@ export function VisualWorkspace() {
       );
 
     } else if (m.type === 'cloud') {
-      shape = <path {...tp} key={m.id} d={cloudPath(bx, by, bw, bh)} fill="none" stroke={stroke} strokeWidth={sw} style={{ filter: filt }} />;
+      shape = <path {...tp} key={m.id} d={cloudPath(bx, by, bw, bh)} fill="none" stroke={stroke} strokeWidth={sw} />;
 
     } else if (m.type === 'text') {
       shape = (
         <text {...tp} key={m.id} x={m.points[0].x} y={m.points[0].y}
           fill={stroke} fontSize={m.fontSize / zoom} fontFamily="sans-serif" fontWeight="600"
-          dominantBaseline="hanging" style={{ filter: filt }}>
+          dominantBaseline="hanging">
           {m.text}
         </text>
       );
@@ -722,7 +722,7 @@ export function VisualWorkspace() {
     } else if (m.type === 'callout') {
       const cx = bx + bw / 2, cy = by + bh / 2;
       shape = (
-        <g key={m.id} {...tp} style={{ filter: filt }}>
+        <g key={m.id} {...tp}>
           <line x1={m.points[0].x} y1={m.points[0].y} x2={cx} y2={cy} stroke={stroke} strokeWidth={sw} />
           <rect x={bx} y={by} width={bw} height={bh} rx={2 / zoom} fill="white" fillOpacity={0.92} stroke={stroke} strokeWidth={sw} />
           <text x={bx + 5 / zoom} y={by + bh / 2} fill="#1e293b" fontSize={m.fontSize / zoom} fontFamily="sans-serif" dominantBaseline="middle">{m.text}</text>
@@ -732,7 +732,7 @@ export function VisualWorkspace() {
     } else if (m.type === 'pen' || m.type === 'highlighter') {
       const pts = m.points.map(p => `${p.x},${p.y}`).join(' ');
       shape = <polyline {...tp} key={m.id} points={pts} fill="none" stroke={stroke} strokeWidth={sw}
-        strokeLinecap="round" strokeLinejoin="round" opacity={m.type === 'highlighter' ? 0.35 : 1} style={{ filter: filt }} />;
+        strokeLinecap="round" strokeLinejoin="round" opacity={m.type === 'highlighter' ? 0.35 : 1} />;
 
     } else if (m.type === 'dimension' || m.type === 'distance') {
       const p1 = m.points[0], p2 = m.points[1];
@@ -743,7 +743,7 @@ export function VisualWorkspace() {
       const mx = (p1.x + p2.x) / 2, my = (p1.y + p2.y) / 2;
       const ang = Math.atan2(ddy, ddx) * 180 / Math.PI;
       shape = (
-        <g key={m.id} {...tp} style={{ filter: filt }}>
+        <g key={m.id} {...tp}>
           <line x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y} stroke={stroke} strokeWidth={sw} />
           <line x1={p1.x - nx} y1={p1.y - ny} x2={p1.x + nx} y2={p1.y + ny} stroke={stroke} strokeWidth={sw} />
           <line x1={p2.x - nx} y1={p2.y - ny} x2={p2.x + nx} y2={p2.y + ny} stroke={stroke} strokeWidth={sw} />
@@ -756,14 +756,14 @@ export function VisualWorkspace() {
 
     } else if (m.type === 'image' && m.imageData) {
       shape = (
-        <g key={m.id} {...tp} style={{ filter: filt }}>
+        <g key={m.id} {...tp}>
           <image href={m.imageData} x={bx} y={by} width={bw} height={bh} preserveAspectRatio="xMidYMid meet" />
           {isSel && <rect x={bx} y={by} width={bw} height={bh} fill="none" stroke="#3b82f6" strokeWidth={1.5 / zoom} />}
         </g>
       );
     }
 
-    return shape ? <g key={m.id}>{shape}{hitRect}</g> : null;
+    return shape ? <g key={m.id} opacity={m.opacity ?? 1}>{shape}{hitRect}</g> : null;
   };
 
   // ── Render preview ────────────────────────────────────────────────────────
@@ -1040,7 +1040,7 @@ export function VisualWorkspace() {
             onDragOver={e => e.preventDefault()}
             onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) handleBgFile(f); }}
           >
-            <svg width={canvasSize.w} height={canvasSize.h} className="absolute inset-0">
+            <svg width={canvasSize.w} height={canvasSize.h} className="absolute inset-0" overflow="visible">
               <g data-testid="plan-transform"
                 data-plan-pan-x={String(pan.x)} data-plan-pan-y={String(pan.y)} data-plan-zoom={String(zoom)}
                 transform={`translate(${pan.x},${pan.y}) scale(${zoom})`}>
@@ -1174,48 +1174,122 @@ export function VisualWorkspace() {
                   Select a markup to inspect.<br/>
                   <span className="opacity-60">Double-click text/cloud/box to edit inline.</span>
                 </div>
-              ) : (
+              ) : (() => {
+                const b = mkBounds(selectedMarkup);
+                const upd = (patch: Partial<Markup>) =>
+                  setBoardMarkups(prev => ({ ...prev, [activeBoardId]: (prev[activeBoardId]??[]).map(m => m.id===selectedId ? {...m,...patch} : m) }));
+                return (
                 <div className="p-3 space-y-3">
                   <p data-testid="inspector-title" className="text-sm font-semibold text-slate-100">{inspectorTitle}</p>
 
+                  {/* Position & size readout */}
+                  <div className="grid grid-cols-2 gap-1.5 text-[10px]">
+                    <div className="bg-slate-700/60 rounded px-2 py-1">
+                      <span className="text-slate-500 block uppercase tracking-wide">X</span>
+                      <span className="text-slate-200 font-mono">{Math.round(b.x)}</span>
+                    </div>
+                    <div className="bg-slate-700/60 rounded px-2 py-1">
+                      <span className="text-slate-500 block uppercase tracking-wide">Y</span>
+                      <span className="text-slate-200 font-mono">{Math.round(b.y)}</span>
+                    </div>
+                    <div className="bg-slate-700/60 rounded px-2 py-1">
+                      <span className="text-slate-500 block uppercase tracking-wide">W</span>
+                      <span className="text-slate-200 font-mono">{Math.round(b.w)}</span>
+                    </div>
+                    <div className="bg-slate-700/60 rounded px-2 py-1">
+                      <span className="text-slate-500 block uppercase tracking-wide">H</span>
+                      <span className="text-slate-200 font-mono">{Math.round(b.h)}</span>
+                    </div>
+                  </div>
+
+                  {/* Label */}
                   <div>
                     <label className="block text-[10px] text-slate-500 mb-1 uppercase tracking-wide">Label</label>
-                    <input value={selectedMarkup.text}
-                      onChange={e => setBoardMarkups(prev => ({ ...prev, [activeBoardId]: (prev[activeBoardId]??[]).map(m => m.id===selectedId ? {...m,text:e.target.value} : m) }))}
+                    <input value={selectedMarkup.text} onChange={e => upd({ text: e.target.value })}
                       className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-slate-200 focus:outline-none focus:border-blue-500"
                       placeholder="Add label…"/>
                   </div>
 
+                  {/* Color */}
+                  <div>
+                    <label className="block text-[10px] text-slate-500 mb-1 uppercase tracking-wide">Color</label>
+                    <div className="flex gap-1.5 flex-wrap items-center">
+                      {COLORS.map(c => (
+                        <button key={c} onClick={() => upd({ color: c })}
+                          className={`w-5 h-5 rounded-full border-2 transition-transform hover:scale-110 ${selectedMarkup.color===c ? 'border-white scale-110' : 'border-transparent'}`}
+                          style={{background:c}}/>
+                      ))}
+                      <input type="color" value={selectedMarkup.color} onChange={e => upd({ color: e.target.value })}
+                        className="w-5 h-5 rounded cursor-pointer bg-transparent border-0 p-0" title="Custom color"/>
+                    </div>
+                  </div>
+
+                  {/* Stroke width */}
+                  <div>
+                    <div className="flex justify-between text-[10px] text-slate-500 mb-1">
+                      <span className="uppercase tracking-wide">Stroke Width</span>
+                      <span className="text-slate-300 font-mono">{selectedMarkup.strokeWidth}px</span>
+                    </div>
+                    <input type="range" min={1} max={12} step={0.5} value={selectedMarkup.strokeWidth}
+                      onChange={e => upd({ strokeWidth: Number(e.target.value) })}
+                      className="w-full accent-blue-500 h-1.5"/>
+                  </div>
+
+                  {/* Opacity */}
+                  <div>
+                    <div className="flex justify-between text-[10px] text-slate-500 mb-1">
+                      <span className="uppercase tracking-wide">Opacity</span>
+                      <span className="text-slate-300 font-mono">{Math.round((selectedMarkup.opacity ?? 1) * 100)}%</span>
+                    </div>
+                    <input type="range" min={0.1} max={1} step={0.05} value={selectedMarkup.opacity ?? 1}
+                      onChange={e => upd({ opacity: Number(e.target.value) })}
+                      className="w-full accent-blue-500 h-1.5"/>
+                  </div>
+
+                  {/* Font size — text types only */}
+                  {['text','callout','box','cloud'].includes(selectedMarkup.type) && (
+                    <div>
+                      <div className="flex justify-between text-[10px] text-slate-500 mb-1">
+                        <span className="uppercase tracking-wide">Font Size</span>
+                        <span className="text-slate-300 font-mono">{selectedMarkup.fontSize}pt</span>
+                      </div>
+                      <input type="range" min={8} max={48} step={1} value={selectedMarkup.fontSize}
+                        onChange={e => upd({ fontSize: Number(e.target.value) })}
+                        className="w-full accent-blue-500 h-1.5"/>
+                    </div>
+                  )}
+
+                  {/* Layer assignment */}
+                  <div>
+                    <label className="block text-[10px] text-slate-500 mb-1 uppercase tracking-wide">Layer</label>
+                    <select value={selectedMarkup.layerId} onChange={e => upd({ layerId: e.target.value })}
+                      className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-slate-200 focus:outline-none">
+                      {layers.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+                    </select>
+                  </div>
+
+                  {/* Status */}
                   <div>
                     <label className="block text-[10px] text-slate-500 mb-1 uppercase tracking-wide">Status</label>
-                    <select value={selectedMarkup.status}
-                      onChange={e => setBoardMarkups(prev => ({ ...prev, [activeBoardId]: (prev[activeBoardId]??[]).map(m => m.id===selectedId ? {...m,status:e.target.value as MarkupStatus} : m) }))}
+                    <select value={selectedMarkup.status} onChange={e => upd({ status: e.target.value as MarkupStatus })}
                       className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-slate-200 focus:outline-none">
                       {Object.entries(STATUS_CFG).map(([k,v]) => <option key={k} value={k}>{v.label}</option>)}
                     </select>
                   </div>
 
+                  {/* Priority */}
                   <div>
                     <label className="block text-[10px] text-slate-500 mb-1 uppercase tracking-wide">Priority</label>
                     <div className="flex gap-1">
                       {(['high','medium','low'] as Priority[]).map(p => (
-                        <button key={p} onClick={() => setBoardMarkups(prev => ({ ...prev, [activeBoardId]: (prev[activeBoardId]??[]).map(m => m.id===selectedId ? {...m,priority:p} : m) }))}
+                        <button key={p} onClick={() => upd({ priority: p })}
                           className={`flex-1 py-1 rounded text-[10px] capitalize border transition-colors ${selectedMarkup.priority===p ? 'border-blue-500 bg-blue-600/20 text-blue-300' : 'border-slate-600 text-slate-400 hover:border-slate-500'}`}
                         >{p}</button>
                       ))}
                     </div>
                   </div>
 
-                  <div>
-                    <label className="block text-[10px] text-slate-500 mb-1 uppercase tracking-wide">Color</label>
-                    <div className="flex gap-1.5 flex-wrap">
-                      {COLORS.map(c => (
-                        <button key={c} onClick={() => setBoardMarkups(prev => ({ ...prev, [activeBoardId]: (prev[activeBoardId]??[]).map(m => m.id===selectedId ? {...m,color:c} : m) }))}
-                          className={`w-5 h-5 rounded-full border-2 ${selectedMarkup.color===c ? 'border-white' : 'border-transparent'}`} style={{background:c}}/>
-                      ))}
-                    </div>
-                  </div>
-
+                  {/* Inline text edit */}
                   {TEXT_EDITABLE.includes(selectedMarkup.type) && (
                     <button onClick={() => { setEditingId(selectedMarkup.id); setEditingText(selectedMarkup.text); }}
                       className="w-full py-1.5 rounded bg-slate-700 hover:bg-slate-600 text-xs text-slate-300 border border-slate-600">
@@ -1223,6 +1297,20 @@ export function VisualWorkspace() {
                     </button>
                   )}
 
+                  {/* Z-order */}
+                  <div>
+                    <label className="block text-[10px] text-slate-500 mb-1 uppercase tracking-wide">Order</label>
+                    <div className="flex gap-1">
+                      <button title="Bring to Front"
+                        onClick={() => updateMarkups(activeBoardId, prev => { const rest = prev.filter(m => m.id !== selectedId); const sel = prev.find(m => m.id === selectedId)!; return [...rest, sel]; })}
+                        className="flex-1 py-1 rounded text-[10px] border border-slate-600 text-slate-400 hover:border-slate-500 hover:text-white">▲ Front</button>
+                      <button title="Send to Back"
+                        onClick={() => updateMarkups(activeBoardId, prev => { const rest = prev.filter(m => m.id !== selectedId); const sel = prev.find(m => m.id === selectedId)!; return [sel, ...rest]; })}
+                        className="flex-1 py-1 rounded text-[10px] border border-slate-600 text-slate-400 hover:border-slate-500 hover:text-white">▼ Back</button>
+                    </div>
+                  </div>
+
+                  {/* Linked items */}
                   <div className="border-t border-slate-700 pt-2 space-y-1">
                     {([['Linked Photos', 3], ['Linked Documents', 2], ['Board Markups', 1], ['Linked Costs', 1]] as [string,number][]).map(([label, count]) => (
                       <button key={label} aria-label={`${label} ${count}`}
@@ -1243,7 +1331,8 @@ export function VisualWorkspace() {
                     <Trash2 size={11}/> Delete
                   </button>
                 </div>
-              )}
+                );
+              })()}
             </div>
           </div>
         )}
