@@ -442,7 +442,8 @@ export function VisualWorkspace() {
     setSelectedId(m.id);
     setSelectedIds([m.id]);
     setActivePanel(null);
-  }, [activeBoardId, canvasSize, counter, updateMarkups]);
+    setTool('select');  // return to select so the stamp can be immediately dragged
+  }, [activeBoardId, canvasSize, counter, updateMarkups, setTool]);
 
   // ── Hit test ─────────────────────────────────────────────────────────────
   const hitTest = useCallback((pt: Pt, list: Markup[]): Markup | null => {
@@ -562,7 +563,7 @@ export function VisualWorkspace() {
     if (t === 'link')   { setActivePanel('link');   return; }
     if (t === 'color')  { setActivePanel('color');  return; }
     if (t === 'scale')  { setActivePanel('scale');  return; }
-    if (t === 'stamps') { setActivePanel('stamps'); return; }
+    // 'stamps' panel only opens from the toolbar button, not from canvas clicks
 
     // Drawing tools
     if (t === 'distance' && !scaleSet) return;
@@ -779,7 +780,7 @@ export function VisualWorkspace() {
     if (t === 'note')   setActivePanel('note');
     if (t === 'link')   setActivePanel('link');
     if (t === 'scale')  setActivePanel('scale');
-    if (t === 'stamps') setActivePanel('stamps');
+    if (t === 'stamps') { setActivePanel(prev => prev === 'stamps' ? null : 'stamps'); return; }
     if (t === 'undo')   { undo(); setTool('select'); }
     if (t === 'redo')   { redo(); setTool('select'); }
     if (t === 'fit')    { fitView(); setTool('select'); }
@@ -1183,7 +1184,7 @@ export function VisualWorkspace() {
             onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) handleBgFile(f); }}
             onDragEnter={e => e.preventDefault()}
           >
-            <svg width={canvasSize.w} height={canvasSize.h} className="absolute inset-0" overflow="visible">
+            <svg width={canvasSize.w} height={canvasSize.h} className="absolute inset-0" overflow="visible" style={{ willChange: 'transform' }}>
               <g data-testid="plan-transform"
                 data-plan-pan-x={String(pan.x)} data-plan-pan-y={String(pan.y)} data-plan-zoom={String(zoom)}
                 transform={`translate(${pan.x},${pan.y}) scale(${zoom})`}>
