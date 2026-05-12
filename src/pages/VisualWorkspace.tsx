@@ -9,8 +9,9 @@ import {
   ChevronRight, ChevronDown, Plus, X,
   Eye, EyeOff, Trash2, Upload,
   Filter, RefreshCw, ChevronLeft,
-  Image, Tag,
+  Image, Tag, Stamp,
 } from 'lucide-react';
+import { getActiveProjectId } from '../utils/projectDocuments';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -18,7 +19,7 @@ type Tool =
   | 'select' | 'pan' | 'zoom' | 'fit' | 'zoom-area'
   | 'arrow' | 'cloud' | 'text' | 'box' | 'callout'
   | 'dimension' | 'distance' | 'angle' | 'area'
-  | 'note' | 'photo' | 'file' | 'link'
+  | 'note' | 'photo' | 'file' | 'link' | 'stamps'
   | 'highlighter' | 'pen' | 'eraser' | 'color'
   | 'layers' | 'scale' | 'grid' | 'snap'
   | 'undo' | 'redo' | 'more';
@@ -55,7 +56,7 @@ interface BoardItem { id: string; name: string; parentId: string | null }
 
 type ActivePanel =
   | 'color' | 'photo' | 'file' | 'note' | 'scale'
-  | 'report' | 'export' | 'photo-library' | 'link' | null;
+  | 'report' | 'export' | 'photo-library' | 'link' | 'stamps' | null;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -143,11 +144,27 @@ const TOOL_NAMES: Partial<Record<Tool, string>> = {
   select: 'Select', pan: 'Pan', zoom: 'Zoom', fit: 'Fit', 'zoom-area': 'Zoom Area',
   arrow: 'Arrow', cloud: 'Cloud', text: 'Text', box: 'Box', callout: 'Callout',
   dimension: 'Dimension', distance: 'Distance', angle: 'Angle', area: 'Area',
-  note: 'Note', photo: 'Photo', file: 'File', link: 'Link',
+  note: 'Note', photo: 'Photo', file: 'File', link: 'Link', stamps: 'Stamps',
   highlighter: 'Highlighter', pen: 'Pen', eraser: 'Eraser', color: 'Color',
   layers: 'Layers', scale: 'Scale', grid: 'Grid', snap: 'Snap',
   undo: 'Undo', redo: 'Redo', more: 'More',
 };
+
+interface StampDef { label: string; type: MarkupType; w: number; h: number; color: string; text: string; status: MarkupStatus; priority: Priority }
+const STAMPS: StampDef[] = [
+  { label: 'Field Verify',    type: 'cloud',   w: 180, h: 60,  color: '#ef4444', text: 'FIELD VERIFY',    status: 'field-verify', priority: 'high'   },
+  { label: 'Monitor',         type: 'cloud',   w: 160, h: 60,  color: '#f97316', text: 'MONITOR',         status: 'monitor',      priority: 'medium' },
+  { label: 'Revision Cloud',  type: 'cloud',   w: 200, h: 80,  color: '#3b82f6', text: '',                status: 'open',         priority: 'low'    },
+  { label: 'NTS Box',         type: 'box',     w: 120, h: 40,  color: '#eab308', text: 'NTS',             status: 'open',         priority: 'low'    },
+  { label: 'Hold',            type: 'box',     w: 100, h: 40,  color: '#8b5cf6', text: 'HOLD',            status: 'open',         priority: 'high'   },
+  { label: 'Section Loss',    type: 'callout', w: 160, h: 50,  color: '#ef4444', text: 'Section Loss',    status: 'field-verify', priority: 'high'   },
+  { label: 'Corrosion',       type: 'callout', w: 160, h: 50,  color: '#f97316', text: 'Corrosion',       status: 'field-verify', priority: 'medium' },
+  { label: 'Crack',           type: 'callout', w: 140, h: 50,  color: '#ef4444', text: 'Crack',           status: 'field-verify', priority: 'high'   },
+  { label: 'Repair Required', type: 'box',     w: 160, h: 40,  color: '#22c55e', text: 'REPAIR REQUIRED', status: 'complete',     priority: 'medium' },
+  { label: 'Approved',        type: 'box',     w: 120, h: 40,  color: '#22c55e', text: 'APPROVED',        status: 'complete',     priority: 'low'    },
+  { label: 'Leader Note',     type: 'callout', w: 160, h: 50,  color: '#3b82f6', text: 'Note',            status: 'open',         priority: 'low'    },
+  { label: 'Highlight Area',  type: 'box',     w: 180, h: 80,  color: '#eab308', text: '',                status: 'open',         priority: 'low'    },
+];
 
 // ─── Toolbar button ───────────────────────────────────────────────────────────
 
@@ -214,6 +231,8 @@ export function VisualWorkspace() {
 
   // Markups
   const [boardMarkups, setBoardMarkups] = useState<Record<string, Markup[]>>({ b1: SEED });
+  // Multi-select: selectedIds is the full set; selectedId is the primary (last clicked) for inspector
+  const [selectedIds,  setSelectedIds]  = useState<string[]>([]);
   const [selectedId,   setSelectedId]   = useState<string | null>(null);
   const [counter,      setCounter]      = useState(SEED.length + 1);
 
@@ -237,6 +256,8 @@ export function VisualWorkspace() {
   const panOrigin       = useRef<Pt | null>(null);
   const moveOrigin      = useRef<Pt | null>(null);
   const moveMarkupPts   = useRef<Pt[] | null>(null);
+  // For multi-select move: map of id → original points
+  const moveAllPtsMap   = useRef<Record<string, Pt[]> | null>(null);
 
   // Resize refs
   const resizingHandle  = useRef<HandlePos | null>(null);
@@ -245,8 +266,33 @@ export function VisualWorkspace() {
 
   const [preview, setPreview] = useState<{ type: string; start: Pt; cur: Pt; pts?: Pt[] } | null>(null);
 
-  const markups       = boardMarkups[activeBoardId] ?? [];
+  const markups        = boardMarkups[activeBoardId] ?? [];
   const selectedMarkup = markups.find(m => m.id === selectedId) ?? null;
+
+  // ── Persistence: save/load markups per project in localStorage ────────────
+  const projectId   = getActiveProjectId();
+  const MARKUP_KEY  = `vw.markups.${projectId || 'default'}`;
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(MARKUP_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved) as Record<string, Markup[]>;
+        setBoardMarkups(parsed);
+        hist.current = { snaps: [parsed], idx: 0 };
+        const maxNum = Object.values(parsed).flat().reduce((max, m) => Math.max(max, m.number), 0);
+        if (maxNum >= SEED.length) setCounter(maxNum + 1);
+      }
+    } catch { /* ignore corrupt data */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [MARKUP_KEY]);
+
+  useEffect(() => {
+    const t = setTimeout(() => {
+      try { localStorage.setItem(MARKUP_KEY, JSON.stringify(boardMarkups)); } catch { /* storage full */ }
+    }, 400);
+    return () => clearTimeout(t);
+  }, [boardMarkups, MARKUP_KEY]);
 
   // ── Resize observer ───────────────────────────────────────────────────────
   useEffect(() => {
@@ -276,13 +322,15 @@ export function VisualWorkspace() {
     });
   }, [pushHistory]);
 
+  const clearSelection = useCallback(() => { setSelectedId(null); setSelectedIds([]); }, []);
+
   const undo = useCallback(() => {
     if (hist.current.idx <= 0) return;
     hist.current.idx--;
     setBoardMarkups(hist.current.snaps[hist.current.idx]);
     setHistIdx(hist.current.idx);
-    setSelectedId(null);
-  }, []);
+    clearSelection();
+  }, [clearSelection]);
 
   const redo = useCallback(() => {
     if (hist.current.idx >= hist.current.snaps.length - 1) return;
@@ -315,8 +363,33 @@ export function VisualWorkspace() {
     setZoom(nz);
   }, [setPan, setZoom]);
 
-  // ── File upload (background) ──────────────────────────────────────────────
+  // ── File upload (background — image or PDF) ───────────────────────────────
   const handleBgFile = useCallback((file: File) => {
+    if (file.type === 'application/pdf') {
+      const reader = new FileReader();
+      reader.onload = async ev => {
+        try {
+          const { getDocument, GlobalWorkerOptions } = await import('pdfjs-dist');
+          // Use CDN worker to avoid bundling the huge worker file
+          GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${(await import('pdfjs-dist')).version}/pdf.worker.min.mjs`;
+          const pdf = await getDocument({ data: ev.target!.result as ArrayBuffer }).promise;
+          const page = await pdf.getPage(1);
+          const vp = page.getViewport({ scale: 2 });
+          const canvas = document.createElement('canvas');
+          canvas.width = vp.width; canvas.height = vp.height;
+          const ctx = canvas.getContext('2d')!;
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          await page.render({ canvasContext: ctx as any, viewport: vp } as any).promise;
+          const src = canvas.toDataURL('image/png');
+          setBgImage(src);
+          setBgSize({ w: vp.width, h: vp.height });
+        } catch (err) {
+          console.error('PDF render error', err);
+        }
+      };
+      reader.readAsArrayBuffer(file);
+      return;
+    }
     if (!file.type.startsWith('image/')) return;
     const reader = new FileReader();
     reader.onload = e => {
@@ -347,8 +420,27 @@ export function VisualWorkspace() {
       updateMarkups(activeBoardId, prev => [...prev, m]);
       setCounter(c => c + 1);
       setSelectedId(m.id);
+      setSelectedIds([m.id]);
     };
     img.src = src;
+    setActivePanel(null);
+  }, [activeBoardId, canvasSize, counter, updateMarkups]);
+
+  // ── Place a stamp at center of viewport ───────────────────────────────────
+  const placeStamp = useCallback((s: StampDef) => {
+    const cx = (canvasSize.w / 2 - panRef.current.x) / zoomRef.current;
+    const cy = (canvasSize.h / 2 - panRef.current.y) / zoomRef.current;
+    const m: Markup = {
+      id: genId(), type: s.type, number: counter,
+      points: [{ x: cx - s.w / 2, y: cy - s.h / 2 }, { x: cx + s.w / 2, y: cy + s.h / 2 }],
+      text: s.text, color: s.color, strokeWidth: 2, fontSize: 14, opacity: 1,
+      priority: s.priority, status: s.status, layerId: 'l1',
+      createdAt: new Date().toISOString(),
+    };
+    updateMarkups(activeBoardId, prev => [...prev, m]);
+    setCounter(c => c + 1);
+    setSelectedId(m.id);
+    setSelectedIds([m.id]);
     setActivePanel(null);
   }, [activeBoardId, canvasSize, counter, updateMarkups]);
 
@@ -436,28 +528,41 @@ export function VisualWorkspace() {
     if (t === 'select') {
       const hit = hitTest(pt, markups);
       if (hit) {
-        setSelectedId(hit.id);
+        if (e.shiftKey) {
+          // Shift+click: toggle in multi-selection
+          setSelectedIds(prev => prev.includes(hit.id) ? prev.filter(id => id !== hit.id) : [...prev, hit.id]);
+          setSelectedId(hit.id);
+        } else {
+          setSelectedId(hit.id);
+          setSelectedIds([hit.id]);
+        }
         moveOrigin.current    = pt;
         moveMarkupPts.current = hit.points.map(p => ({ ...p }));
+        // Capture all selected pts for multi-move
+        const allIds = e.shiftKey ? [...selectedIds, hit.id] : [hit.id];
+        moveAllPtsMap.current = Object.fromEntries(
+          markups.filter(m => allIds.includes(m.id)).map(m => [m.id, m.points.map(p => ({ ...p }))])
+        );
       } else {
-        setSelectedId(null);
+        clearSelection();
       }
       return;
     }
 
     if (t === 'eraser') {
       const hit = hitTest(pt, markups);
-      if (hit) { updateMarkups(activeBoardId, prev => prev.filter(m => m.id !== hit.id)); setSelectedId(null); }
+      if (hit) { updateMarkups(activeBoardId, prev => prev.filter(m => m.id !== hit.id)); clearSelection(); }
       return;
     }
 
     // Panel-open tools
-    if (t === 'note')  { setActivePanel('note');  setTool('select'); return; }
-    if (t === 'photo') { setActivePanel('photo'); return; }
-    if (t === 'file')  { setActivePanel('file');  return; }
-    if (t === 'link')  { setActivePanel('link');  return; }
-    if (t === 'color') { setActivePanel('color'); return; }
-    if (t === 'scale') { setActivePanel('scale'); return; }
+    if (t === 'note')   { setActivePanel('note');   setTool('select'); return; }
+    if (t === 'photo')  { setActivePanel('photo');  return; }
+    if (t === 'file')   { setActivePanel('file');   return; }
+    if (t === 'link')   { setActivePanel('link');   return; }
+    if (t === 'color')  { setActivePanel('color');  return; }
+    if (t === 'scale')  { setActivePanel('scale');  return; }
+    if (t === 'stamps') { setActivePanel('stamps'); return; }
 
     // Drawing tools
     if (t === 'distance' && !scaleSet) return;
@@ -514,18 +619,30 @@ export function VisualWorkspace() {
       return;
     }
 
-    // Move selected
+    // Move selected (single or multi)
     const t = toolRef.current;
-    if (t === 'select' && moveOrigin.current && moveMarkupPts.current && selectedId) {
+    if (t === 'select' && moveOrigin.current && selectedId) {
       const dx = pt.x - moveOrigin.current.x, dy = pt.y - moveOrigin.current.y;
-      setBoardMarkups(prev => ({
-        ...prev,
-        [activeBoardId]: (prev[activeBoardId] ?? []).map(m =>
-          m.id === selectedId
-            ? { ...m, points: moveMarkupPts.current!.map(p => ({ x: p.x + dx, y: p.y + dy })) }
-            : m
-        ),
-      }));
+      if (moveAllPtsMap.current && Object.keys(moveAllPtsMap.current).length > 1) {
+        // Multi-move
+        setBoardMarkups(prev => ({
+          ...prev,
+          [activeBoardId]: (prev[activeBoardId] ?? []).map(m => {
+            const origPts = moveAllPtsMap.current![m.id];
+            return origPts ? { ...m, points: origPts.map(p => ({ x: p.x + dx, y: p.y + dy })) } : m;
+          }),
+        }));
+      } else if (moveMarkupPts.current) {
+        // Single move
+        setBoardMarkups(prev => ({
+          ...prev,
+          [activeBoardId]: (prev[activeBoardId] ?? []).map(m =>
+            m.id === selectedId
+              ? { ...m, points: moveMarkupPts.current!.map(p => ({ x: p.x + dx, y: p.y + dy })) }
+              : m
+          ),
+        }));
+      }
       return;
     }
 
@@ -559,7 +676,7 @@ export function VisualWorkspace() {
     // Commit move
     if (t === 'select' && moveOrigin.current) {
       pushHistory({ ...boardMarkups });
-      moveOrigin.current = null; moveMarkupPts.current = null;
+      moveOrigin.current = null; moveMarkupPts.current = null; moveAllPtsMap.current = null;
       return;
     }
 
@@ -636,31 +753,33 @@ export function VisualWorkspace() {
     const h = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
       if (e.key === 'Escape') {
-        setTool('select'); setSelectedId(null); setActivePanel(null);
+        setTool('select'); clearSelection(); setActivePanel(null);
         isDrawing.current = false; setPreview(null);
         if (editingId) commitEdit();
       }
-      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedId && !editingId) {
-        updateMarkups(activeBoardId, prev => prev.filter(m => m.id !== selectedId));
-        setSelectedId(null);
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedIds.length > 0 && !editingId) {
+        const toDelete = new Set(selectedIds);
+        updateMarkups(activeBoardId, prev => prev.filter(m => !toDelete.has(m.id)));
+        clearSelection();
       }
       if ((e.metaKey || e.ctrlKey) && e.key === 'z') { e.preventDefault(); undo(); }
       if ((e.metaKey || e.ctrlKey) && (e.key === 'y' || (e.shiftKey && e.key === 'z'))) { e.preventDefault(); redo(); }
     };
     window.addEventListener('keydown', h);
     return () => window.removeEventListener('keydown', h);
-  }, [selectedId, editingId, activeBoardId, updateMarkups, undo, redo, setTool, commitEdit]);
+  }, [selectedIds, selectedId, editingId, activeBoardId, updateMarkups, undo, redo, setTool, commitEdit, clearSelection]);
 
   // ── Tool activation ───────────────────────────────────────────────────────
   const activateTool = useCallback((t: Tool) => {
     setTool(t);
-    if (!['color','photo','file','note','link','scale'].includes(t)) setActivePanel(null);
+    if (!['color','photo','file','note','link','scale','stamps'].includes(t)) setActivePanel(null);
     if (t === 'color')  setActivePanel('color');
     if (t === 'photo')  setActivePanel('photo');
     if (t === 'file')   setActivePanel('file');
     if (t === 'note')   setActivePanel('note');
     if (t === 'link')   setActivePanel('link');
     if (t === 'scale')  setActivePanel('scale');
+    if (t === 'stamps') setActivePanel('stamps');
     if (t === 'undo')   { undo(); setTool('select'); }
     if (t === 'redo')   { redo(); setTool('select'); }
     if (t === 'fit')    { fitView(); setTool('select'); }
@@ -837,9 +956,31 @@ export function VisualWorkspace() {
 
   // ── Selection + resize handles ────────────────────────────────────────────
   const renderHandles = () => {
+    if (selectedIds.length === 0) return null;
+    const pad = 8 / zoom, hw = 5 / zoom;
+
+    // Multi-select: draw individual outlines + union box, no resize handles
+    if (selectedIds.length > 1) {
+      const selMarkups = markups.filter(m => selectedIds.includes(m.id));
+      const allBounds = selMarkups.map(m => mkBounds(m));
+      const ux = Math.min(...allBounds.map(b => b.x));
+      const uy = Math.min(...allBounds.map(b => b.y));
+      const ux2 = Math.max(...allBounds.map(b => b.x + b.w));
+      const uy2 = Math.max(...allBounds.map(b => b.y + b.h));
+      return (
+        <g>
+          {allBounds.map((b, i) => (
+            <rect key={i} x={b.x - pad/2} y={b.y - pad/2} width={b.w + pad} height={b.h + pad}
+              fill="none" stroke="#60a5fa" strokeWidth={1 / zoom} strokeDasharray={`${3/zoom}`} />
+          ))}
+          <rect x={ux - pad} y={uy - pad} width={ux2 - ux + pad * 2} height={uy2 - uy + pad * 2}
+            fill="none" stroke="#3b82f6" strokeWidth={2 / zoom} strokeDasharray={`${4 / zoom}`} />
+        </g>
+      );
+    }
+
     if (!selectedMarkup) return null;
     const b   = mkBounds(selectedMarkup);
-    const pad = 8 / zoom, hw = 5 / zoom;
     const corners: { pos: HandlePos; x: number; y: number }[] = [
       { pos: 'tl', x: b.x - pad,       y: b.y - pad },
       { pos: 'tr', x: b.x + b.w + pad, y: b.y - pad },
@@ -944,10 +1085,11 @@ export function VisualWorkspace() {
         <TB tid="tool-angle"     active={tool==='angle'}     onClick={()=>activateTool('angle')}     icon={<TrendingUp size={15}/>}    label="Angle"/>
         <TB tid="tool-area"      active={tool==='area'}      onClick={()=>activateTool('area')}      icon={<Hexagon size={15}/>}       label="Area"/>
         <Sep/>
-        <TB tid="tool-note"        active={activePanel==='note'}  onClick={()=>activateTool('note')}        icon={<StickyNote size={15}/>}    label="Note"/>
-        <TB tid="tool-photo"       active={activePanel==='photo'} onClick={()=>activateTool('photo')}       icon={<Camera size={15}/>}        label="Photo"/>
-        <TB tid="tool-file"        active={activePanel==='file'}  onClick={()=>activateTool('file')}        icon={<FileText size={15}/>}      label="File"/>
-        <TB tid="tool-link"        active={activePanel==='link'}  onClick={()=>activateTool('link')}        icon={<Link size={15}/>}           label="Link"/>
+        <TB tid="tool-note"        active={activePanel==='note'}   onClick={()=>activateTool('note')}        icon={<StickyNote size={15}/>}    label="Note"/>
+        <TB tid="tool-photo"       active={activePanel==='photo'}  onClick={()=>activateTool('photo')}       icon={<Camera size={15}/>}        label="Photo"/>
+        <TB tid="tool-file"        active={activePanel==='file'}   onClick={()=>activateTool('file')}        icon={<FileText size={15}/>}      label="File"/>
+        <TB tid="tool-link"        active={activePanel==='link'}   onClick={()=>activateTool('link')}        icon={<Link size={15}/>}           label="Link"/>
+        <TB tid="tool-stamps"      active={activePanel==='stamps'} onClick={()=>activateTool('stamps')}      icon={<Stamp size={15}/>}         label="Stamps"/>
         <Sep/>
         <TB tid="tool-highlighter" active={tool==='highlighter'}  onClick={()=>activateTool('highlighter')} icon={<Highlighter size={15}/>}   label="Highlighter"/>
         <TB tid="tool-pen"         active={tool==='pen'}          onClick={()=>activateTool('pen')}         icon={<PenLine size={15}/>}       label="Pen"/>
@@ -1039,6 +1181,7 @@ export function VisualWorkspace() {
             onWheel={onWheel}
             onDragOver={e => e.preventDefault()}
             onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) handleBgFile(f); }}
+            onDragEnter={e => e.preventDefault()}
           >
             <svg width={canvasSize.w} height={canvasSize.h} className="absolute inset-0" overflow="visible">
               <g data-testid="plan-transform"
@@ -1059,8 +1202,8 @@ export function VisualWorkspace() {
               <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                 <div className="text-center text-slate-500">
                   <Upload size={28} className="mx-auto mb-2 opacity-30"/>
-                  <p className="text-sm">Drop an image here or click Upload in the toolbar</p>
-                  <p className="text-xs mt-1 opacity-50">JPG · PNG</p>
+                  <p className="text-sm">Drop an image or PDF here</p>
+                  <p className="text-xs mt-1 opacity-50">JPG · PNG · PDF (page 1)</p>
                 </div>
               </div>
             )}
@@ -1068,7 +1211,7 @@ export function VisualWorkspace() {
             {/* In-place text editor overlay */}
             {renderTextEditor()}
 
-            <input ref={fileInputRef} type="file" accept="image/*" className="hidden"
+            <input ref={fileInputRef} type="file" accept="image/*,application/pdf" className="hidden"
               onChange={e => e.target.files?.[0] && handleBgFile(e.target.files[0])}/>
             <input ref={photoInputRef} type="file" accept="image/*" className="hidden"
               onChange={e => {
@@ -1169,10 +1312,34 @@ export function VisualWorkspace() {
                 {selectedMarkup && <button onClick={() => setSelectedId(null)} className="text-slate-500 hover:text-white"><X size={11}/></button>}
               </div>
 
-              {!selectedMarkup ? (
+              {selectedIds.length > 1 ? (
+                <div className="p-3 space-y-3">
+                  <p className="text-sm font-semibold text-slate-100">{selectedIds.length} markups selected</p>
+                  <p className="text-xs text-slate-400">Drag to move all together. Use Delete to remove all.</p>
+                  <div className="flex gap-1 flex-wrap">
+                    {COLORS.map(c => (
+                      <button key={c} title={c}
+                        onClick={() => setBoardMarkups(prev => ({ ...prev, [activeBoardId]: (prev[activeBoardId]??[]).map(m => selectedIds.includes(m.id) ? {...m, color: c} : m) }))}
+                        className="w-6 h-6 rounded-full border-2 border-transparent hover:border-white transition-transform hover:scale-110" style={{background:c}}/>
+                    ))}
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-slate-500 mb-1 uppercase tracking-wide">Status — apply to all</label>
+                    <select onChange={e => setBoardMarkups(prev => ({ ...prev, [activeBoardId]: (prev[activeBoardId]??[]).map(m => selectedIds.includes(m.id) ? {...m, status: e.target.value as MarkupStatus} : m) }))}
+                      className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-slate-200 focus:outline-none">
+                      <option value="">— choose —</option>
+                      {Object.entries(STATUS_CFG).map(([k,v]) => <option key={k} value={k}>{v.label}</option>)}
+                    </select>
+                  </div>
+                  <button onClick={() => { const toDelete = new Set(selectedIds); updateMarkups(activeBoardId, p => p.filter(m => !toDelete.has(m.id))); clearSelection(); }}
+                    className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded bg-red-900/30 border border-red-800/50 text-red-400 hover:bg-red-900/50 text-xs">
+                    <Trash2 size={11}/> Delete all {selectedIds.length}
+                  </button>
+                </div>
+              ) : !selectedMarkup ? (
                 <div className="px-4 py-6 text-xs text-slate-500 text-center">
                   Select a markup to inspect.<br/>
-                  <span className="opacity-60">Double-click text/cloud/box to edit inline.</span>
+                  <span className="opacity-60">Shift+click to multi-select. Double-click text to edit.</span>
                 </div>
               ) : (() => {
                 const b = mkBounds(selectedMarkup);
@@ -1360,6 +1527,7 @@ export function VisualWorkspace() {
                 {activePanel === 'scale'         && 'Workspace settings'}
                 {activePanel === 'report'        && 'Generate structural inspection report'}
                 {activePanel === 'export'        && 'Export project deliverables'}
+                {activePanel === 'stamps'        && 'Stamp library'}
                 {activePanel === 'photo-library' && <span data-testid="photo-library-title">Photo Library</span>}
               </h2>
               <button data-testid="close-active-panel" onClick={() => setActivePanel(null)} className="text-slate-400 hover:text-white"><X size={16}/></button>
@@ -1490,6 +1658,27 @@ export function VisualWorkspace() {
                       <div key={i} className="rounded bg-slate-700 aspect-video flex items-center justify-center cursor-pointer hover:bg-slate-600 hover:ring-2 ring-blue-500">
                         <Image size={24} className="text-slate-500"/>
                       </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {activePanel === 'stamps' && (
+                <div className="space-y-3">
+                  <p className="text-xs text-slate-400">Click a stamp to place it at the center of the canvas. Drag to reposition after placing.</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {STAMPS.map(s => (
+                      <button key={s.label} onClick={() => placeStamp(s)}
+                        className="flex flex-col items-start gap-1 px-3 py-2.5 rounded-lg border border-slate-600 bg-slate-700 hover:bg-slate-600 hover:border-slate-500 text-left transition-colors group">
+                        <div className="flex items-center gap-2 w-full">
+                          <div className="w-3 h-3 rounded-sm shrink-0" style={{ background: s.color }}/>
+                          <span className="text-xs font-medium text-slate-200 truncate">{s.label}</span>
+                        </div>
+                        <div className="flex gap-1.5">
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-600 text-slate-400 capitalize">{s.type}</span>
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-600 text-slate-400 capitalize">{s.priority}</span>
+                        </div>
+                      </button>
                     ))}
                   </div>
                 </div>
