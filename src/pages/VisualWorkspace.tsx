@@ -1173,7 +1173,7 @@ export function VisualWorkspace() {
         <div className="flex-1 flex flex-col overflow-hidden">
           <div ref={containerRef} data-testid="plan-canvas"
             className="flex-1 overflow-hidden relative"
-            style={{ cursor, background: '#1e293b' }}
+            style={{ cursor, background: '#1e293b', transform: 'translateZ(0)', isolation: 'isolate' }}
             onPointerDown={onPointerDown}
             onPointerMove={onPointerMove}
             onPointerUp={onPointerUp}
@@ -1184,7 +1184,7 @@ export function VisualWorkspace() {
             onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) handleBgFile(f); }}
             onDragEnter={e => e.preventDefault()}
           >
-            <svg width={canvasSize.w} height={canvasSize.h} className="absolute inset-0" overflow="visible" style={{ willChange: 'transform' }}>
+            <svg width={canvasSize.w} height={canvasSize.h} className="absolute inset-0" overflow="visible">
               <g data-testid="plan-transform"
                 data-plan-pan-x={String(pan.x)} data-plan-pan-y={String(pan.y)} data-plan-zoom={String(zoom)}
                 transform={`translate(${pan.x},${pan.y}) scale(${zoom})`}>
@@ -1516,6 +1516,7 @@ export function VisualWorkspace() {
       {/* ── Active panel overlay ─────────────────────────────────────────── */}
       {activePanel && (
         <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/50"
+          style={{ willChange: 'opacity' }}
           onClick={e => { if (e.target === e.currentTarget) setActivePanel(null); }}>
           <div className="bg-slate-800 border border-slate-600 rounded-xl shadow-2xl w-96 max-h-[80vh] overflow-y-auto">
             <div className="flex items-center justify-between px-5 py-4 border-b border-slate-700">
