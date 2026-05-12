@@ -63,6 +63,26 @@ type ActivePanel =
 let _ctr = 100;
 const genId = () => `m_${++_ctr}`;
 
+// Ensure any markup loaded from localStorage (possibly from an older schema) has all fields
+function normalizeMarkup(raw: Record<string, unknown>): Markup {
+  return {
+    id:          String(raw.id ?? genId()),
+    type:        (raw.type as MarkupType) ?? 'box',
+    number:      Number(raw.number ?? 0),
+    points:      (raw.points as Pt[]) ?? [],
+    text:        String(raw.text ?? ''),
+    color:       String(raw.color ?? '#ef4444'),
+    strokeWidth: Number(raw.strokeWidth ?? 2),
+    fontSize:    Number(raw.fontSize ?? 14),
+    opacity:     Number(raw.opacity ?? 1),
+    priority:    (raw.priority as Priority) ?? 'medium',
+    status:      (raw.status as MarkupStatus) ?? 'open',
+    layerId:     String(raw.layerId ?? 'l1'),
+    createdAt:   String(raw.createdAt ?? new Date().toISOString()),
+    imageData:   raw.imageData as string | undefined,
+  };
+}
+
 function s2c(sx: number, sy: number, pan: Pt, zoom: number): Pt {
   return { x: (sx - pan.x) / zoom, y: (sy - pan.y) / zoom };
 }
@@ -277,10 +297,14 @@ export function VisualWorkspace() {
     try {
       const saved = localStorage.getItem(MARKUP_KEY);
       if (saved) {
-        const parsed = JSON.parse(saved) as Record<string, Markup[]>;
-        setBoardMarkups(parsed);
-        hist.current = { snaps: [parsed], idx: 0 };
-        const maxNum = Object.values(parsed).flat().reduce((max, m) => Math.max(max, m.number), 0);
+        const raw = JSON.parse(saved) as Record<string, Record<string, unknown>[]>;
+        const normalized: Record<string, Markup[]> = {};
+        for (const [boardId, list] of Object.entries(raw)) {
+          normalized[boardId] = list.map(normalizeMarkup);
+        }
+        setBoardMarkups(normalized);
+        hist.current = { snaps: [normalized], idx: 0 };
+        const maxNum = Object.values(normalized).flat().reduce((max, m) => Math.max(max, m.number), 0);
         if (maxNum >= SEED.length) setCounter(maxNum + 1);
       }
     } catch { /* ignore corrupt data */ }
@@ -1513,11 +1537,11 @@ export function VisualWorkspace() {
         )}
       </div>
 
-      {/* ── Active panel overlay ─────────────────────────────────────────── */}
-      {activePanel && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/50"
-          style={{ willChange: 'opacity' }}
-          onClick={e => { if (e.target === e.currentTarget) setActivePanel(null); }}>
+      {/* ── Active panel overlay — always in DOM so no compositing layer is created/destroyed ── */}
+      <div
+        className="absolute inset-0 z-50 flex items-center justify-center bg-black/50 transition-opacity duration-150"
+        style={{ opacity: activePanel ? 1 : 0, pointerEvents: activePanel ? 'auto' : 'none' }}
+        onClick={e => { if (e.target === e.currentTarget) setActivePanel(null); }}>
           <div className="bg-slate-800 border border-slate-600 rounded-xl shadow-2xl w-96 max-h-[80vh] overflow-y-auto">
             <div className="flex items-center justify-between px-5 py-4 border-b border-slate-700">
               <h2 data-testid="active-panel-title" className="font-semibold text-slate-100">
@@ -1688,7 +1712,6 @@ export function VisualWorkspace() {
             </div>
           </div>
         </div>
-      )}
     </div>
   );
 }
