@@ -1,21 +1,35 @@
 import React, { useRef, useState, useCallback, useEffect } from 'react';
 import {
   Maximize2, Minimize2, Plus, Trash2, ZoomIn, ZoomOut, X,
+  Download, FileText, LayoutTemplate,
 } from 'lucide-react';
 
-// ── Types (exported so VisualWorkspace can use them) ─────────────────────────
+// ── Types ─────────────────────────────────────────────────────────────────────
 
 export type RNodeType =
-  | 'markup'     // drawing annotation / cloud
-  | 'member'     // structural member (beam, column, connection)
-  | 'document'   // calc sheet, report, spec, RFI
-  | 'cost'       // cost estimate, budget line
-  | 'action'     // work order, required repair, hold
-  | 'photo'      // site photo
-  | 'inspection' // test result, UT, PT, visual inspection record
-  | 'code-ref'   // AISC 360, ACI 318, IBC reference
-  | 'material'   // material specification
-  | 'finding';   // defect / observation (corrosion, crack, deformation)
+  | 'markup'
+  | 'member'
+  | 'document'
+  | 'cost'
+  | 'action'
+  | 'photo'
+  | 'inspection'
+  | 'code-ref'
+  | 'material'
+  | 'finding'
+  | 'defect'
+  | 'measurement'
+  | 'risk'
+  | 'deadline'
+  | 'checklist';
+
+export type RNodeStatus = 'open' | 'in-progress' | 'resolved' | 'deferred';
+
+export interface ChecklistItem {
+  id: string;
+  text: string;
+  done: boolean;
+}
 
 export interface RNode {
   id: string;
@@ -24,6 +38,13 @@ export interface RNode {
   subtitle?: string;
   x: number;
   y: number;
+  status?: RNodeStatus;
+  riskSeverity?: number;
+  riskLikelihood?: number;
+  dueDate?: string;
+  photoData?: string;
+  checklistItems?: ChecklistItem[];
+  crossBoardRef?: string;
 }
 
 export interface REdge {
@@ -44,25 +65,38 @@ let _rid = 0;
 export const genRid = () => `r${++_rid}_${Date.now()}`;
 
 export const NODE_CFG: Record<RNodeType, { label: string; color: string; headerText: string }> = {
-  markup:     { label: 'Markup',      color: '#ef4444', headerText: 'MRK' },
-  member:     { label: 'Member',      color: '#f97316', headerText: 'STR' },
-  document:   { label: 'Document',    color: '#3b82f6', headerText: 'DOC' },
-  cost:       { label: 'Cost',        color: '#22c55e', headerText: '$$$' },
-  action:     { label: 'Action',      color: '#eab308', headerText: 'ACT' },
-  photo:      { label: 'Photo',       color: '#8b5cf6', headerText: 'IMG' },
-  inspection: { label: 'Inspection',  color: '#06b6d4', headerText: 'TST' },
-  'code-ref': { label: 'Code Ref',    color: '#94a3b8', headerText: 'REF' },
-  material:   { label: 'Material',    color: '#a78bfa', headerText: 'MAT' },
-  finding:    { label: 'Finding',     color: '#f43f5e', headerText: '⚠' },
+  markup:      { label: 'Markup',       color: '#ef4444', headerText: 'MRK' },
+  member:      { label: 'Member',       color: '#f97316', headerText: 'STR' },
+  document:    { label: 'Document',     color: '#3b82f6', headerText: 'DOC' },
+  cost:        { label: 'Cost',         color: '#22c55e', headerText: '$$$' },
+  action:      { label: 'Action',       color: '#eab308', headerText: 'ACT' },
+  photo:       { label: 'Photo',        color: '#8b5cf6', headerText: 'IMG' },
+  inspection:  { label: 'Inspection',   color: '#06b6d4', headerText: 'TST' },
+  'code-ref':  { label: 'Code Ref',     color: '#94a3b8', headerText: 'REF' },
+  material:    { label: 'Material',     color: '#a78bfa', headerText: 'MAT' },
+  finding:     { label: 'Finding',      color: '#f43f5e', headerText: '⚠'  },
+  defect:      { label: 'Defect',       color: '#dc2626', headerText: 'DEF' },
+  measurement: { label: 'Measurement',  color: '#0891b2', headerText: 'MSR' },
+  risk:        { label: 'Risk',         color: '#f97316', headerText: 'RISK' },
+  deadline:    { label: 'Deadline',     color: '#8b5cf6', headerText: 'DUE' },
+  checklist:   { label: 'Checklist',    color: '#10b981', headerText: 'CHK' },
 };
 
-// Node dimensions
-const EXP_W = 182;  // expanded node width
-const EXP_H = 62;   // expanded node height
-const EXP_HDR = 22; // expanded header height
-const CMP_W = 96;   // compact node width
-const CMP_H = 36;   // compact node height
-const CMP_HDR = 14; // compact header height
+const STATUS_COLOR: Record<RNodeStatus, string> = {
+  'open':        '#ef4444',
+  'in-progress': '#f97316',
+  'resolved':    '#22c55e',
+  'deferred':    '#64748b',
+};
+
+const EXP_W   = 182;
+const EXP_H   = 78;
+const EXP_HDR = 22;
+const CMP_W   = 96;
+const CMP_H   = 36;
+const CMP_HDR = 14;
+
+const TODAY = new Date().toISOString().slice(0, 10);
 
 interface Pt { x: number; y: number }
 
@@ -80,22 +114,322 @@ function inPort(n: RNode, exp: boolean): Pt {
   return { x: n.x, y: n.y + (exp ? EXP_H : CMP_H) / 2 };
 }
 
-// ── Component ─────────────────────────────────────────────────────────────────
+function riskColor(score: number): string {
+  if (score <= 4)  return '#22c55e';
+  if (score <= 9)  return '#f59e0b';
+  return '#ef4444';
+}
+
+function riskScore(n: RNode): number {
+  return (n.riskSeverity ?? 1) * (n.riskLikelihood ?? 1);
+}
+
+// ── Templates ─────────────────────────────────────────────────────────────────
+
+function makeBridgeDeckSurvey(): RelationshipGraph {
+  const base = { x: 60, y: 60 };
+  const dx = 240;
+  const nodes: RNode[] = [
+    { id: genRid(), type: 'markup',      label: 'Markup #1',          subtitle: 'Deck Area B-4',        x: base.x,          y: base.y },
+    { id: genRid(), type: 'member',      label: 'Deck Area B-4',      subtitle: 'Span 3, Bay 4',        x: base.x + dx,     y: base.y },
+    { id: genRid(), type: 'defect',      label: 'Delamination',       subtitle: 'Surface spalling',     x: base.x + dx * 2, y: base.y, status: 'open' },
+    { id: genRid(), type: 'measurement', label: '2.4 m² Area',        subtitle: 'Affected region',      x: base.x + dx * 2, y: base.y + 110 },
+    { id: genRid(), type: 'finding',     label: 'Section Loss 12%',   subtitle: 'Cover concrete',       x: base.x + dx,     y: base.y + 110 },
+    { id: genRid(), type: 'risk',        label: 'Risk: High',         subtitle: 'Structural risk',      x: base.x,          y: base.y + 220, riskSeverity: 4, riskLikelihood: 3 },
+    { id: genRid(), type: 'cost',        label: 'Cost Est. $18k',     subtitle: 'Deck repair',          x: base.x + dx,     y: base.y + 220 },
+    { id: genRid(), type: 'action',      label: 'Repair Order',       subtitle: 'Issue work order',     x: base.x + dx * 2, y: base.y + 220, status: 'in-progress' },
+    { id: genRid(), type: 'deadline',    label: 'Q3 2026',            subtitle: 'Completion target',    x: base.x + dx * 3, y: base.y + 220, dueDate: '2026-09-30' },
+    { id: genRid(), type: 'checklist',   label: 'Deck Repair Checklist', subtitle: 'Pre-repair items', x: base.x + dx * 3, y: base.y + 110,
+      checklistItems: [
+        { id: genRid(), text: 'Delineate repair area', done: true },
+        { id: genRid(), text: 'Shore falsework', done: false },
+        { id: genRid(), text: 'Remove delaminated concrete', done: false },
+        { id: genRid(), text: 'Apply bonding agent', done: false },
+      ],
+    },
+    { id: genRid(), type: 'document',    label: 'Inspection Report',  subtitle: 'Rev B - 2026-01-15',   x: base.x + dx * 3, y: base.y },
+  ];
+  const edges: REdge[] = [
+    { id: genRid(), from: nodes[0].id, to: nodes[1].id, label: 'annotates' },
+    { id: genRid(), from: nodes[1].id, to: nodes[2].id, label: 'has defect' },
+    { id: genRid(), from: nodes[2].id, to: nodes[3].id, label: 'measured by' },
+    { id: genRid(), from: nodes[2].id, to: nodes[4].id, label: 'causes' },
+    { id: genRid(), from: nodes[4].id, to: nodes[5].id, label: 'informs' },
+    { id: genRid(), from: nodes[5].id, to: nodes[6].id, label: 'drives' },
+    { id: genRid(), from: nodes[6].id, to: nodes[7].id, label: 'funds' },
+    { id: genRid(), from: nodes[7].id, to: nodes[8].id, label: 'due by' },
+    { id: genRid(), from: nodes[7].id, to: nodes[9].id, label: 'uses' },
+    { id: genRid(), from: nodes[9].id, to: nodes[10].id, label: 'documented in' },
+  ];
+  return { nodes, edges };
+}
+
+function makeBuildingEnvelope(): RelationshipGraph {
+  const base = { x: 60, y: 60 };
+  const dx = 230;
+  const nodes: RNode[] = [
+    { id: genRid(), type: 'member',      label: 'Facade Panel E-7',   subtitle: 'Level 3, North',       x: base.x,          y: base.y },
+    { id: genRid(), type: 'defect',      label: 'Sealant Failure',    subtitle: 'Joint #14',            x: base.x + dx,     y: base.y, status: 'open' },
+    { id: genRid(), type: 'measurement', label: 'Gap 8 mm',           subtitle: 'Design limit: 3 mm',   x: base.x + dx * 2, y: base.y },
+    { id: genRid(), type: 'finding',     label: 'Water Infiltration', subtitle: 'Interior staining',    x: base.x + dx,     y: base.y + 110, status: 'in-progress' },
+    { id: genRid(), type: 'action',      label: 'Reseal Joint',       subtitle: 'Polyurethane sealant', x: base.x + dx * 2, y: base.y + 110, status: 'open' },
+    { id: genRid(), type: 'cost',        label: 'Cost Est. $3,200',   subtitle: 'Labour + materials',   x: base.x + dx * 3, y: base.y + 110 },
+    { id: genRid(), type: 'deadline',    label: 'Before Wet Season',  subtitle: 'Completion target',    x: base.x + dx * 3, y: base.y, dueDate: '2026-10-01' },
+    { id: genRid(), type: 'document',    label: 'Facade Spec BS-101', subtitle: 'Issue C',              x: base.x,          y: base.y + 220 },
+    { id: genRid(), type: 'inspection',  label: 'Water Test WT-04',   subtitle: 'AAMA 501.2',           x: base.x + dx,     y: base.y + 220 },
+  ];
+  const edges: REdge[] = [
+    { id: genRid(), from: nodes[0].id, to: nodes[1].id, label: 'has defect' },
+    { id: genRid(), from: nodes[1].id, to: nodes[2].id, label: 'measured' },
+    { id: genRid(), from: nodes[1].id, to: nodes[3].id, label: 'causes' },
+    { id: genRid(), from: nodes[3].id, to: nodes[4].id, label: 'requires' },
+    { id: genRid(), from: nodes[4].id, to: nodes[5].id, label: 'costs' },
+    { id: genRid(), from: nodes[4].id, to: nodes[6].id, label: 'due' },
+    { id: genRid(), from: nodes[7].id, to: nodes[4].id, label: 'specifies' },
+    { id: genRid(), from: nodes[8].id, to: nodes[3].id, label: 'confirms' },
+  ];
+  return { nodes, edges };
+}
+
+function makeSteelFrameInspection(): RelationshipGraph {
+  const base = { x: 60, y: 60 };
+  const dx = 230;
+  const nodes: RNode[] = [
+    { id: genRid(), type: 'member',      label: 'W24×76 Beam',        subtitle: 'Grid C3–C5, Level 2',  x: base.x,          y: base.y },
+    { id: genRid(), type: 'defect',      label: 'Web Corrosion',      subtitle: 'Section loss',         x: base.x + dx,     y: base.y, status: 'open' },
+    { id: genRid(), type: 'measurement', label: 'Thickness 8.2 mm',   subtitle: 'Nominal: 11.9 mm',     x: base.x + dx * 2, y: base.y },
+    { id: genRid(), type: 'risk',        label: 'Capacity Risk',      subtitle: 'Flexural capacity',    x: base.x + dx,     y: base.y + 110, riskSeverity: 4, riskLikelihood: 2 },
+    { id: genRid(), type: 'code-ref',    label: 'AISC 360-22',        subtitle: 'Ch. F Flexure',        x: base.x,          y: base.y + 220 },
+    { id: genRid(), type: 'material',    label: 'ASTM A992',          subtitle: 'Fy=345 MPa',           x: base.x + dx,     y: base.y + 220 },
+    { id: genRid(), type: 'action',      label: 'Sister Plate Repair',subtitle: 'Weld PL10×200',        x: base.x + dx * 2, y: base.y + 220, status: 'open' },
+    { id: genRid(), type: 'cost',        label: 'Cost Est. $9,400',   subtitle: 'Fab + erection',       x: base.x + dx * 3, y: base.y + 220 },
+    { id: genRid(), type: 'inspection',  label: 'UT Scan UT-17',      subtitle: 'ASNT Level II',        x: base.x + dx * 3, y: base.y },
+  ];
+  const edges: REdge[] = [
+    { id: genRid(), from: nodes[0].id, to: nodes[1].id, label: 'has defect' },
+    { id: genRid(), from: nodes[1].id, to: nodes[2].id, label: 'measured' },
+    { id: genRid(), from: nodes[1].id, to: nodes[3].id, label: 'creates' },
+    { id: genRid(), from: nodes[3].id, to: nodes[6].id, label: 'requires' },
+    { id: genRid(), from: nodes[4].id, to: nodes[3].id, label: 'governs' },
+    { id: genRid(), from: nodes[5].id, to: nodes[0].id, label: 'specifies' },
+    { id: genRid(), from: nodes[6].id, to: nodes[7].id, label: 'costs' },
+    { id: genRid(), from: nodes[8].id, to: nodes[1].id, label: 'identifies' },
+  ];
+  return { nodes, edges };
+}
+
+function makeConcreteConditionSurvey(): RelationshipGraph {
+  const base = { x: 60, y: 60 };
+  const dx = 230;
+  const nodes: RNode[] = [
+    { id: genRid(), type: 'member',      label: 'Column C-12',        subtitle: 'Parking Level B2',     x: base.x,          y: base.y },
+    { id: genRid(), type: 'defect',      label: 'Carbonation Crack',  subtitle: 'Vertical, 600 mm',     x: base.x + dx,     y: base.y, status: 'open' },
+    { id: genRid(), type: 'measurement', label: 'Width 0.35 mm',      subtitle: 'Limit 0.20 mm ACI',    x: base.x + dx * 2, y: base.y },
+    { id: genRid(), type: 'finding',     label: 'Rebar Corrosion',    subtitle: 'Cover 18 mm (low)',    x: base.x + dx,     y: base.y + 110 },
+    { id: genRid(), type: 'risk',        label: 'Spall Risk',         subtitle: 'Falling concrete',     x: base.x + dx * 2, y: base.y + 110, riskSeverity: 3, riskLikelihood: 4 },
+    { id: genRid(), type: 'action',      label: 'Crack Injection',    subtitle: 'Epoxy LV + wrap',      x: base.x,          y: base.y + 220, status: 'open' },
+    { id: genRid(), type: 'checklist',   label: 'Repair Checklist',   subtitle: 'Pre-injection steps',  x: base.x + dx,     y: base.y + 220,
+      checklistItems: [
+        { id: genRid(), text: 'Clean crack faces', done: false },
+        { id: genRid(), text: 'Install injection ports', done: false },
+        { id: genRid(), text: 'Seal crack surface', done: false },
+        { id: genRid(), text: 'Inject epoxy', done: false },
+      ],
+    },
+    { id: genRid(), type: 'code-ref',    label: 'ACI 224R-01',        subtitle: 'Crack control',        x: base.x + dx * 2, y: base.y + 220 },
+    { id: genRid(), type: 'cost',        label: 'Cost Est. $6,800',   subtitle: 'Materials + labour',   x: base.x + dx * 3, y: base.y + 220 },
+    { id: genRid(), type: 'document',    label: 'Condition Survey',   subtitle: 'CS-2026-03',           x: base.x + dx * 3, y: base.y },
+  ];
+  const edges: REdge[] = [
+    { id: genRid(), from: nodes[0].id, to: nodes[1].id, label: 'has defect' },
+    { id: genRid(), from: nodes[1].id, to: nodes[2].id, label: 'measured' },
+    { id: genRid(), from: nodes[1].id, to: nodes[3].id, label: 'causes' },
+    { id: genRid(), from: nodes[3].id, to: nodes[4].id, label: 'elevates' },
+    { id: genRid(), from: nodes[4].id, to: nodes[5].id, label: 'requires' },
+    { id: genRid(), from: nodes[5].id, to: nodes[6].id, label: 'uses' },
+    { id: genRid(), from: nodes[7].id, to: nodes[5].id, label: 'governs' },
+    { id: genRid(), from: nodes[5].id, to: nodes[8].id, label: 'costs' },
+    { id: genRid(), from: nodes[9].id, to: nodes[1].id, label: 'documents' },
+  ];
+  return { nodes, edges };
+}
+
+const TEMPLATES: { label: string; fn: () => RelationshipGraph }[] = [
+  { label: 'Bridge Deck Survey',        fn: makeBridgeDeckSurvey },
+  { label: 'Building Envelope',         fn: makeBuildingEnvelope },
+  { label: 'Steel Frame Inspection',    fn: makeSteelFrameInspection },
+  { label: 'Concrete Condition Survey', fn: makeConcreteConditionSurvey },
+];
+
+// ── Report Generator ──────────────────────────────────────────────────────────
+
+function generateReport(graph: RelationshipGraph): void {
+  const totalNodes = graph.nodes.length;
+  const findings   = graph.nodes.filter(n => n.type === 'finding' || n.type === 'defect').length;
+  const actions    = graph.nodes.filter(n => n.type === 'action').length;
+  const costNodes  = graph.nodes.filter(n => n.type === 'cost');
+  const hasCost    = costNodes.length > 0;
+
+  const sectionOrder: RNodeType[] = [
+    'finding', 'defect', 'member', 'measurement', 'risk',
+    'cost', 'action', 'deadline', 'checklist', 'code-ref', 'document',
+    'inspection', 'photo', 'material', 'markup',
+  ];
+  const sectionTitles: Partial<Record<RNodeType, string>> = {
+    finding:     'Finding / Defect',
+    defect:      'Defect',
+    member:      'Member',
+    measurement: 'Measurement',
+    risk:        'Risk Assessment',
+    cost:        'Cost',
+    action:      'Action Items',
+    deadline:    'Deadlines / Schedule',
+    checklist:   'Checklist Status',
+    'code-ref':  'Code References',
+    document:    'Documents',
+    inspection:  'Inspections',
+    photo:       'Photos',
+    material:    'Materials',
+    markup:      'Markup Annotations',
+  };
+
+  function nodeRows(type: RNodeType): string {
+    const nodes = graph.nodes.filter(n => n.type === type);
+    if (!nodes.length) return '';
+    const title = sectionTitles[type] ?? NODE_CFG[type].label;
+    const rows = nodes.map(n => {
+      let extra = '';
+      if (n.type === 'risk') {
+        const sc = riskScore(n);
+        const col = riskColor(sc);
+        extra = `<td style="color:${col};font-weight:600;">S${n.riskSeverity ?? 1} × L${n.riskLikelihood ?? 1} = ${sc}</td>`;
+      } else if (n.type === 'deadline') {
+        const overdue = n.dueDate && n.dueDate < TODAY && n.status !== 'resolved';
+        extra = `<td style="${overdue ? 'color:#dc2626;font-weight:600;' : ''}">${overdue ? '⚠ Overdue — ' : ''}${n.dueDate ?? '—'}</td>`;
+      } else if (n.type === 'checklist') {
+        const items = n.checklistItems ?? [];
+        const done  = items.filter(i => i.done).length;
+        extra = `<td>${done}/${items.length} items complete</td>`;
+      } else {
+        extra = `<td></td>`;
+      }
+      const statusCell = n.status && n.status !== 'open'
+        ? `<td><span style="background:${STATUS_COLOR[n.status]};color:#fff;padding:1px 6px;border-radius:4px;font-size:10px;">${n.status}</span></td>`
+        : `<td>${n.status === 'open' ? '<span style="background:#ef4444;color:#fff;padding:1px 6px;border-radius:4px;font-size:10px;">open</span>' : '—'}</td>`;
+      return `<tr><td>${n.label}</td><td style="color:#555;">${n.subtitle ?? '—'}</td>${statusCell}${extra}</tr>`;
+    }).join('');
+
+    const extraHeader = (type === 'risk') ? '<th>Risk Score</th>'
+      : (type === 'deadline') ? '<th>Due Date</th>'
+      : (type === 'checklist') ? '<th>Progress</th>'
+      : '<th></th>';
+
+    return `
+      <section style="margin-bottom:28px;">
+        <h2 style="font-size:15px;font-weight:700;color:#1e293b;border-bottom:2px solid #e2e8f0;padding-bottom:6px;margin-bottom:10px;">${title}</h2>
+        <table style="width:100%;border-collapse:collapse;font-size:12px;">
+          <thead><tr style="background:#f1f5f9;color:#475569;">
+            <th style="text-align:left;padding:6px 8px;">Label</th>
+            <th style="text-align:left;padding:6px 8px;">Detail</th>
+            <th style="text-align:left;padding:6px 8px;">Status</th>
+            ${extraHeader}
+          </tr></thead>
+          <tbody style="color:#1e293b;">${rows.replace(/<tr>/g, '<tr style="border-bottom:1px solid #f1f5f9;">').replace(/<td>/g, '<td style="padding:5px 8px;">').replace(/<\/td>/g, '</td>')}</tbody>
+        </table>
+      </section>`;
+  }
+
+  const sections = sectionOrder
+    .filter(t => graph.nodes.some(n => n.type === t))
+    .map(t => nodeRows(t))
+    .join('');
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Structural Inspection Report</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; margin: 0; background: #fff; color: #1e293b; }
+    .page { max-width: 900px; margin: 0 auto; padding: 40px 48px; }
+    @media print { .no-print { display: none !important; } body { margin: 0; } }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="no-print" style="margin-bottom:20px;">
+      <button onclick="window.print()" style="background:#1e293b;color:#fff;border:none;padding:8px 20px;border-radius:6px;cursor:pointer;font-size:13px;">Print</button>
+    </div>
+    <div style="border-bottom:3px solid #1e293b;padding-bottom:16px;margin-bottom:24px;">
+      <h1 style="font-size:22px;font-weight:800;margin:0 0 4px;">Structural Inspection Report</h1>
+      <p style="color:#64748b;font-size:13px;margin:0;">Generated: ${TODAY}</p>
+    </div>
+    <section style="margin-bottom:28px;">
+      <h2 style="font-size:15px;font-weight:700;color:#1e293b;border-bottom:2px solid #e2e8f0;padding-bottom:6px;margin-bottom:10px;">Summary</h2>
+      <table style="border-collapse:collapse;font-size:13px;">
+        <tr><td style="padding:4px 16px 4px 0;color:#475569;">Total Nodes</td><td style="font-weight:600;">${totalNodes}</td></tr>
+        <tr><td style="padding:4px 16px 4px 0;color:#475569;">Findings / Defects</td><td style="font-weight:600;">${findings}</td></tr>
+        <tr><td style="padding:4px 16px 4px 0;color:#475569;">Action Items</td><td style="font-weight:600;">${actions}</td></tr>
+        ${hasCost ? `<tr><td style="padding:4px 16px 4px 0;color:#475569;">Cost Nodes</td><td style="font-weight:600;">${costNodes.length}</td></tr>` : ''}
+      </table>
+    </section>
+    ${sections}
+  </div>
+</body>
+</html>`;
+
+  const w = window.open('', '_blank');
+  if (w) {
+    w.document.write(html);
+    w.document.close();
+  }
+}
+
+// ── CSV Export ────────────────────────────────────────────────────────────────
+
+function exportCSV(graph: RelationshipGraph): void {
+  const header = ['ID', 'Type', 'Label', 'Detail', 'Status', 'Due Date', 'Risk Score', 'Connections'];
+  const rows = graph.nodes.map(n => {
+    const conns = graph.edges.filter(e => e.from === n.id || e.to === n.id).length;
+    const sc = n.type === 'risk' ? String(riskScore(n)) : '';
+    const due = n.dueDate ?? '';
+    const status = n.status ?? '';
+    const vals = [n.id, n.type, n.label, n.subtitle ?? '', status, due, sc, String(conns)];
+    return vals.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',');
+  });
+  const csv = [header.join(','), ...rows].join('\r\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'relationship-map.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ── Props ─────────────────────────────────────────────────────────────────────
 
 interface Props {
   graph: RelationshipGraph;
   onChange: (g: RelationshipGraph) => void;
+  boardNames?: Record<string, string>;
+  activeBoardId?: string;
 }
 
-export function RelationshipMap({ graph, onChange }: Props) {
-  const [expanded,     setExpanded]     = useState(false);
-  const [pan,          setPan]          = useState<Pt>({ x: 60, y: 60 });
-  const [scale,        setScale]        = useState(1);
-  const [selectedNode, setSelectedNode] = useState<string | null>(null);
-  const [selectedEdge, setSelectedEdge] = useState<string | null>(null);
-  const [showPalette,  setShowPalette]  = useState(false);
-  const [edgePreview,  setEdgePreview]  = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
-  const [editingLabel, setEditingLabel] = useState<{ id: string; field: 'label' | 'subtitle'; value: string } | null>(null);
+// ── Component ─────────────────────────────────────────────────────────────────
+
+export function RelationshipMap({ graph, onChange, boardNames, activeBoardId }: Props) {
+  const [expanded,        setExpanded]        = useState(false);
+  const [pan,             setPan]             = useState<Pt>({ x: 60, y: 60 });
+  const [scale,           setScale]           = useState(1);
+  const [selectedNode,    setSelectedNode]    = useState<string | null>(null);
+  const [selectedEdge,    setSelectedEdge]    = useState<string | null>(null);
+  const [showPalette,     setShowPalette]     = useState(false);
+  const [showTemplates,   setShowTemplates]   = useState(false);
+  const [edgePreview,     setEdgePreview]     = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
+  const [photoLightbox,   setPhotoLightbox]   = useState<string | null>(null);
+  const [newCheckItem,    setNewCheckItem]    = useState('');
 
   const svgRef        = useRef<SVGSVGElement>(null);
   const isPanning     = useRef(false);
@@ -104,6 +438,7 @@ export function RelationshipMap({ graph, onChange }: Props) {
   const draggingId    = useRef<string | null>(null);
   const dragOffset    = useRef<Pt>({ x: 0, y: 0 });
   const drawingFrom   = useRef<string | null>(null);
+  const didDrag       = useRef(false);
 
   const toCanvas = useCallback((cx: number, cy: number): Pt => {
     const rect = svgRef.current!.getBoundingClientRect();
@@ -113,12 +448,15 @@ export function RelationshipMap({ graph, onChange }: Props) {
     };
   }, [pan, scale]);
 
-  // ── Keyboard (expanded only) ──────────────────────────────────────────────
+  // ── Keyboard ──────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!expanded) return;
     const h = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { setExpanded(false); setShowPalette(false); setEditingLabel(null); }
-      if ((e.key === 'Delete' || e.key === 'Backspace') && !(e.target instanceof HTMLInputElement)) {
+      if (e.key === 'Escape') {
+        if (photoLightbox) { setPhotoLightbox(null); return; }
+        setExpanded(false); setShowPalette(false); setShowTemplates(false);
+      }
+      if ((e.key === 'Delete' || e.key === 'Backspace') && !(e.target instanceof HTMLInputElement) && !(e.target instanceof HTMLSelectElement)) {
         if (selectedNode) {
           onChange({ ...graph, nodes: graph.nodes.filter(n => n.id !== selectedNode), edges: graph.edges.filter(ed => ed.from !== selectedNode && ed.to !== selectedNode) });
           setSelectedNode(null);
@@ -131,7 +469,7 @@ export function RelationshipMap({ graph, onChange }: Props) {
     };
     window.addEventListener('keydown', h);
     return () => window.removeEventListener('keydown', h);
-  }, [expanded, selectedNode, selectedEdge, graph, onChange]);
+  }, [expanded, selectedNode, selectedEdge, graph, onChange, photoLightbox]);
 
   // ── Add node ──────────────────────────────────────────────────────────────
   const addNode = useCallback((type: RNodeType) => {
@@ -144,7 +482,12 @@ export function RelationshipMap({ graph, onChange }: Props) {
     setShowPalette(false);
   }, [graph, onChange, pan, scale]);
 
-  // ── SVG pointer handlers (expanded) ──────────────────────────────────────
+  // ── Update node helper ───────────────────────────────────────────────────
+  const updateNode = useCallback((id: string, patch: Partial<RNode>) => {
+    onChange({ ...graph, nodes: graph.nodes.map(n => n.id === id ? { ...n, ...patch } : n) });
+  }, [graph, onChange]);
+
+  // ── SVG pointer handlers ──────────────────────────────────────────────────
   const onSvgDown = useCallback((e: React.PointerEvent<SVGSVGElement>) => {
     const t = e.target as Element;
     if (e.button === 1 || (e.button === 0 && (t.tagName === 'svg' || t.getAttribute('data-bg') === '1'))) {
@@ -163,6 +506,7 @@ export function RelationshipMap({ graph, onChange }: Props) {
       setPan({ x: panOrigin.current.x + e.clientX - panStart.current.x, y: panOrigin.current.y + e.clientY - panStart.current.y });
     }
     if (draggingId.current) {
+      didDrag.current = true;
       const cv = toCanvas(e.clientX, e.clientY);
       onChange({ ...graph, nodes: graph.nodes.map(n => n.id === draggingId.current ? { ...n, x: cv.x - dragOffset.current.x, y: cv.y - dragOffset.current.y } : n) });
     }
@@ -203,8 +547,18 @@ export function RelationshipMap({ graph, onChange }: Props) {
     const cv = toCanvas(e.clientX, e.clientY);
     draggingId.current = nodeId;
     dragOffset.current = { x: cv.x - node.x, y: cv.y - node.y };
+    didDrag.current = false;
     svgRef.current?.setPointerCapture(e.pointerId);
   }, [graph, toCanvas]);
+
+  const onNodeClick = useCallback((e: React.PointerEvent, nodeId: string) => {
+    e.stopPropagation();
+    if (didDrag.current) return;
+    const node = graph.nodes.find(n => n.id === nodeId);
+    if (node && (node.type === 'photo' || node.type === 'defect') && node.photoData) {
+      setPhotoLightbox(node.photoData);
+    }
+  }, [graph]);
 
   const onOutPortDown = useCallback((e: React.PointerEvent, nodeId: string) => {
     e.stopPropagation();
@@ -225,61 +579,122 @@ export function RelationshipMap({ graph, onChange }: Props) {
   // ── Node renderer ─────────────────────────────────────────────────────────
   const renderNode = (n: RNode, exp: boolean) => {
     const cfg = NODE_CFG[n.type];
-    const w = exp ? EXP_W : CMP_W;
-    const h = exp ? EXP_H : CMP_H;
+    const w   = exp ? EXP_W : CMP_W;
+    const h   = exp ? EXP_H : CMP_H;
     const hdr = exp ? EXP_HDR : CMP_HDR;
     const isSel = n.id === selectedNode;
+
+    // Risk node color override
+    let nodeColor = cfg.color;
+    if (n.type === 'risk' && exp) {
+      nodeColor = riskColor(riskScore(n));
+    }
+
+    // Extra body content for expanded view
+    const bodyExtras: React.ReactNode[] = [];
+    if (exp) {
+      // Status pill (not 'open', only show non-default)
+      if (n.status && n.status !== 'open') {
+        bodyExtras.push(
+          <rect key="st-bg" x={5} y={57} width={52} height={13} rx={3} fill={STATUS_COLOR[n.status]} opacity={0.9}/>,
+          <text key="st-txt" x={9} y={65} fill="white" fontSize={7.5} fontFamily="sans-serif" dominantBaseline="middle">{n.status}</text>
+        );
+      }
+
+      // Risk score
+      if (n.type === 'risk') {
+        const sc  = riskScore(n);
+        const col = riskColor(sc);
+        bodyExtras.push(
+          <text key="risk" x={7} y={68} fill={col} fontSize={8.5} fontFamily="sans-serif" fontWeight="bold">
+            {`S×L = ${sc}`}
+          </text>
+        );
+      }
+
+      // Deadline date
+      if (n.type === 'deadline' && n.dueDate) {
+        const overdue = n.dueDate < TODAY && n.status !== 'resolved';
+        bodyExtras.push(
+          <text key="due" x={7} y={68} fill={overdue ? '#ef4444' : '#94a3b8'} fontSize={8} fontFamily="sans-serif">
+            {overdue ? `⚠ Overdue` : n.dueDate}
+          </text>
+        );
+      }
+
+      // Checklist progress
+      if (n.type === 'checklist') {
+        const items = n.checklistItems ?? [];
+        const done  = items.filter(i => i.done).length;
+        const pct   = items.length > 0 ? done / items.length : 0;
+        bodyExtras.push(
+          <text key="ck-txt" x={7} y={66} fill="#94a3b8" fontSize={8} fontFamily="sans-serif">{`${done}/${items.length} done`}</text>,
+          <rect key="ck-bg"  x={0} y={h - 3} width={w} height={3} fill="#334155"/>,
+          <rect key="ck-bar" x={0} y={h - 3} width={w * pct} height={3} fill="#10b981"/>
+        );
+      }
+
+      // Photo/defect camera indicator
+      if ((n.type === 'photo' || n.type === 'defect') && n.photoData) {
+        bodyExtras.push(
+          <text key="cam" x={w - 14} y={h - 8} fill="#a78bfa" fontSize={10} fontFamily="sans-serif" style={{ cursor: 'pointer' }}>📷</text>
+        );
+      }
+
+      // Cross-board link indicator
+      if (n.crossBoardRef && boardNames) {
+        const bName = boardNames[n.crossBoardRef] ?? n.crossBoardRef;
+        const short = bName.length > 12 ? bName.slice(0, 12) + '…' : bName;
+        bodyExtras.push(
+          <text key="xb" x={w - 5} y={h - 8} fill="#60a5fa" fontSize={7.5} fontFamily="sans-serif" textAnchor="end">{`→ ${short}`}</text>
+        );
+      }
+    }
 
     return (
       <g key={n.id} transform={`translate(${n.x},${n.y})`}
         style={{ cursor: exp ? 'grab' : 'pointer' }}
-        onPointerDown={exp ? (e) => onNodeDown(e, n.id) : undefined}>
+        onPointerDown={exp ? (e) => onNodeDown(e, n.id) : undefined}
+        onPointerUp={exp ? (e) => onNodeClick(e, n.id) : undefined}>
 
-        {/* Selection outline */}
         {isSel && <rect x={-3} y={-3} width={w + 6} height={h + 6} rx={5}
           fill="none" stroke="#60a5fa" strokeWidth={1.5} strokeDasharray="4 2"/>}
 
-        {/* Body */}
         <rect x={0} y={0} width={w} height={h} rx={4}
-          fill="#1e293b" stroke={isSel ? '#60a5fa' : cfg.color} strokeWidth={isSel ? 1.5 : 1}/>
+          fill="#1e293b" stroke={isSel ? '#60a5fa' : nodeColor} strokeWidth={isSel ? 1.5 : 1}/>
 
-        {/* Header bar */}
         <path d={`M 4 0 L ${w - 4} 0 Q ${w} 0 ${w} 4 L ${w} ${hdr} L 0 ${hdr} L 0 4 Q 0 0 4 0 Z`}
-          fill={cfg.color}/>
+          fill={nodeColor}/>
 
-        {/* Header label */}
         <text x={exp ? 7 : 5} y={exp ? 15 : 10}
           fill="white" fontSize={exp ? 9 : 7}
           fontFamily="sans-serif" fontWeight="bold" dominantBaseline="middle">
           {exp ? cfg.label.toUpperCase() : cfg.headerText}
         </text>
 
-        {/* Main label */}
         <text x={exp ? 7 : 5} y={hdr + (exp ? 13 : 11)}
           fill="#f1f5f9" fontSize={exp ? 10.5 : 8}
           fontFamily="sans-serif" fontWeight="600">
           {n.label.length > (exp ? 19 : 11) ? n.label.slice(0, exp ? 19 : 11) + '…' : n.label}
         </text>
 
-        {/* Subtitle (expanded only) */}
         {exp && n.subtitle && (
           <text x={7} y={hdr + 29} fill="#94a3b8" fontSize={8.5} fontFamily="sans-serif">
             {n.subtitle.length > 23 ? n.subtitle.slice(0, 23) + '…' : n.subtitle}
           </text>
         )}
 
-        {/* Input port (left, expanded) */}
+        {bodyExtras}
+
         {exp && (
           <circle cx={0} cy={h / 2} r={6}
-            fill="#0f172a" stroke={cfg.color} strokeWidth={1.5}
+            fill="#0f172a" stroke={nodeColor} strokeWidth={1.5}
             style={{ cursor: 'crosshair', pointerEvents: 'all' }}
             onPointerUp={e => onInPortUp(e, n.id)}/>
         )}
-
-        {/* Output port (right, expanded) */}
         {exp && (
           <circle cx={w} cy={h / 2} r={6}
-            fill={cfg.color} stroke="white" strokeWidth={1}
+            fill={nodeColor} stroke="white" strokeWidth={1}
             style={{ cursor: 'crosshair', pointerEvents: 'all' }}
             onPointerDown={e => onOutPortDown(e, n.id)}/>
         )}
@@ -298,24 +713,20 @@ export function RelationshipMap({ graph, onChange }: Props) {
     const mx = (p1.x + p2.x) / 2, my = (p1.y + p2.y) / 2;
     return (
       <g key={ed.id}>
-        {/* Hit area */}
         <path d={bezierPath(p1.x, p1.y, p2.x, p2.y)}
           fill="none" stroke="transparent" strokeWidth={12}
           style={{ cursor: 'pointer' }}
           onClick={() => { setSelectedEdge(ed.id); setSelectedNode(null); }}/>
-        {/* Visible line */}
         <path d={bezierPath(p1.x, p1.y, p2.x, p2.y)}
           fill="none"
           stroke={isSel ? '#60a5fa' : '#475569'}
           strokeWidth={exp ? (isSel ? 2 : 1.5) : 1}
           strokeDasharray={exp ? undefined : '5 3'}/>
-        {/* Arrow tip */}
         {exp && (
           <polygon
             points={`${p2.x - 8},${p2.y - 4} ${p2.x},${p2.y} ${p2.x - 8},${p2.y + 4}`}
             fill={isSel ? '#60a5fa' : '#475569'}/>
         )}
-        {/* Edge label */}
         {exp && ed.label && (
           <text x={mx} y={my - 5} fill="#64748b" fontSize={8}
             fontFamily="sans-serif" textAnchor="middle">{ed.label}</text>
@@ -324,7 +735,7 @@ export function RelationshipMap({ graph, onChange }: Props) {
     );
   };
 
-  // ── Compact view (embedded in bottom strip) ───────────────────────────────
+  // ── Compact view ──────────────────────────────────────────────────────────
   const renderCompact = () => {
     const hasNodes = graph.nodes.length > 0;
     let vb = '0 0 400 140';
@@ -335,14 +746,10 @@ export function RelationshipMap({ graph, onChange }: Props) {
       const x1 = Math.max(...xs) + CMP_W + pad, y1 = Math.max(...ys) + CMP_H + pad;
       vb = `${x0} ${y0} ${x1 - x0} ${y1 - y0}`;
     }
-
     return (
       <div className="flex flex-col h-full bg-slate-900 overflow-hidden">
-        {/* Header */}
         <div className="flex items-center justify-between px-2 py-1.5 border-b border-slate-700 shrink-0">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-            Relationship Map
-          </span>
+          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Relationship Map</span>
           <div className="flex gap-1">
             <button onClick={() => setShowPalette(v => !v)} title="Add node"
               className={`p-0.5 rounded transition-colors ${showPalette ? 'text-blue-400' : 'text-slate-400 hover:text-white'}`}>
@@ -354,8 +761,6 @@ export function RelationshipMap({ graph, onChange }: Props) {
             </button>
           </div>
         </div>
-
-        {/* Palette dropdown (fixed so it escapes overflow:hidden) */}
         {showPalette && (
           <div className="fixed z-50 bg-slate-800 border border-slate-600 rounded-lg shadow-2xl p-2 grid grid-cols-2 gap-1 w-52"
             style={{ bottom: '11.5rem', right: '15.5rem' }}>
@@ -371,8 +776,6 @@ export function RelationshipMap({ graph, onChange }: Props) {
             ))}
           </div>
         )}
-
-        {/* Canvas */}
         <div className="flex-1 overflow-hidden">
           {!hasNodes ? (
             <div className="flex flex-col items-center justify-center h-full gap-1.5">
@@ -380,9 +783,7 @@ export function RelationshipMap({ graph, onChange }: Props) {
                 No nodes yet.<br/>Click + to add or expand to blueprint editor.
               </span>
               <button onClick={() => setExpanded(true)}
-                className="text-[10px] text-blue-500 hover:text-blue-400 underline">
-                Open editor
-              </button>
+                className="text-[10px] text-blue-500 hover:text-blue-400 underline">Open editor</button>
             </div>
           ) : (
             <svg width="100%" height="100%">
@@ -397,10 +798,247 @@ export function RelationshipMap({ graph, onChange }: Props) {
     );
   };
 
-  // ── Expanded / fullscreen Blueprint editor ────────────────────────────────
+  // ── Properties panel ──────────────────────────────────────────────────────
   const selNode = graph.nodes.find(n => n.id === selectedNode) ?? null;
   const selEdge = graph.edges.find(e => e.id === selectedEdge) ?? null;
 
+  const renderPropertiesPanel = () => (
+    <div className="w-56 shrink-0 bg-slate-900 border-l border-slate-700 flex flex-col overflow-hidden">
+      <div className="flex items-center justify-between px-3 py-2 border-b border-slate-700">
+        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Properties</span>
+        {(selectedNode || selectedEdge) && (
+          <button onClick={() => { setSelectedNode(null); setSelectedEdge(null); }}
+            className="text-slate-500 hover:text-white"><X size={11}/></button>
+        )}
+      </div>
+      <div className="flex-1 overflow-y-auto">
+        {selNode && (() => {
+          const cfg = NODE_CFG[selNode.type];
+          const sc  = riskScore(selNode);
+          return (
+            <div className="p-3 space-y-3">
+              <div className="flex items-center gap-2 pb-2 border-b border-slate-700"
+                style={{ borderTopColor: cfg.color, borderTopWidth: 3, paddingTop: 8, marginTop: -4 }}>
+                <span className="w-3 h-3 rounded-sm shrink-0" style={{ background: cfg.color }}/>
+                <span className="text-[10px] font-bold uppercase text-slate-300">{cfg.label}</span>
+              </div>
+
+              {/* Label */}
+              <div>
+                <label className="block text-[10px] text-slate-500 mb-1 uppercase tracking-wide">Label</label>
+                <input value={selNode.label}
+                  onChange={e => updateNode(selNode.id, { label: e.target.value })}
+                  className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-slate-200 focus:outline-none focus:border-blue-500"/>
+              </div>
+
+              {/* Subtitle */}
+              <div>
+                <label className="block text-[10px] text-slate-500 mb-1 uppercase tracking-wide">Detail / Subtitle</label>
+                <input value={selNode.subtitle ?? ''}
+                  onChange={e => updateNode(selNode.id, { subtitle: e.target.value })}
+                  placeholder="e.g. $2,400 est. · May 2025"
+                  className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-slate-200 focus:outline-none focus:border-blue-500"/>
+              </div>
+
+              {/* Type */}
+              <div>
+                <label className="block text-[10px] text-slate-500 mb-1 uppercase tracking-wide">Type</label>
+                <select value={selNode.type}
+                  onChange={e => updateNode(selNode.id, { type: e.target.value as RNodeType })}
+                  className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-slate-200 focus:outline-none">
+                  {(Object.entries(NODE_CFG) as [RNodeType, typeof NODE_CFG[RNodeType]][]).map(([t, c]) => (
+                    <option key={t} value={t}>{c.label}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Status */}
+              <div>
+                <label className="block text-[10px] text-slate-500 mb-1 uppercase tracking-wide">Status</label>
+                <select value={selNode.status ?? 'open'}
+                  onChange={e => updateNode(selNode.id, { status: e.target.value as RNodeStatus })}
+                  className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-slate-200 focus:outline-none">
+                  <option value="open">Open</option>
+                  <option value="in-progress">In Progress</option>
+                  <option value="resolved">Resolved</option>
+                  <option value="deferred">Deferred</option>
+                </select>
+              </div>
+
+              {/* Risk fields */}
+              {selNode.type === 'risk' && (
+                <div className="space-y-2 border border-slate-700 rounded p-2">
+                  <div className="text-[9px] text-slate-500 uppercase tracking-wide">Risk Matrix</div>
+                  <div>
+                    <label className="text-[9px] text-slate-400">Severity: {selNode.riskSeverity ?? 1}</label>
+                    <input type="range" min={1} max={5} value={selNode.riskSeverity ?? 1}
+                      onChange={e => updateNode(selNode.id, { riskSeverity: Number(e.target.value) })}
+                      className="w-full accent-orange-500"/>
+                  </div>
+                  <div>
+                    <label className="text-[9px] text-slate-400">Likelihood: {selNode.riskLikelihood ?? 1}</label>
+                    <input type="range" min={1} max={5} value={selNode.riskLikelihood ?? 1}
+                      onChange={e => updateNode(selNode.id, { riskLikelihood: Number(e.target.value) })}
+                      className="w-full accent-orange-500"/>
+                  </div>
+                  <div className="text-[10px] font-bold" style={{ color: riskColor(sc) }}>
+                    Score: {sc} {sc <= 4 ? '(Low)' : sc <= 9 ? '(Medium)' : '(High)'}
+                  </div>
+                </div>
+              )}
+
+              {/* Deadline date */}
+              {selNode.type === 'deadline' && (
+                <div>
+                  <label className="block text-[10px] text-slate-500 mb-1 uppercase tracking-wide">Due Date</label>
+                  <input type="date" value={selNode.dueDate ?? ''}
+                    onChange={e => updateNode(selNode.id, { dueDate: e.target.value })}
+                    className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-slate-200 focus:outline-none focus:border-blue-500"/>
+                </div>
+              )}
+
+              {/* Photo attach */}
+              {(selNode.type === 'photo' || selNode.type === 'defect') && (
+                <div>
+                  <label className="block text-[10px] text-slate-500 mb-1 uppercase tracking-wide">Photo</label>
+                  {selNode.photoData && (
+                    <div className="mb-1">
+                      <img src={selNode.photoData} alt="attached" className="w-full rounded border border-slate-600" style={{ maxHeight: 80, objectFit: 'cover' }}
+                        onClick={() => setPhotoLightbox(selNode.photoData!)}
+                        style={{ cursor: 'pointer', maxHeight: 80, objectFit: 'cover', width: '100%', borderRadius: 4, border: '1px solid #475569' }}/>
+                    </div>
+                  )}
+                  <label className="flex items-center gap-1.5 cursor-pointer text-[10px] text-blue-400 hover:text-blue-300">
+                    <input type="file" accept="image/*" className="hidden"
+                      onChange={e => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        const reader = new FileReader();
+                        reader.onload = ev => updateNode(selNode.id, { photoData: ev.target?.result as string });
+                        reader.readAsDataURL(file);
+                      }}/>
+                    Attach Photo
+                  </label>
+                </div>
+              )}
+
+              {/* Checklist items */}
+              {selNode.type === 'checklist' && (
+                <div className="space-y-1.5">
+                  <label className="block text-[10px] text-slate-500 uppercase tracking-wide">Checklist Items</label>
+                  {(selNode.checklistItems ?? []).map(item => (
+                    <div key={item.id} className="flex items-center gap-1.5">
+                      <input type="checkbox" checked={item.done}
+                        onChange={e => {
+                          const items = (selNode.checklistItems ?? []).map(i => i.id === item.id ? { ...i, done: e.target.checked } : i);
+                          updateNode(selNode.id, { checklistItems: items });
+                        }}
+                        className="accent-emerald-500"/>
+                      <span className={`flex-1 text-[10px] ${item.done ? 'line-through text-slate-500' : 'text-slate-300'}`}>{item.text}</span>
+                      <button onClick={() => {
+                        const items = (selNode.checklistItems ?? []).filter(i => i.id !== item.id);
+                        updateNode(selNode.id, { checklistItems: items });
+                      }} className="text-red-600 hover:text-red-400 text-[10px]">✕</button>
+                    </div>
+                  ))}
+                  <div className="flex gap-1 mt-1">
+                    <input value={newCheckItem} onChange={e => setNewCheckItem(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter' && newCheckItem.trim()) {
+                          const items = [...(selNode.checklistItems ?? []), { id: genRid(), text: newCheckItem.trim(), done: false }];
+                          updateNode(selNode.id, { checklistItems: items });
+                          setNewCheckItem('');
+                        }
+                      }}
+                      placeholder="New item…"
+                      className="flex-1 bg-slate-700 border border-slate-600 rounded px-2 py-1 text-[10px] text-slate-200 focus:outline-none focus:border-blue-500"/>
+                    <button onClick={() => {
+                      if (!newCheckItem.trim()) return;
+                      const items = [...(selNode.checklistItems ?? []), { id: genRid(), text: newCheckItem.trim(), done: false }];
+                      updateNode(selNode.id, { checklistItems: items });
+                      setNewCheckItem('');
+                    }} className="px-2 py-1 bg-emerald-700 hover:bg-emerald-600 rounded text-[10px] text-white">Add</button>
+                  </div>
+                </div>
+              )}
+
+              {/* Cross-board link */}
+              {boardNames && Object.keys(boardNames).length > 0 && (
+                <div>
+                  <label className="block text-[10px] text-slate-500 mb-1 uppercase tracking-wide">Cross-board Link</label>
+                  <select value={selNode.crossBoardRef ?? ''}
+                    onChange={e => updateNode(selNode.id, { crossBoardRef: e.target.value || undefined })}
+                    className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-slate-200 focus:outline-none">
+                    <option value="">(none)</option>
+                    {Object.entries(boardNames)
+                      .filter(([id]) => id !== activeBoardId)
+                      .map(([id, name]) => (
+                        <option key={id} value={id}>{name}</option>
+                      ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Stats */}
+              <div className="border-t border-slate-700 pt-2 space-y-1 text-[9px] text-slate-500">
+                <div>Connections: <span className="text-slate-300">{graph.edges.filter(e => e.from === selNode.id || e.to === selNode.id).length}</span></div>
+                <div>Position: <span className="font-mono text-slate-400">{Math.round(selNode.x)}, {Math.round(selNode.y)}</span></div>
+              </div>
+
+              <button onClick={() => {
+                onChange({ ...graph, nodes: graph.nodes.filter(n => n.id !== selNode.id), edges: graph.edges.filter(e => e.from !== selNode.id && e.to !== selNode.id) });
+                setSelectedNode(null);
+              }} className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded bg-red-900/30 border border-red-800/50 text-red-400 hover:bg-red-900/50 text-xs">
+                <Trash2 size={11}/> Delete node
+              </button>
+            </div>
+          );
+        })()}
+
+        {selEdge && (() => {
+          const fromNode = graph.nodes.find(n => n.id === selEdge.from);
+          const toNode   = graph.nodes.find(n => n.id === selEdge.to);
+          return (
+            <div className="p-3 space-y-3">
+              <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 pb-2 border-b border-slate-700">Connection</div>
+              <div className="text-xs text-slate-300 space-y-1">
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-sm" style={{ background: fromNode ? NODE_CFG[fromNode.type].color : '#475569' }}/>
+                  <span>{fromNode?.label ?? '—'}</span>
+                </div>
+                <div className="pl-1 text-slate-600">↓</div>
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-sm" style={{ background: toNode ? NODE_CFG[toNode.type].color : '#475569' }}/>
+                  <span>{toNode?.label ?? '—'}</span>
+                </div>
+              </div>
+              <div>
+                <label className="block text-[10px] text-slate-500 mb-1 uppercase tracking-wide">Relationship label</label>
+                <input value={selEdge.label ?? ''}
+                  onChange={e => onChange({ ...graph, edges: graph.edges.map(ed => ed.id === selEdge.id ? { ...ed, label: e.target.value } : ed) })}
+                  placeholder="e.g. references, drives, requires…"
+                  className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-slate-200 focus:outline-none focus:border-blue-500"/>
+              </div>
+              <button onClick={() => {
+                onChange({ ...graph, edges: graph.edges.filter(e => e.id !== selEdge.id) });
+                setSelectedEdge(null);
+              }} className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded bg-red-900/30 border border-red-800/50 text-red-400 hover:bg-red-900/50 text-xs">
+                <Trash2 size={11}/> Delete connection
+              </button>
+            </div>
+          );
+        })()}
+
+        {!selNode && !selEdge && (
+          <div className="px-4 py-6 text-[10px] text-slate-600 text-center leading-relaxed">
+            Click a node or connection to edit its properties.
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  // ── Expanded / fullscreen Blueprint editor ────────────────────────────────
   const renderExpanded = () => (
     <div className="fixed inset-0 z-50 flex bg-slate-950 text-slate-200">
 
@@ -420,8 +1058,7 @@ export function RelationshipMap({ graph, onChange }: Props) {
           ))}
         </div>
         <div className="px-3 py-2 border-t border-slate-700 space-y-1 text-[9px] text-slate-600">
-          <div>● Drag output port to input port to connect</div>
-          <div>● Alt+drag or middle-mouse to pan</div>
+          <div>● Drag output port to connect</div>
           <div>● Scroll to zoom</div>
           <div>● Del to delete selected</div>
         </div>
@@ -429,10 +1066,46 @@ export function RelationshipMap({ graph, onChange }: Props) {
 
       {/* Main canvas */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Canvas toolbar */}
+        {/* Toolbar */}
         <div className="flex items-center justify-between px-4 py-2 bg-slate-900 border-b border-slate-700 shrink-0">
           <span className="text-sm font-semibold text-slate-100">Relationship Map / Blueprint</span>
           <div className="flex items-center gap-2">
+
+            {/* Generate Report */}
+            <button onClick={() => generateReport(graph)}
+              className="flex items-center gap-1 text-[10px] text-slate-300 hover:text-white border border-slate-700 rounded px-2 py-1 hover:bg-slate-700 transition-colors">
+              <FileText size={11}/> Report
+            </button>
+
+            {/* Export CSV */}
+            <button onClick={() => exportCSV(graph)}
+              className="flex items-center gap-1 text-[10px] text-slate-300 hover:text-white border border-slate-700 rounded px-2 py-1 hover:bg-slate-700 transition-colors">
+              <Download size={11}/> CSV
+            </button>
+
+            {/* Templates */}
+            <div className="relative">
+              <button onClick={() => setShowTemplates(v => !v)}
+                className={`flex items-center gap-1 text-[10px] border rounded px-2 py-1 transition-colors ${showTemplates ? 'text-blue-300 border-blue-600 bg-blue-900/30' : 'text-slate-300 hover:text-white border-slate-700 hover:bg-slate-700'}`}>
+                <LayoutTemplate size={11}/> Templates
+              </button>
+              {showTemplates && (
+                <div className="absolute right-0 top-full mt-1 w-52 bg-slate-800 border border-slate-600 rounded-lg shadow-2xl z-10 overflow-hidden">
+                  {TEMPLATES.map(tpl => (
+                    <button key={tpl.label} onClick={() => {
+                      setShowTemplates(false);
+                      if (graph.nodes.length > 0) {
+                        if (!window.confirm('Replace current graph with template?')) return;
+                      }
+                      onChange(tpl.fn());
+                    }} className="flex w-full items-center px-3 py-2.5 text-[11px] text-slate-300 hover:bg-slate-700 text-left transition-colors">
+                      {tpl.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
             {selectedNode && (
               <button onClick={() => {
                 onChange({ ...graph, nodes: graph.nodes.filter(n => n.id !== selectedNode), edges: graph.edges.filter(e => e.from !== selectedNode && e.to !== selectedNode) });
@@ -449,6 +1122,7 @@ export function RelationshipMap({ graph, onChange }: Props) {
                 <Trash2 size={10}/> Delete edge
               </button>
             )}
+
             <span className="text-[10px] text-slate-500 font-mono">{Math.round(scale * 100)}%</span>
             <button onClick={() => setScale(s => Math.min(s * 1.2, 3))}
               className="p-1 text-slate-400 hover:text-white rounded hover:bg-slate-700"><ZoomIn size={13}/></button>
@@ -472,8 +1146,6 @@ export function RelationshipMap({ graph, onChange }: Props) {
           onPointerLeave={onSvgUp}
           onWheel={onWheel}
           style={{ cursor: 'default' }}>
-
-          {/* Dot grid background */}
           <defs>
             <pattern id="rmap-dots" patternUnits="userSpaceOnUse"
               x={pan.x % (20 * scale)} y={pan.y % (20 * scale)}
@@ -482,8 +1154,6 @@ export function RelationshipMap({ graph, onChange }: Props) {
             </pattern>
           </defs>
           <rect width="100%" height="100%" fill="url(#rmap-dots)" data-bg="1"/>
-
-          {/* Graph content */}
           <g transform={`translate(${pan.x},${pan.y}) scale(${scale})`}>
             {graph.edges.map(e => renderEdge(e, true))}
             {edgePreview && (
@@ -497,112 +1167,23 @@ export function RelationshipMap({ graph, onChange }: Props) {
       </div>
 
       {/* Right: properties panel */}
-      <div className="w-52 shrink-0 bg-slate-900 border-l border-slate-700 flex flex-col overflow-hidden">
-        <div className="flex items-center justify-between px-3 py-2 border-b border-slate-700">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Properties</span>
-          {(selectedNode || selectedEdge) && (
-            <button onClick={() => { setSelectedNode(null); setSelectedEdge(null); }}
-              className="text-slate-500 hover:text-white"><X size={11}/></button>
-          )}
+      {renderPropertiesPanel()}
+
+      {/* Photo lightbox */}
+      {photoLightbox && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80"
+          onClick={() => setPhotoLightbox(null)}>
+          <div className="relative max-w-3xl max-h-[80vh]" onClick={e => e.stopPropagation()}>
+            <img src={photoLightbox} alt="lightbox" className="max-w-full max-h-[80vh] rounded-lg shadow-2xl"/>
+            <button onClick={() => setPhotoLightbox(null)}
+              className="absolute top-2 right-2 bg-black/60 hover:bg-black/80 text-white rounded-full p-1">
+              <X size={16}/>
+            </button>
+          </div>
         </div>
-
-        <div className="flex-1 overflow-y-auto">
-          {/* Node properties */}
-          {selNode && (() => {
-            const cfg = NODE_CFG[selNode.type];
-            return (
-              <div className="p-3 space-y-3">
-                <div className="flex items-center gap-2 pb-2 border-b border-slate-700"
-                  style={{ borderTopColor: cfg.color, borderTopWidth: 3, paddingTop: 8, marginTop: -4 }}>
-                  <span className="w-3 h-3 rounded-sm shrink-0" style={{ background: cfg.color }}/>
-                  <span className="text-[10px] font-bold uppercase text-slate-300">{cfg.label}</span>
-                </div>
-                <div>
-                  <label className="block text-[10px] text-slate-500 mb-1 uppercase tracking-wide">Label</label>
-                  <input value={selNode.label}
-                    onChange={e => onChange({ ...graph, nodes: graph.nodes.map(n => n.id === selNode.id ? { ...n, label: e.target.value } : n) })}
-                    className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-slate-200 focus:outline-none focus:border-blue-500"/>
-                </div>
-                <div>
-                  <label className="block text-[10px] text-slate-500 mb-1 uppercase tracking-wide">Detail / Subtitle</label>
-                  <input value={selNode.subtitle ?? ''}
-                    onChange={e => onChange({ ...graph, nodes: graph.nodes.map(n => n.id === selNode.id ? { ...n, subtitle: e.target.value } : n) })}
-                    placeholder="e.g. $2,400 est. · May 2025"
-                    className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-slate-200 focus:outline-none focus:border-blue-500"/>
-                </div>
-                <div>
-                  <label className="block text-[10px] text-slate-500 mb-1 uppercase tracking-wide">Type</label>
-                  <select value={selNode.type}
-                    onChange={e => onChange({ ...graph, nodes: graph.nodes.map(n => n.id === selNode.id ? { ...n, type: e.target.value as RNodeType } : n) })}
-                    className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-slate-200 focus:outline-none">
-                    {(Object.entries(NODE_CFG) as [RNodeType, typeof NODE_CFG[RNodeType]][]).map(([t, c]) => (
-                      <option key={t} value={t}>{c.label}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="border-t border-slate-700 pt-2 space-y-1 text-[9px] text-slate-500">
-                  <div>Connections: <span className="text-slate-300">{graph.edges.filter(e => e.from === selNode.id || e.to === selNode.id).length}</span></div>
-                  <div>Position: <span className="font-mono text-slate-400">{Math.round(selNode.x)}, {Math.round(selNode.y)}</span></div>
-                </div>
-                <button onClick={() => {
-                  onChange({ ...graph, nodes: graph.nodes.filter(n => n.id !== selNode.id), edges: graph.edges.filter(e => e.from !== selNode.id && e.to !== selNode.id) });
-                  setSelectedNode(null);
-                }} className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded bg-red-900/30 border border-red-800/50 text-red-400 hover:bg-red-900/50 text-xs">
-                  <Trash2 size={11}/> Delete node
-                </button>
-              </div>
-            );
-          })()}
-
-          {/* Edge properties */}
-          {selEdge && (() => {
-            const fromNode = graph.nodes.find(n => n.id === selEdge.from);
-            const toNode   = graph.nodes.find(n => n.id === selEdge.to);
-            return (
-              <div className="p-3 space-y-3">
-                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 pb-2 border-b border-slate-700">
-                  Connection
-                </div>
-                <div className="text-xs text-slate-300 space-y-1">
-                  <div className="flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-sm" style={{ background: fromNode ? NODE_CFG[fromNode.type].color : '#475569' }}/>
-                    <span>{fromNode?.label ?? '—'}</span>
-                  </div>
-                  <div className="pl-1 text-slate-600">↓</div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-sm" style={{ background: toNode ? NODE_CFG[toNode.type].color : '#475569' }}/>
-                    <span>{toNode?.label ?? '—'}</span>
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-[10px] text-slate-500 mb-1 uppercase tracking-wide">Relationship label</label>
-                  <input value={selEdge.label ?? ''}
-                    onChange={e => onChange({ ...graph, edges: graph.edges.map(ed => ed.id === selEdge.id ? { ...ed, label: e.target.value } : ed) })}
-                    placeholder="e.g. references, drives, requires…"
-                    className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-slate-200 focus:outline-none focus:border-blue-500"/>
-                </div>
-                <button onClick={() => {
-                  onChange({ ...graph, edges: graph.edges.filter(e => e.id !== selEdge.id) });
-                  setSelectedEdge(null);
-                }} className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded bg-red-900/30 border border-red-800/50 text-red-400 hover:bg-red-900/50 text-xs">
-                  <Trash2 size={11}/> Delete connection
-                </button>
-              </div>
-            );
-          })()}
-
-          {!selNode && !selEdge && (
-            <div className="px-4 py-6 text-[10px] text-slate-600 text-center leading-relaxed">
-              Click a node or connection to edit its properties.
-            </div>
-          )}
-        </div>
-      </div>
+      )}
     </div>
   );
-
-  // Suppress unused var warning (editingLabel reserved for future inline editing)
-  void editingLabel;
 
   return (
     <>

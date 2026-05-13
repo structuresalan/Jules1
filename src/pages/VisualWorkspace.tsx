@@ -2267,6 +2267,8 @@ export function VisualWorkspace() {
             <RelationshipMap
               graph={boardGraphs[activeBoardId] ?? { nodes: [], edges: [] }}
               onChange={g => setBoardGraphs(prev => ({ ...prev, [activeBoardId]: g }))}
+              boardNames={Object.fromEntries(BOARD_TREE.filter(b => b.parentId !== null).map(b => [b.id, b.name]))}
+              activeBoardId={activeBoardId}
             />
           </div>
           </div>{/* end bottom strip flex */}
