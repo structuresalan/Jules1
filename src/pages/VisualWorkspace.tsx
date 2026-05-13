@@ -9,10 +9,11 @@ import {
   ChevronRight, ChevronDown, Plus, X,
   Eye, EyeOff, Trash2, Upload,
   Filter, RefreshCw, ChevronLeft,
-  Image, Tag, Stamp, RotateCcw, Hash, Minimize2, Search, Download,
+  Tag, Stamp, Hash, Minimize2, Search, Download,
 } from 'lucide-react';
 import { getActiveProjectId } from '../utils/projectDocuments';
-import { RelationshipMap, RelationshipGraph } from '../components/RelationshipMap';
+import type { RelationshipGraph } from '../components/RelationshipMap';
+import { RelationshipMap } from '../components/RelationshipMap';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -338,15 +339,7 @@ export function VisualWorkspace() {
   // Colour (ref + state so drawing handlers see latest)
   const [color, setColor] = useState('#ef4444');
   const colorRef = useRef('#ef4444');
-  useEffect(() => { colorRef.current        = color;        }, [color]);
-  useEffect(() => { ctxStrokeWidthRef.current= ctxStrokeWidth;}, [ctxStrokeWidth]);
-  useEffect(() => { ctxFontFamilyRef.current = ctxFontFamily; }, [ctxFontFamily]);
-  useEffect(() => { ctxFontSizeRef.current   = ctxFontSize;   }, [ctxFontSize]);
-  useEffect(() => { ctxDashStyleRef.current  = ctxDashStyle;  }, [ctxDashStyle]);
-  useEffect(() => { calibRatioRef.current    = calibRatio;    }, [calibRatio]);
-  useEffect(() => { calibUnitRef.current     = calibUnit;     }, [calibUnit]);
-  useEffect(() => { fillColorRef.current     = fillColor;     }, [fillColor]);
-  useEffect(() => { clipboardRef.current     = clipboard;     }, [clipboard]);
+  useEffect(() => { colorRef.current = color; }, [color]);
 
   // Feature 17: Track fullscreen state
   useEffect(() => {
@@ -417,6 +410,16 @@ export function VisualWorkspace() {
   // Feature 12: Clipboard
   const [clipboard, setClipboard] = useState<Markup[]>([]);
   const clipboardRef = useRef<Markup[]>([]);
+
+  // Sync refs to state so drawing callbacks always see latest values
+  useEffect(() => { ctxStrokeWidthRef.current = ctxStrokeWidth; }, [ctxStrokeWidth]);
+  useEffect(() => { ctxFontFamilyRef.current  = ctxFontFamily;  }, [ctxFontFamily]);
+  useEffect(() => { ctxFontSizeRef.current    = ctxFontSize;    }, [ctxFontSize]);
+  useEffect(() => { ctxDashStyleRef.current   = ctxDashStyle;   }, [ctxDashStyle]);
+  useEffect(() => { calibRatioRef.current     = calibRatio;     }, [calibRatio]);
+  useEffect(() => { calibUnitRef.current      = calibUnit;      }, [calibUnit]);
+  useEffect(() => { fillColorRef.current      = fillColor;      }, [fillColor]);
+  useEffect(() => { clipboardRef.current      = clipboard;      }, [clipboard]);
 
   // Feature 14: Comment input
   const [commentInput, setCommentInput] = useState('');
