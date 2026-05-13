@@ -63,6 +63,8 @@ export interface RNode {
   measurementValue?: string;
   measurementUnit?:  string;
   measurementLimit?: string;
+  // Feature 10: Custom tags
+  tags?: { key: string; value: string }[];
 }
 
 export interface REdge {
@@ -452,6 +454,11 @@ export function RelationshipMap({ graph, onChange, boardNames, activeBoardId }: 
   const [collapsed,       setCollapsed]       = useState<Set<string>>(new Set());
   const [locked,          setLocked]          = useState(false);
   const [showMinimap,     setShowMinimap]     = useState(true);
+  // Feature 8: Edge inline label editing
+  const [editingEdgeId,   setEditingEdgeId]   = useState<string | null>(null);
+  const [editingEdgeText, setEditingEdgeText] = useState('');
+  // Feature 9: Critical path
+  const [criticalPath,    setCriticalPath]    = useState<{ nodeIds: Set<string>; edgeIds: Set<string> } | null>(null);
 
   const svgRef        = useRef<SVGSVGElement>(null);
   const isPanning     = useRef(false);
@@ -738,6 +745,77 @@ export function RelationshipMap({ graph, onChange, boardNames, activeBoardId }: 
     img.src = url;
   }, []);
 
+  // ── Feature 6: Zoom to fit selection ─────────────────────────────────────
+  const fitSelection = useCallback(() => {
+    if (!selectedNode) return;
+    const svgEl = svgRef.current;
+    if (!svgEl) return;
+    // Collect selected + immediate neighbors
+    const ids = new Set<string>([selectedNode]);
+    graph.edges.forEach(e => {
+      if (e.from === selectedNode) ids.add(e.to);
+      if (e.to   === selectedNode) ids.add(e.from);
+    });
+    const nodes = graph.nodes.filter(n => ids.has(n.id));
+    if (nodes.length === 0) return;
+    const pad = 80;
+    const x0 = Math.min(...nodes.map(n => n.x)) - pad;
+    const y0 = Math.min(...nodes.map(n => n.y)) - pad;
+    const x1 = Math.max(...nodes.map(n => n.x + EXP_W)) + pad;
+    const y1 = Math.max(...nodes.map(n => n.y + EXP_H)) + pad;
+    const gw = x1 - x0, gh = y1 - y0;
+    const vw = svgEl.clientWidth, vh = svgEl.clientHeight;
+    const newScale = Math.min(vw / gw, vh / gh, 2);
+    setScale(newScale);
+    setPan({ x: vw / 2 - (x0 + gw / 2) * newScale, y: vh / 2 - (y0 + gh / 2) * newScale });
+  }, [selectedNode, graph]);
+
+  // ── Feature 9: Critical path ──────────────────────────────────────────────
+  const computeCriticalPath = useCallback(() => {
+    if (criticalPath) { setCriticalPath(null); return; }
+    const nodes = graph.nodes;
+    const edges = graph.edges;
+    if (nodes.length === 0) return;
+
+    // Build adjacency
+    const outEdgesMap: Record<string, { to: string; edgeId: string }[]> = {};
+    nodes.forEach(n => { outEdgesMap[n.id] = []; });
+    edges.forEach(e => { outEdgesMap[e.from]?.push({ to: e.to, edgeId: e.id }); });
+
+    // DFS longest path from each root
+    let bestPath: string[] = [];
+    let bestEdgePath: string[] = [];
+
+    const dfs = (nodeId: string, pathNodes: string[], pathEdges: string[], visited: Set<string>) => {
+      if (visited.has(nodeId)) return;
+      visited.add(nodeId);
+      pathNodes.push(nodeId);
+      if (pathNodes.length > bestPath.length) {
+        bestPath = [...pathNodes];
+        bestEdgePath = [...pathEdges];
+      }
+      for (const { to, edgeId } of (outEdgesMap[nodeId] ?? [])) {
+        dfs(to, pathNodes, [...pathEdges, edgeId], new Set(visited));
+      }
+      pathNodes.pop();
+    };
+
+    // Find roots (no incoming edges)
+    const hasIncoming = new Set(edges.map(e => e.to));
+    const roots = nodes.filter(n => !hasIncoming.has(n.id));
+    (roots.length > 0 ? roots : nodes.slice(0, 1)).forEach(r => {
+      dfs(r.id, [], [], new Set());
+    });
+
+    setCriticalPath({
+      nodeIds: new Set(bestPath),
+      edgeIds: new Set(bestEdgePath),
+    });
+  }, [graph, criticalPath]);
+
+  // Feature 9: Reset critical path when selectedNode changes
+  useEffect(() => { setCriticalPath(null); }, [selectedNode]);
+
   // ── Node renderer ─────────────────────────────────────────────────────────
   const renderNode = (n: RNode, exp: boolean) => {
     const cfg = NODE_CFG[n.type];
@@ -748,7 +826,12 @@ export function RelationshipMap({ graph, onChange, boardNames, activeBoardId }: 
     const isSel = n.id === selectedNode;
 
     // Feature 4: dim non-connected nodes when a selection exists
-    const dimmed = exp && connectedPath !== null && !connectedPath.nodeIds.has(n.id);
+    // Feature 9: if no connectedPath, use criticalPath for dimming
+    const dimmed = exp && (
+      connectedPath !== null
+        ? !connectedPath.nodeIds.has(n.id)
+        : criticalPath !== null && !criticalPath.nodeIds.has(n.id)
+    );
 
     // Risk node color override
     let nodeColor = cfg.color;
@@ -864,6 +947,18 @@ export function RelationshipMap({ graph, onChange, boardNames, activeBoardId }: 
 
         {!isCollapsed && bodyExtras}
 
+        {/* Feature 9: Critical path gold left border */}
+        {exp && criticalPath && connectedPath === null && criticalPath.nodeIds.has(n.id) && (
+          <rect x={-2} y={0} width={3} height={h} fill="#f59e0b"/>
+        )}
+
+        {/* Feature 10: Tags badge */}
+        {exp && n.tags && n.tags.length > 0 && (
+          <text x={w - 6} y={hdr - 4} fill="white" fontSize={7} fontFamily="sans-serif" textAnchor="end" opacity={0.8}>
+            {n.tags.length}⚑
+          </text>
+        )}
+
         {exp && (
           <circle cx={0} cy={isCollapsed ? EXP_HDR / 2 : h / 2} r={6}
             fill="#0f172a" stroke={nodeColor} strokeWidth={1.5}
@@ -897,7 +992,15 @@ export function RelationshipMap({ graph, onChange, boardNames, activeBoardId }: 
     const mx = (p1.x + p2.x) / 2, my = (p1.y + p2.y) / 2;
 
     // Feature 4: dim non-connected edges
-    const dimmedEdge = exp && connectedPath !== null && !connectedPath.edgeIds.has(ed.id);
+    // Feature 9: if no connectedPath, use criticalPath
+    const dimmedEdge = exp && (
+      connectedPath !== null
+        ? !connectedPath.edgeIds.has(ed.id)
+        : criticalPath !== null && !criticalPath.edgeIds.has(ed.id)
+    );
+    // Feature 9: critical path edge color
+    const isOnCriticalPath = exp && criticalPath !== null && connectedPath === null && criticalPath.edgeIds.has(ed.id);
+    const edgeStroke = isSel ? '#60a5fa' : isOnCriticalPath ? '#f59e0b' : '#475569';
 
     return (
       <g key={ed.id}>
@@ -907,24 +1010,37 @@ export function RelationshipMap({ graph, onChange, boardNames, activeBoardId }: 
           onClick={() => { setSelectedEdge(ed.id); setSelectedNode(null); }}/>
         <path d={bezierPath(p1.x, p1.y, p2.x, p2.y)}
           fill="none"
-          stroke={isSel ? '#60a5fa' : '#475569'}
+          stroke={edgeStroke}
           strokeWidth={exp ? (isSel ? 2 : 1.5) : 1}
           strokeDasharray={exp ? undefined : '5 3'}
           opacity={dimmedEdge ? 0.2 : undefined}/>
         {exp && !dimmedEdge && (
           <polygon
             points={`${p2.x - 8},${p2.y - 4} ${p2.x},${p2.y} ${p2.x - 8},${p2.y + 4}`}
-            fill={isSel ? '#60a5fa' : '#475569'}/>
+            fill={edgeStroke}/>
         )}
         {exp && dimmedEdge && (
           <polygon
             points={`${p2.x - 8},${p2.y - 4} ${p2.x},${p2.y} ${p2.x - 8},${p2.y + 4}`}
-            fill={isSel ? '#60a5fa' : '#475569'}
+            fill={edgeStroke}
             opacity={0.2}/>
         )}
-        {exp && ed.label && (
-          <text x={mx} y={my - 5} fill="#64748b" fontSize={8}
-            fontFamily="sans-serif" textAnchor="middle">{ed.label}</text>
+        {/* Feature 8: Edge label with double-click to edit */}
+        {exp && (
+          <g onDoubleClick={e => {
+            e.stopPropagation();
+            setEditingEdgeId(ed.id);
+            setEditingEdgeText(ed.label ?? '');
+          }}>
+            <rect x={mx - 30} y={my - 10} width={60} height={20} fill="transparent" style={{ cursor: 'text' }}/>
+            {ed.label ? (
+              <text x={mx} y={my - 5} fill="#64748b" fontSize={8} fontFamily="sans-serif" textAnchor="middle"
+                style={{ cursor: 'text' }}>{ed.label}</text>
+            ) : (
+              <text x={mx} y={my - 5} fill="#334155" fontSize={8} fontFamily="sans-serif" textAnchor="middle"
+                style={{ cursor: 'text' }}>+label</text>
+            )}
+          </g>
         )}
       </g>
     );
@@ -943,18 +1059,45 @@ export function RelationshipMap({ graph, onChange, boardNames, activeBoardId }: 
     }
     return (
       <div className="flex flex-col h-full bg-slate-900 overflow-hidden">
-        <div className="flex items-center justify-between px-2 py-1.5 border-b border-slate-700 shrink-0">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Relationship Map</span>
-          <div className="flex gap-1">
-            <button onClick={() => setShowPalette(v => !v)} title="Add node"
-              className={`p-0.5 rounded transition-colors ${showPalette ? 'text-blue-400' : 'text-slate-400 hover:text-white'}`}>
-              <Plus size={11}/>
-            </button>
-            <button onClick={() => setExpanded(true)} title="Expand to Blueprint editor"
-              className="p-0.5 text-slate-400 hover:text-white rounded">
-              <Maximize2 size={11}/>
-            </button>
+        <div className="border-b border-slate-700 shrink-0">
+          <div className="flex items-center justify-between px-2 py-1.5">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Relationship Map</span>
+            <div className="flex gap-1">
+              <button onClick={() => setShowPalette(v => !v)} title="Add node"
+                className={`p-0.5 rounded transition-colors ${showPalette ? 'text-blue-400' : 'text-slate-400 hover:text-white'}`}>
+                <Plus size={11}/>
+              </button>
+              <button onClick={() => setExpanded(true)} title="Expand to Blueprint editor"
+                className="p-0.5 text-slate-400 hover:text-white rounded">
+                <Maximize2 size={11}/>
+              </button>
+            </div>
           </div>
+          {/* Feature 7: Summary strip */}
+          {graph.nodes.length > 0 && (() => {
+            const TODAY_STR = new Date().toISOString().slice(0, 10);
+            const openFindings = graph.nodes.filter(n =>
+              (n.type === 'finding' || n.type === 'defect') && n.status !== 'resolved'
+            ).length;
+            const totalCost = graph.nodes
+              .filter(n => n.type === 'cost' && n.costAmount)
+              .reduce((s, n) => s + (n.costAmount ?? 0), 0);
+            const overdue = graph.nodes.filter(n =>
+              n.type === 'deadline' && n.dueDate && n.dueDate < TODAY_STR && n.status !== 'resolved'
+            ).length;
+            const parts: React.ReactNode[] = [];
+            if (openFindings > 0) parts.push(<span key="f" className="text-slate-400">{openFindings} finding{openFindings > 1 ? 's' : ''}</span>);
+            if (totalCost > 0) parts.push(<span key="c" className="text-slate-400">${totalCost.toLocaleString()}</span>);
+            if (overdue > 0) parts.push(<span key="o" className="text-red-400">{overdue} overdue</span>);
+            if (parts.length === 0) return null;
+            return (
+              <div className="flex items-center gap-2 px-2 pb-1 text-[9px] flex-wrap">
+                {parts.map((p, i) => (
+                  <React.Fragment key={i}>{i > 0 && <span className="text-slate-700">·</span>}{p}</React.Fragment>
+                ))}
+              </div>
+            );
+          })()}
         </div>
         {showPalette && (
           <div className="fixed z-50 bg-slate-800 border border-slate-600 rounded-lg shadow-2xl p-2 grid grid-cols-2 gap-1 w-52"
@@ -1307,6 +1450,45 @@ export function RelationshipMap({ graph, onChange, boardNames, activeBoardId }: 
                 </div>
               )}
 
+              {/* Custom tags */}
+              <div className="border-t border-slate-700 pt-2">
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-[10px] text-slate-500 uppercase tracking-wide">Custom Fields</label>
+                  <button onClick={() => commit({
+                    ...graph,
+                    nodes: graph.nodes.map(n => n.id === selNode.id
+                      ? { ...n, tags: [...(n.tags ?? []), { key: '', value: '' }] }
+                      : n)
+                  })} className="text-[10px] text-blue-400 hover:text-blue-300 flex items-center gap-0.5">
+                    + Add
+                  </button>
+                </div>
+                {(selNode.tags ?? []).map((tag, i) => (
+                  <div key={i} className="flex items-center gap-1 mb-1">
+                    <input
+                      value={tag.key}
+                      onChange={e => commit({ ...graph, nodes: graph.nodes.map(n => n.id === selNode.id ? {
+                        ...n, tags: (n.tags ?? []).map((t, j) => j === i ? { ...t, key: e.target.value } : t)
+                      } : n)})}
+                      placeholder="Field"
+                      className="w-16 bg-slate-700 border border-slate-600 rounded px-1.5 py-0.5 text-[10px] text-slate-300 focus:outline-none focus:border-blue-500"/>
+                    <input
+                      value={tag.value}
+                      onChange={e => commit({ ...graph, nodes: graph.nodes.map(n => n.id === selNode.id ? {
+                        ...n, tags: (n.tags ?? []).map((t, j) => j === i ? { ...t, value: e.target.value } : t)
+                      } : n)})}
+                      placeholder="Value"
+                      className="flex-1 bg-slate-700 border border-slate-600 rounded px-1.5 py-0.5 text-[10px] text-slate-300 focus:outline-none focus:border-blue-500"/>
+                    <button onClick={() => commit({ ...graph, nodes: graph.nodes.map(n => n.id === selNode.id ? {
+                        ...n, tags: (n.tags ?? []).filter((_, j) => j !== i)
+                      } : n)})}
+                      className="text-slate-600 hover:text-red-400 shrink-0">
+                      <X size={9}/>
+                    </button>
+                  </div>
+                ))}
+              </div>
+
               {/* Stats */}
               <div className="border-t border-slate-700 pt-2 space-y-1 text-[9px] text-slate-500">
                 <div>Connections: <span className="text-slate-300">{graph.edges.filter(e => e.from === selNode.id || e.to === selNode.id).length}</span></div>
@@ -1472,6 +1654,22 @@ export function RelationshipMap({ graph, onChange, boardNames, activeBoardId }: 
             <button onClick={() => { setPan({ x: 60, y: 60 }); setScale(1); }}
               className="text-[10px] text-slate-400 hover:text-white border border-slate-700 rounded px-2 py-1">Fit</button>
 
+            {/* Feature 6: Fit Selection */}
+            <button onClick={fitSelection} disabled={!selectedNode}
+              title="Fit selection (zoom to selected + neighbors)"
+              className={`p-1 rounded hover:bg-slate-700 text-[10px] font-mono ${selectedNode ? 'text-slate-300 hover:text-white' : 'text-slate-600 cursor-not-allowed'}`}>
+              SEL
+            </button>
+
+            {/* Feature 9: Critical Path toggle */}
+            <button onClick={computeCriticalPath}
+              title="Highlight critical path (longest chain)"
+              className={`px-2 py-1 rounded text-[10px] font-mono border transition-colors ${
+                criticalPath ? 'border-amber-500 text-amber-400 bg-amber-900/20' : 'border-slate-600 text-slate-400 hover:text-white hover:border-slate-500'
+              }`}>
+              PATH
+            </button>
+
             {/* Auto-layout (Feature 2) */}
             <button onClick={autoLayout} title="Auto-arrange nodes"
               className="flex items-center gap-1 text-[10px] text-slate-300 hover:text-white border border-slate-700 rounded px-2 py-1 hover:bg-slate-700 transition-colors">
@@ -1524,6 +1722,39 @@ export function RelationshipMap({ graph, onChange, boardNames, activeBoardId }: 
                 style={{ pointerEvents: 'none' }}/>
             )}
             {graph.nodes.map(n => renderNode(n, true))}
+            {/* Feature 8: Edge inline label editing */}
+            {editingEdgeId && (() => {
+              const ed = graph.edges.find(e => e.id === editingEdgeId);
+              if (!ed) return null;
+              const fn = graph.nodes.find(n => n.id === ed.from);
+              const tn = graph.nodes.find(n => n.id === ed.to);
+              if (!fn || !tn) return null;
+              const p1 = { x: fn.x + EXP_W, y: fn.y + EXP_H / 2 };
+              const p2 = { x: tn.x,         y: tn.y + EXP_H / 2 };
+              const mx = (p1.x + p2.x) / 2, my = (p1.y + p2.y) / 2;
+              return (
+                <foreignObject x={mx - 50} y={my - 14} width={100} height={26}>
+                  <input
+                    autoFocus
+                    value={editingEdgeText}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditingEdgeText(e.target.value)}
+                    onBlur={() => {
+                      commit({ ...graph, edges: graph.edges.map(e => e.id === editingEdgeId ? { ...e, label: editingEdgeText } : e) });
+                      setEditingEdgeId(null);
+                    }}
+                    onKeyDown={(e: React.KeyboardEvent) => {
+                      if (e.key === 'Enter') { (e.target as HTMLInputElement).blur(); }
+                      if (e.key === 'Escape') { setEditingEdgeId(null); }
+                    }}
+                    style={{
+                      width: '100%', height: '100%', background: '#1e293b', border: '1px solid #3b82f6',
+                      borderRadius: 3, color: '#f1f5f9', fontSize: 10, fontFamily: 'sans-serif',
+                      padding: '0 4px', outline: 'none', textAlign: 'center',
+                    }}
+                  />
+                </foreignObject>
+              );
+            })()}
           </g>
         </svg>
 
