@@ -10,7 +10,9 @@ import {
   Eye, EyeOff, Trash2, Upload,
   Filter, RefreshCw, ChevronLeft,
   Tag, Stamp, Hash, Minimize2, Search, Download,
+  Home, Frame, Wind, Database, Network,
 } from 'lucide-react';
+import { NavLink } from 'react-router-dom';
 import { getActiveProjectId } from '../utils/projectDocuments';
 import type { RelationshipGraph } from '../components/RelationshipMap';
 import { RelationshipMap } from '../components/RelationshipMap';
@@ -2238,6 +2240,27 @@ export function VisualWorkspace() {
               )}
             </div>
           )}
+
+          {/* ── Page navigation ── */}
+          <div className="shrink-0 border-t border-slate-700 px-2 py-2">
+            <div className="text-[9px] font-bold uppercase tracking-wider text-slate-500 px-1 mb-1">Navigate</div>
+            <div className="space-y-0.5">
+              {[
+                { to: '/dashboard', icon: <Home size={13}/>, label: 'Dashboard' },
+                { to: '/steel',     icon: <Frame size={13}/>, label: 'Steel Design' },
+                { to: '/concrete',  icon: <Layers size={13}/>, label: 'Concrete Design' },
+                { to: '/loads',     icon: <Wind size={13}/>, label: 'Loads' },
+                { to: '/documents', icon: <FileText size={13}/>, label: 'Documents' },
+                { to: '/variables', icon: <Database size={13}/>, label: 'Variables' },
+              ].map(item => (
+                <NavLink key={item.to} to={item.to}
+                  className="flex items-center gap-2 px-2 py-1 rounded text-xs text-slate-400 hover:bg-slate-700 hover:text-white transition-colors">
+                  {item.icon}
+                  {item.label}
+                </NavLink>
+              ))}
+            </div>
+          </div>
         </div>
 
         {/* ── Canvas + schedule ───────────────────────────────────────────── */}
