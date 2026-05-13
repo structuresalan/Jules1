@@ -124,11 +124,13 @@ export const MainLayout: React.FC = () => {
         <Menu size={20} />
       </button>
 
-      {/* Sidebar */}
+      {/* Sidebar — hidden on Visual Workspace to avoid double sidebar */}
       <div
         className={`fixed md:static inset-y-0 left-0 transform ${
           isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
-        } md:translate-x-0 transition duration-200 ease-in-out z-40 w-60 shrink-0 flex flex-col bg-slate-950 border-r border-slate-700`}
+        } md:translate-x-0 transition duration-200 ease-in-out z-40 w-60 shrink-0 flex flex-col bg-slate-950 border-r border-slate-700 ${
+          isVisualWorkspace ? 'hidden' : ''
+        }`}
       >
         {/* Logo area */}
         <div className="px-4 py-4 border-b border-slate-700">
