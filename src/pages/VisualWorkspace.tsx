@@ -10,7 +10,7 @@ import {
   Eye, EyeOff, Trash2, Upload,
   Filter, RefreshCw, ChevronLeft,
   Tag, Stamp, Hash, Minimize2, Search, Download,
-  Home, Frame, Wind, Database, Network,
+  Home, Frame, Wind, Database,
 } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 import { getActiveProjectId } from '../utils/projectDocuments';
