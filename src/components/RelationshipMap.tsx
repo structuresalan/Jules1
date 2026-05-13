@@ -2,6 +2,7 @@ import React, { useRef, useState, useCallback, useEffect, useMemo } from 'react'
 import {
   Maximize2, Minimize2, Plus, Trash2, ZoomIn, ZoomOut, X,
   Download, FileText, LayoutTemplate, LayoutGrid, Undo2, Redo2,
+  Lock, Unlock,
 } from 'lucide-react';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -447,6 +448,10 @@ export function RelationshipMap({ graph, onChange, boardNames, activeBoardId }: 
   const [edgePreview,     setEdgePreview]     = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
   const [photoLightbox,   setPhotoLightbox]   = useState<string | null>(null);
   const [newCheckItem,    setNewCheckItem]    = useState('');
+  const [ctxMenu,         setCtxMenu]         = useState<{ nodeId: string; x: number; y: number } | null>(null);
+  const [collapsed,       setCollapsed]       = useState<Set<string>>(new Set());
+  const [locked,          setLocked]          = useState(false);
+  const [showMinimap,     setShowMinimap]     = useState(true);
 
   const svgRef        = useRef<SVGSVGElement>(null);
   const isPanning     = useRef(false);
@@ -509,6 +514,15 @@ export function RelationshipMap({ graph, onChange, boardNames, activeBoardId }: 
           setSelectedEdge(null);
         }
       }
+      if ((e.ctrlKey || e.metaKey) && e.key === 'd' && selectedNode && !(e.target instanceof HTMLInputElement)) {
+        e.preventDefault();
+        const src = graph.nodes.find(n => n.id === selectedNode);
+        if (src) {
+          const newNode = { ...src, id: genRid(), x: src.x + 30, y: src.y + 30 };
+          commit({ ...graph, nodes: [...graph.nodes, newNode] });
+          setSelectedNode(newNode.id);
+        }
+      }
     };
     window.addEventListener('keydown', h);
     return () => window.removeEventListener('keydown', h);
@@ -540,7 +554,7 @@ export function RelationshipMap({ graph, onChange, boardNames, activeBoardId }: 
       (e.currentTarget as SVGSVGElement).setPointerCapture(e.pointerId);
     }
     if (t.tagName === 'svg' || t.getAttribute('data-bg') === '1') {
-      setSelectedNode(null); setSelectedEdge(null);
+      setSelectedNode(null); setSelectedEdge(null); setCtxMenu(null);
     }
   }, [pan]);
 
@@ -594,6 +608,7 @@ export function RelationshipMap({ graph, onChange, boardNames, activeBoardId }: 
   const onNodeDown = useCallback((e: React.PointerEvent, nodeId: string) => {
     e.stopPropagation();
     if (e.button !== 0) return;
+    if (locked) { setSelectedNode(nodeId); setSelectedEdge(null); return; }
     setSelectedNode(nodeId); setSelectedEdge(null);
     const node = graph.nodes.find(n => n.id === nodeId)!;
     const cv = toCanvas(e.clientX, e.clientY);
@@ -614,9 +629,10 @@ export function RelationshipMap({ graph, onChange, boardNames, activeBoardId }: 
 
   const onOutPortDown = useCallback((e: React.PointerEvent, nodeId: string) => {
     e.stopPropagation();
+    if (locked) return;
     drawingFrom.current = nodeId;
     svgRef.current?.setPointerCapture(e.pointerId);
-  }, []);
+  }, [locked]);
 
   const onInPortUp = useCallback((e: React.PointerEvent, nodeId: string) => {
     e.stopPropagation();
@@ -725,8 +741,9 @@ export function RelationshipMap({ graph, onChange, boardNames, activeBoardId }: 
   // ── Node renderer ─────────────────────────────────────────────────────────
   const renderNode = (n: RNode, exp: boolean) => {
     const cfg = NODE_CFG[n.type];
+    const isCollapsed = exp && collapsed.has(n.id);
     const w   = exp ? EXP_W : CMP_W;
-    const h   = exp ? EXP_H : CMP_H;
+    const h   = isCollapsed ? EXP_HDR : (exp ? EXP_H : CMP_H);
     const hdr = exp ? EXP_HDR : CMP_HDR;
     const isSel = n.id === selectedNode;
 
@@ -741,7 +758,7 @@ export function RelationshipMap({ graph, onChange, boardNames, activeBoardId }: 
 
     // Extra body content for expanded view
     const bodyExtras: React.ReactNode[] = [];
-    if (exp) {
+    if (exp && !isCollapsed) {
       // Status pill (not 'open', only show non-default)
       if (n.status && n.status !== 'open') {
         bodyExtras.push(
@@ -805,7 +822,12 @@ export function RelationshipMap({ graph, onChange, boardNames, activeBoardId }: 
         opacity={dimmed ? 0.3 : undefined}
         style={{ cursor: exp ? 'grab' : 'pointer' }}
         onPointerDown={exp ? (e) => onNodeDown(e, n.id) : undefined}
-        onPointerUp={exp ? (e) => onNodeClick(e, n.id) : undefined}>
+        onPointerUp={exp ? (e) => onNodeClick(e, n.id) : undefined}
+        onContextMenu={exp ? (e: React.MouseEvent) => {
+          e.preventDefault();
+          e.stopPropagation();
+          if (!locked) setCtxMenu({ nodeId: n.id, x: e.clientX, y: e.clientY });
+        } : undefined}>
 
         {isSel && <rect x={-3} y={-3} width={w + 6} height={h + 6} rx={5}
           fill="none" stroke="#60a5fa" strokeWidth={1.5} strokeDasharray="4 2"/>}
@@ -814,7 +836,11 @@ export function RelationshipMap({ graph, onChange, boardNames, activeBoardId }: 
           fill="#1e293b" stroke={isSel ? '#60a5fa' : nodeColor} strokeWidth={isSel ? 1.5 : 1}/>
 
         <path d={`M 4 0 L ${w - 4} 0 Q ${w} 0 ${w} 4 L ${w} ${hdr} L 0 ${hdr} L 0 4 Q 0 0 4 0 Z`}
-          fill={nodeColor}/>
+          fill={nodeColor}
+          onDoubleClick={exp ? (e: React.MouseEvent) => {
+            e.stopPropagation();
+            setCollapsed(prev => { const s = new Set(prev); s.has(n.id) ? s.delete(n.id) : s.add(n.id); return s; });
+          } : undefined}/>
 
         <text x={exp ? 7 : 5} y={exp ? 15 : 10}
           fill="white" fontSize={exp ? 9 : 7}
@@ -822,28 +848,30 @@ export function RelationshipMap({ graph, onChange, boardNames, activeBoardId }: 
           {exp ? cfg.label.toUpperCase() : cfg.headerText}
         </text>
 
-        <text x={exp ? 7 : 5} y={hdr + (exp ? 13 : 11)}
-          fill="#f1f5f9" fontSize={exp ? 10.5 : 8}
-          fontFamily="sans-serif" fontWeight="600">
-          {n.label.length > (exp ? 19 : 11) ? n.label.slice(0, exp ? 19 : 11) + '…' : n.label}
-        </text>
+        {!isCollapsed && (
+          <text x={exp ? 7 : 5} y={hdr + (exp ? 13 : 11)}
+            fill="#f1f5f9" fontSize={exp ? 10.5 : 8}
+            fontFamily="sans-serif" fontWeight="600">
+            {n.label.length > (exp ? 19 : 11) ? n.label.slice(0, exp ? 19 : 11) + '…' : n.label}
+          </text>
+        )}
 
-        {exp && n.subtitle && (
+        {!isCollapsed && exp && n.subtitle && (
           <text x={7} y={hdr + 29} fill="#94a3b8" fontSize={8.5} fontFamily="sans-serif">
             {n.subtitle.length > 23 ? n.subtitle.slice(0, 23) + '…' : n.subtitle}
           </text>
         )}
 
-        {bodyExtras}
+        {!isCollapsed && bodyExtras}
 
         {exp && (
-          <circle cx={0} cy={h / 2} r={6}
+          <circle cx={0} cy={isCollapsed ? EXP_HDR / 2 : h / 2} r={6}
             fill="#0f172a" stroke={nodeColor} strokeWidth={1.5}
             style={{ cursor: 'crosshair', pointerEvents: 'all' }}
             onPointerUp={e => onInPortUp(e, n.id)}/>
         )}
         {exp && (
-          <circle cx={w} cy={h / 2} r={6}
+          <circle cx={w} cy={isCollapsed ? EXP_HDR / 2 : h / 2} r={6}
             fill={nodeColor} stroke="white" strokeWidth={1}
             style={{ cursor: 'crosshair', pointerEvents: 'all' }}
             onPointerDown={e => onOutPortDown(e, n.id)}/>
@@ -857,8 +885,14 @@ export function RelationshipMap({ graph, onChange, boardNames, activeBoardId }: 
     const fn = graph.nodes.find(n => n.id === ed.from);
     const tn = graph.nodes.find(n => n.id === ed.to);
     if (!fn || !tn) return null;
-    const p1 = outPort(fn, exp);
-    const p2 = inPort(tn, exp);
+    const fnCollapsed = exp && collapsed.has(fn.id);
+    const tnCollapsed = exp && collapsed.has(tn.id);
+    const p1 = exp
+      ? { x: fn.x + EXP_W, y: fn.y + (fnCollapsed ? EXP_HDR / 2 : EXP_H / 2) }
+      : outPort(fn, exp);
+    const p2 = exp
+      ? { x: tn.x, y: tn.y + (tnCollapsed ? EXP_HDR / 2 : EXP_H / 2) }
+      : inPort(tn, exp);
     const isSel = ed.id === selectedEdge;
     const mx = (p1.x + p2.x) / 2, my = (p1.y + p2.y) / 2;
 
@@ -973,7 +1007,13 @@ export function RelationshipMap({ graph, onChange, boardNames, activeBoardId }: 
         )}
       </div>
       <div className="flex-1 overflow-y-auto">
-        {selNode && (() => {
+        {locked && (
+          <div className="px-4 py-6 text-center text-xs text-amber-400 space-y-2">
+            <div>🔒 Graph is locked</div>
+            <div className="text-slate-500">Unlock to edit nodes and connections.</div>
+          </div>
+        )}
+        {!locked && selNode && (() => {
           const cfg = NODE_CFG[selNode.type];
           const sc  = riskScore(selNode);
           return (
@@ -1283,7 +1323,7 @@ export function RelationshipMap({ graph, onChange, boardNames, activeBoardId }: 
           );
         })()}
 
-        {selEdge && (() => {
+        {!locked && selEdge && (() => {
           const fromNode = graph.nodes.find(n => n.id === selEdge.from);
           const toNode   = graph.nodes.find(n => n.id === selEdge.to);
           return (
@@ -1317,7 +1357,7 @@ export function RelationshipMap({ graph, onChange, boardNames, activeBoardId }: 
           );
         })()}
 
-        {!selNode && !selEdge && (
+        {!locked && !selNode && !selEdge && (
           <div className="px-4 py-6 text-[10px] text-slate-600 text-center leading-relaxed">
             Click a node or connection to edit its properties.
           </div>
@@ -1349,6 +1389,7 @@ export function RelationshipMap({ graph, onChange, boardNames, activeBoardId }: 
           <div>● Drag output port to connect</div>
           <div>● Scroll to zoom</div>
           <div>● Del to delete selected</div>
+          <div>● Ctrl+D to duplicate</div>
         </div>
       </div>
 
@@ -1437,6 +1478,19 @@ export function RelationshipMap({ graph, onChange, boardNames, activeBoardId }: 
               <LayoutGrid size={11}/> Arrange
             </button>
 
+            {/* Lock / Unlock */}
+            <button onClick={() => setLocked(v => !v)}
+              title={locked ? 'Unlock graph' : 'Lock graph'}
+              className={`p-1 rounded hover:bg-slate-700 ${locked ? 'text-amber-400' : 'text-slate-400 hover:text-white'}`}>
+              {locked ? <Lock size={13}/> : <Unlock size={13}/>}
+            </button>
+
+            {/* Minimap toggle */}
+            <button onClick={() => setShowMinimap(v => !v)} title="Toggle minimap"
+              className={`p-1 rounded hover:bg-slate-700 text-[10px] font-mono ${showMinimap ? 'text-blue-400' : 'text-slate-400 hover:text-white'}`}>
+              MAP
+            </button>
+
             <button onClick={() => { setExpanded(false); setSelectedNode(null); setSelectedEdge(null); }}
               title="Collapse (Esc)"
               className="p-1 text-slate-400 hover:text-white rounded hover:bg-slate-700">
@@ -1445,8 +1499,9 @@ export function RelationshipMap({ graph, onChange, boardNames, activeBoardId }: 
           </div>
         </div>
 
-        {/* SVG Canvas */}
-        <svg ref={svgRef} className="flex-1"
+        {/* SVG Canvas + overlays */}
+        <div className="flex-1 relative overflow-hidden">
+        <svg ref={svgRef} className="w-full h-full"
           onPointerDown={onSvgDown}
           onPointerMove={onSvgMove}
           onPointerUp={onSvgUp}
@@ -1471,6 +1526,99 @@ export function RelationshipMap({ graph, onChange, boardNames, activeBoardId }: 
             {graph.nodes.map(n => renderNode(n, true))}
           </g>
         </svg>
+
+        {/* Minimap overlay */}
+        {showMinimap && graph.nodes.length > 0 && (() => {
+          const MM_W = 160, MM_H = 100, MM_PAD = 8;
+          const xs = graph.nodes.map(n => n.x), ys = graph.nodes.map(n => n.y);
+          const gx0 = Math.min(...xs) - 20, gy0 = Math.min(...ys) - 20;
+          const gx1 = Math.max(...xs) + EXP_W + 20, gy1 = Math.max(...ys) + EXP_H + 20;
+          const gw = gx1 - gx0, gh = gy1 - gy0;
+          const scaleX = MM_W / gw, scaleY = MM_H / gh;
+          const mmScale = Math.min(scaleX, scaleY, 0.3);
+
+          const svgEl = svgRef.current;
+          const vpW = svgEl ? svgEl.clientWidth  / scale : 800;
+          const vpH = svgEl ? svgEl.clientHeight / scale : 500;
+          const vpX = -pan.x / scale, vpY = -pan.y / scale;
+
+          const toMm = (gx: number, gy: number) => ({
+            x: (gx - gx0) * mmScale + MM_PAD,
+            y: (gy - gy0) * mmScale + MM_PAD,
+          });
+
+          return (
+            <div className="absolute bottom-3 right-3 z-10 bg-slate-900/90 border border-slate-600 rounded-lg overflow-hidden"
+              style={{ width: MM_W + MM_PAD * 2, height: MM_H + MM_PAD * 2 }}>
+              <button onClick={() => setShowMinimap(false)}
+                className="absolute top-0.5 right-0.5 text-slate-600 hover:text-slate-300 z-10 leading-none text-[10px] px-1">×</button>
+              <svg width={MM_W + MM_PAD * 2} height={MM_H + MM_PAD * 2} style={{ display: 'block' }}>
+                {graph.nodes.map(n => {
+                  const cfg = NODE_CFG[n.type];
+                  const pos = toMm(n.x, n.y);
+                  const nw = Math.max(EXP_W * mmScale, 6);
+                  const nh = Math.max(EXP_H * mmScale, 4);
+                  return (
+                    <rect key={n.id} x={pos.x} y={pos.y} width={nw} height={nh} rx={1}
+                      fill={cfg.color} opacity={n.id === selectedNode ? 1 : 0.6}/>
+                  );
+                })}
+                {(() => {
+                  const vp = toMm(vpX, vpY);
+                  return <rect x={vp.x} y={vp.y}
+                    width={Math.max(vpW * mmScale, 10)} height={Math.max(vpH * mmScale, 8)}
+                    fill="none" stroke="#60a5fa" strokeWidth={1} rx={1} opacity={0.7}/>;
+                })()}
+              </svg>
+            </div>
+          );
+        })()}
+
+        {/* Context menu */}
+        {ctxMenu && (() => {
+          const ctxNode = graph.nodes.find(n => n.id === ctxMenu.nodeId);
+          if (!ctxNode) return null;
+          return (
+            <div
+              className="fixed z-[60] bg-slate-800 border border-slate-600 rounded-lg shadow-2xl py-1 w-44 text-xs"
+              style={{ left: ctxMenu.x, top: ctxMenu.y }}
+              onPointerDown={e => e.stopPropagation()}>
+              <button onClick={() => {
+                const newNode = { ...ctxNode, id: genRid(), x: ctxNode.x + 30, y: ctxNode.y + 30 };
+                commit({ ...graph, nodes: [...graph.nodes, newNode] });
+                setCtxMenu(null);
+              }} className="flex items-center gap-2 w-full px-3 py-2 text-slate-300 hover:bg-slate-700">
+                Duplicate
+              </button>
+              <button onClick={() => {
+                setCollapsed(prev => { const s = new Set(prev); s.has(ctxNode.id) ? s.delete(ctxNode.id) : s.add(ctxNode.id); return s; });
+                setCtxMenu(null);
+              }} className="flex items-center gap-2 w-full px-3 py-2 text-slate-300 hover:bg-slate-700">
+                {collapsed.has(ctxMenu.nodeId) ? 'Expand node' : 'Collapse node'}
+              </button>
+              <div className="border-t border-slate-700 my-1"/>
+              <div className="px-3 py-1 text-[9px] text-slate-500 uppercase tracking-wider">Set status</div>
+              {(['open','in-progress','resolved','deferred'] as RNodeStatus[]).map(s => (
+                <button key={s} onClick={() => {
+                  commit({ ...graph, nodes: graph.nodes.map(n => n.id === ctxNode.id ? { ...n, status: s } : n) });
+                  setCtxMenu(null);
+                }} className="flex items-center gap-2 w-full px-3 py-1.5 text-slate-300 hover:bg-slate-700 capitalize">
+                  <span className="w-2 h-2 rounded-full shrink-0" style={{ background: STATUS_COLOR[s] }}/>
+                  {s.replace('-', ' ')}
+                </button>
+              ))}
+              <div className="border-t border-slate-700 my-1"/>
+              <button onClick={() => {
+                commit({ ...graph, nodes: graph.nodes.filter(n => n.id !== ctxNode.id), edges: graph.edges.filter(e => e.from !== ctxNode.id && e.to !== ctxNode.id) });
+                setSelectedNode(null);
+                setCtxMenu(null);
+              }} className="flex items-center gap-2 w-full px-3 py-2 text-red-400 hover:bg-red-900/30">
+                Delete node
+              </button>
+            </div>
+          );
+        })()}
+        </div>{/* end SVG + overlays wrapper */}
       </div>
 
       {/* Right: properties panel */}
