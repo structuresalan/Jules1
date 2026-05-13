@@ -1,7 +1,7 @@
-import React, { useRef, useState, useCallback, useEffect } from 'react';
+import React, { useRef, useState, useCallback, useEffect, useMemo } from 'react';
 import {
   Maximize2, Minimize2, Plus, Trash2, ZoomIn, ZoomOut, X,
-  Download, FileText, LayoutTemplate,
+  Download, FileText, LayoutTemplate, LayoutGrid, Undo2, Redo2,
 } from 'lucide-react';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -45,6 +45,23 @@ export interface RNode {
   photoData?: string;
   checklistItems?: ChecklistItem[];
   crossBoardRef?: string;
+  // Member-specific
+  memberSection?:  string;
+  memberMaterial?: string;
+  memberSpan?:     string;
+  // Defect-specific
+  defectClass?:   'hairline' | 'moderate' | 'severe';
+  defectArea?:    string;
+  // Cost-specific
+  costAmount?:    number;
+  costLaborPct?:  number;
+  // Inspection-specific
+  inspectionMethod?: string;
+  inspectionResult?: 'pass' | 'fail' | 'monitor';
+  // Measurement-specific
+  measurementValue?: string;
+  measurementUnit?:  string;
+  measurementLimit?: string;
 }
 
 export interface REdge {
@@ -440,6 +457,30 @@ export function RelationshipMap({ graph, onChange, boardNames, activeBoardId }: 
   const drawingFrom   = useRef<string | null>(null);
   const didDrag       = useRef(false);
 
+  // ── Feature 1: Undo/Redo ──────────────────────────────────────────────────
+  const historyRef = useRef<{ past: RelationshipGraph[]; future: RelationshipGraph[] }>({ past: [], future: [] });
+
+  const commit = useCallback((newGraph: RelationshipGraph) => {
+    historyRef.current.past.push(graph);
+    historyRef.current.future = [];
+    if (historyRef.current.past.length > 50) historyRef.current.past.shift();
+    onChange(newGraph);
+  }, [graph, onChange]);
+
+  const undo = useCallback(() => {
+    const prev = historyRef.current.past.pop();
+    if (!prev) return;
+    historyRef.current.future.push(graph);
+    onChange(prev);
+  }, [graph, onChange]);
+
+  const redo = useCallback(() => {
+    const next = historyRef.current.future.pop();
+    if (!next) return;
+    historyRef.current.past.push(graph);
+    onChange(next);
+  }, [graph, onChange]);
+
   const toCanvas = useCallback((cx: number, cy: number): Pt => {
     const rect = svgRef.current!.getBoundingClientRect();
     return {
@@ -456,20 +497,22 @@ export function RelationshipMap({ graph, onChange, boardNames, activeBoardId }: 
         if (photoLightbox) { setPhotoLightbox(null); return; }
         setExpanded(false); setShowPalette(false); setShowTemplates(false);
       }
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) { e.preventDefault(); undo(); return; }
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) { e.preventDefault(); redo(); return; }
       if ((e.key === 'Delete' || e.key === 'Backspace') && !(e.target instanceof HTMLInputElement) && !(e.target instanceof HTMLSelectElement)) {
         if (selectedNode) {
-          onChange({ ...graph, nodes: graph.nodes.filter(n => n.id !== selectedNode), edges: graph.edges.filter(ed => ed.from !== selectedNode && ed.to !== selectedNode) });
+          commit({ ...graph, nodes: graph.nodes.filter(n => n.id !== selectedNode), edges: graph.edges.filter(ed => ed.from !== selectedNode && ed.to !== selectedNode) });
           setSelectedNode(null);
         }
         if (selectedEdge) {
-          onChange({ ...graph, edges: graph.edges.filter(ed => ed.id !== selectedEdge) });
+          commit({ ...graph, edges: graph.edges.filter(ed => ed.id !== selectedEdge) });
           setSelectedEdge(null);
         }
       }
     };
     window.addEventListener('keydown', h);
     return () => window.removeEventListener('keydown', h);
-  }, [expanded, selectedNode, selectedEdge, graph, onChange, photoLightbox]);
+  }, [expanded, selectedNode, selectedEdge, graph, commit, undo, redo, photoLightbox]);
 
   // ── Add node ──────────────────────────────────────────────────────────────
   const addNode = useCallback((type: RNodeType) => {
@@ -478,14 +521,14 @@ export function RelationshipMap({ graph, onChange, boardNames, activeBoardId }: 
     const x  = (cw / 2 - pan.x) / scale - EXP_W / 2;
     const y  = (ch / 2 - pan.y) / scale - EXP_H / 2;
     const cfg = NODE_CFG[type];
-    onChange({ ...graph, nodes: [...graph.nodes, { id: genRid(), type, label: cfg.label, subtitle: 'Add detail…', x, y }] });
+    commit({ ...graph, nodes: [...graph.nodes, { id: genRid(), type, label: cfg.label, subtitle: 'Add detail…', x, y }] });
     setShowPalette(false);
-  }, [graph, onChange, pan, scale]);
+  }, [graph, commit, pan, scale]);
 
   // ── Update node helper ───────────────────────────────────────────────────
   const updateNode = useCallback((id: string, patch: Partial<RNode>) => {
-    onChange({ ...graph, nodes: graph.nodes.map(n => n.id === id ? { ...n, ...patch } : n) });
-  }, [graph, onChange]);
+    commit({ ...graph, nodes: graph.nodes.map(n => n.id === id ? { ...n, ...patch } : n) });
+  }, [graph, commit]);
 
   // ── SVG pointer handlers ──────────────────────────────────────────────────
   const onSvgDown = useCallback((e: React.PointerEvent<SVGSVGElement>) => {
@@ -508,6 +551,7 @@ export function RelationshipMap({ graph, onChange, boardNames, activeBoardId }: 
     if (draggingId.current) {
       didDrag.current = true;
       const cv = toCanvas(e.clientX, e.clientY);
+      // Live preview: use onChange directly (skip history during drag)
       onChange({ ...graph, nodes: graph.nodes.map(n => n.id === draggingId.current ? { ...n, x: cv.x - dragOffset.current.x, y: cv.y - dragOffset.current.y } : n) });
     }
     if (drawingFrom.current) {
@@ -522,10 +566,18 @@ export function RelationshipMap({ graph, onChange, boardNames, activeBoardId }: 
 
   const onSvgUp = useCallback(() => {
     isPanning.current = false;
+    // Commit final drag position into history
+    if (draggingId.current && didDrag.current) {
+      const draggedNode = graph.nodes.find(n => n.id === draggingId.current);
+      if (draggedNode) {
+        // graph already has the final position from live onChange calls; commit it
+        commit(graph);
+      }
+    }
     draggingId.current = null;
     drawingFrom.current = null;
     setEdgePreview(null);
-  }, []);
+  }, [graph, commit]);
 
   const onWheel = useCallback((e: React.WheelEvent<SVGSVGElement>) => {
     e.preventDefault();
@@ -570,11 +622,105 @@ export function RelationshipMap({ graph, onChange, boardNames, activeBoardId }: 
     e.stopPropagation();
     const from = drawingFrom.current;
     if (from && from !== nodeId && !graph.edges.some(ed => ed.from === from && ed.to === nodeId)) {
-      onChange({ ...graph, edges: [...graph.edges, { id: genRid(), from, to: nodeId, label: '' }] });
+      commit({ ...graph, edges: [...graph.edges, { id: genRid(), from, to: nodeId, label: '' }] });
     }
     drawingFrom.current = null;
     setEdgePreview(null);
-  }, [graph, onChange]);
+  }, [graph, commit]);
+
+  // ── Feature 2: Auto-layout ────────────────────────────────────────────────
+  const autoLayout = useCallback(() => {
+    const nodes = graph.nodes;
+    const edges = graph.edges;
+    if (nodes.length === 0) return;
+
+    const inDeg: Record<string, number> = {};
+    const outEdges: Record<string, string[]> = {};
+    nodes.forEach(n => { inDeg[n.id] = 0; outEdges[n.id] = []; });
+    edges.forEach(e => {
+      inDeg[e.to] = (inDeg[e.to] ?? 0) + 1;
+      outEdges[e.from] = [...(outEdges[e.from] ?? []), e.to];
+    });
+
+    const depth: Record<string, number> = {};
+    nodes.filter(n => (inDeg[n.id] ?? 0) === 0).forEach(n => { depth[n.id] = 0; });
+
+    const bfsQ = nodes.filter(n => depth[n.id] !== undefined).map(n => n.id);
+    const visited = new Set<string>();
+    while (bfsQ.length > 0) {
+      const id = bfsQ.shift()!;
+      if (visited.has(id)) continue;
+      visited.add(id);
+      (outEdges[id] ?? []).forEach(toId => {
+        depth[toId] = Math.max(depth[toId] ?? 0, (depth[id] ?? 0) + 1);
+        bfsQ.push(toId);
+      });
+    }
+    nodes.forEach(n => { if (depth[n.id] === undefined) depth[n.id] = 0; });
+
+    const COL_W = 230, ROW_H = 110, PAD_X = 60, PAD_Y = 60;
+    const byDepth: Record<number, string[]> = {};
+    nodes.forEach(n => { const d = depth[n.id]; (byDepth[d] ??= []).push(n.id); });
+
+    const newNodes = nodes.map(n => {
+      const d = depth[n.id];
+      const col = byDepth[d] ?? [];
+      const row = col.indexOf(n.id);
+      const colH = col.length * ROW_H;
+      return { ...n, x: PAD_X + d * COL_W, y: PAD_Y + row * ROW_H - colH / 2 + 200 };
+    });
+
+    commit({ ...graph, nodes: newNodes });
+    setPan({ x: 60, y: 60 });
+    setScale(1);
+  }, [graph, commit]);
+
+  // ── Feature 4: Path highlighting ──────────────────────────────────────────
+  const connectedPath = useMemo(() => {
+    if (!selectedNode) return null;
+    const nodeIds = new Set<string>([selectedNode]);
+    const edgeIds = new Set<string>();
+    const queue = [selectedNode];
+    while (queue.length > 0) {
+      const id = queue.shift()!;
+      graph.edges.forEach(e => {
+        if (e.from === id && !nodeIds.has(e.to)) {
+          nodeIds.add(e.to); edgeIds.add(e.id); queue.push(e.to);
+        }
+        if (e.to === id && !nodeIds.has(e.from)) {
+          nodeIds.add(e.from); edgeIds.add(e.id); queue.push(e.from);
+        }
+      });
+    }
+    return { nodeIds, edgeIds };
+  }, [selectedNode, graph]);
+
+  // ── Feature 5: Export PNG ─────────────────────────────────────────────────
+  const exportPng = useCallback(() => {
+    const svg = svgRef.current;
+    if (!svg) return;
+    const rect = svg.getBoundingClientRect();
+    const scale2x = 2;
+    const svgStr = new XMLSerializer().serializeToString(svg);
+    const blob = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const img = new window.Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width  = rect.width  * scale2x;
+      canvas.height = rect.height * scale2x;
+      const ctx = canvas.getContext('2d')!;
+      ctx.fillStyle = '#0f172a';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      URL.revokeObjectURL(url);
+      const a = document.createElement('a');
+      a.download = `relationship-map-${Date.now()}.png`;
+      a.href = canvas.toDataURL('image/png');
+      a.click();
+    };
+    img.src = url;
+  }, []);
 
   // ── Node renderer ─────────────────────────────────────────────────────────
   const renderNode = (n: RNode, exp: boolean) => {
@@ -583,6 +729,9 @@ export function RelationshipMap({ graph, onChange, boardNames, activeBoardId }: 
     const h   = exp ? EXP_H : CMP_H;
     const hdr = exp ? EXP_HDR : CMP_HDR;
     const isSel = n.id === selectedNode;
+
+    // Feature 4: dim non-connected nodes when a selection exists
+    const dimmed = exp && connectedPath !== null && !connectedPath.nodeIds.has(n.id);
 
     // Risk node color override
     let nodeColor = cfg.color;
@@ -653,6 +802,7 @@ export function RelationshipMap({ graph, onChange, boardNames, activeBoardId }: 
 
     return (
       <g key={n.id} transform={`translate(${n.x},${n.y})`}
+        opacity={dimmed ? 0.3 : undefined}
         style={{ cursor: exp ? 'grab' : 'pointer' }}
         onPointerDown={exp ? (e) => onNodeDown(e, n.id) : undefined}
         onPointerUp={exp ? (e) => onNodeClick(e, n.id) : undefined}>
@@ -711,6 +861,10 @@ export function RelationshipMap({ graph, onChange, boardNames, activeBoardId }: 
     const p2 = inPort(tn, exp);
     const isSel = ed.id === selectedEdge;
     const mx = (p1.x + p2.x) / 2, my = (p1.y + p2.y) / 2;
+
+    // Feature 4: dim non-connected edges
+    const dimmedEdge = exp && connectedPath !== null && !connectedPath.edgeIds.has(ed.id);
+
     return (
       <g key={ed.id}>
         <path d={bezierPath(p1.x, p1.y, p2.x, p2.y)}
@@ -721,11 +875,18 @@ export function RelationshipMap({ graph, onChange, boardNames, activeBoardId }: 
           fill="none"
           stroke={isSel ? '#60a5fa' : '#475569'}
           strokeWidth={exp ? (isSel ? 2 : 1.5) : 1}
-          strokeDasharray={exp ? undefined : '5 3'}/>
-        {exp && (
+          strokeDasharray={exp ? undefined : '5 3'}
+          opacity={dimmedEdge ? 0.2 : undefined}/>
+        {exp && !dimmedEdge && (
           <polygon
             points={`${p2.x - 8},${p2.y - 4} ${p2.x},${p2.y} ${p2.x - 8},${p2.y + 4}`}
             fill={isSel ? '#60a5fa' : '#475569'}/>
+        )}
+        {exp && dimmedEdge && (
+          <polygon
+            points={`${p2.x - 8},${p2.y - 4} ${p2.x},${p2.y} ${p2.x - 8},${p2.y + 4}`}
+            fill={isSel ? '#60a5fa' : '#475569'}
+            opacity={0.2}/>
         )}
         {exp && ed.label && (
           <text x={mx} y={my - 5} fill="#64748b" fontSize={8}
@@ -852,6 +1013,133 @@ export function RelationshipMap({ graph, onChange, boardNames, activeBoardId }: 
                 </select>
               </div>
 
+              {/* Feature 3: Type-specific fields */}
+              {selNode.type === 'member' && (
+                <>
+                  <div>
+                    <label className="block text-[10px] text-slate-500 mb-1 uppercase tracking-wide">Section</label>
+                    <input value={selNode.memberSection ?? ''} placeholder="e.g. W18×55"
+                      onChange={e => commit({...graph, nodes: graph.nodes.map(n => n.id===selNode.id ? {...n, memberSection: e.target.value} : n)})}
+                      className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-slate-200 focus:outline-none focus:border-blue-500"/>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-slate-500 mb-1 uppercase tracking-wide">Material</label>
+                    <input value={selNode.memberMaterial ?? ''} placeholder="e.g. A36"
+                      onChange={e => commit({...graph, nodes: graph.nodes.map(n => n.id===selNode.id ? {...n, memberMaterial: e.target.value} : n)})}
+                      className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-slate-200 focus:outline-none focus:border-blue-500"/>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-slate-500 mb-1 uppercase tracking-wide">Span</label>
+                    <input value={selNode.memberSpan ?? ''} placeholder="e.g. 24 ft"
+                      onChange={e => commit({...graph, nodes: graph.nodes.map(n => n.id===selNode.id ? {...n, memberSpan: e.target.value} : n)})}
+                      className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-slate-200 focus:outline-none focus:border-blue-500"/>
+                  </div>
+                </>
+              )}
+
+              {selNode.type === 'defect' && (
+                <>
+                  <div>
+                    <label className="block text-[10px] text-slate-500 mb-1 uppercase tracking-wide">Severity</label>
+                    <select value={selNode.defectClass ?? ''}
+                      onChange={e => commit({...graph, nodes: graph.nodes.map(n => n.id===selNode.id ? {...n, defectClass: e.target.value as RNode['defectClass']} : n)})}
+                      className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-slate-200 focus:outline-none">
+                      <option value="">— select —</option>
+                      <option value="hairline">Hairline</option>
+                      <option value="moderate">Moderate</option>
+                      <option value="severe">Severe</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-slate-500 mb-1 uppercase tracking-wide">Affected Area</label>
+                    <input value={selNode.defectArea ?? ''} placeholder="e.g. 0.8 m²"
+                      onChange={e => commit({...graph, nodes: graph.nodes.map(n => n.id===selNode.id ? {...n, defectArea: e.target.value} : n)})}
+                      className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-slate-200 focus:outline-none focus:border-blue-500"/>
+                  </div>
+                </>
+              )}
+
+              {selNode.type === 'cost' && (
+                <>
+                  <div>
+                    <label className="block text-[10px] text-slate-500 mb-1 uppercase tracking-wide">Amount (USD)</label>
+                    <input type="number" min={0} value={selNode.costAmount ?? ''}
+                      onChange={e => commit({...graph, nodes: graph.nodes.map(n => n.id===selNode.id ? {...n, costAmount: Number(e.target.value)} : n)})}
+                      className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-slate-200 focus:outline-none focus:border-blue-500"/>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-slate-500 mb-1 uppercase tracking-wide">Labor %</label>
+                    <input type="range" min={0} max={100} value={selNode.costLaborPct ?? 50}
+                      onChange={e => commit({...graph, nodes: graph.nodes.map(n => n.id===selNode.id ? {...n, costLaborPct: Number(e.target.value)} : n)})}
+                      className="w-full accent-blue-500 h-1.5"/>
+                    <div className="flex justify-between text-[9px] text-slate-500 mt-0.5">
+                      <span>Labor: {selNode.costLaborPct ?? 50}%</span>
+                      <span>Material: {100 - (selNode.costLaborPct ?? 50)}%</span>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {selNode.type === 'inspection' && (
+                <>
+                  <div>
+                    <label className="block text-[10px] text-slate-500 mb-1 uppercase tracking-wide">Method</label>
+                    <select value={selNode.inspectionMethod ?? ''}
+                      onChange={e => commit({...graph, nodes: graph.nodes.map(n => n.id===selNode.id ? {...n, inspectionMethod: e.target.value} : n)})}
+                      className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-slate-200 focus:outline-none">
+                      <option value="">— select —</option>
+                      {['Visual','UT','PT','GPR','Core Sample','Load Test'].map(m => <option key={m} value={m}>{m}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-slate-500 mb-1 uppercase tracking-wide">Result</label>
+                    <select value={selNode.inspectionResult ?? ''}
+                      onChange={e => commit({...graph, nodes: graph.nodes.map(n => n.id===selNode.id ? {...n, inspectionResult: e.target.value as RNode['inspectionResult']} : n)})}
+                      className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-slate-200 focus:outline-none">
+                      <option value="">— select —</option>
+                      <option value="pass">Pass</option>
+                      <option value="monitor">Monitor</option>
+                      <option value="fail">Fail</option>
+                    </select>
+                  </div>
+                </>
+              )}
+
+              {selNode.type === 'measurement' && (
+                <>
+                  <div className="flex gap-1.5">
+                    <div className="flex-1">
+                      <label className="block text-[10px] text-slate-500 mb-1 uppercase tracking-wide">Value</label>
+                      <input value={selNode.measurementValue ?? ''}
+                        onChange={e => commit({...graph, nodes: graph.nodes.map(n => n.id===selNode.id ? {...n, measurementValue: e.target.value} : n)})}
+                        placeholder="0.35"
+                        className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-slate-200 focus:outline-none focus:border-blue-500"/>
+                    </div>
+                    <div className="w-16">
+                      <label className="block text-[10px] text-slate-500 mb-1 uppercase tracking-wide">Unit</label>
+                      <select value={selNode.measurementUnit ?? 'mm'}
+                        onChange={e => commit({...graph, nodes: graph.nodes.map(n => n.id===selNode.id ? {...n, measurementUnit: e.target.value} : n)})}
+                        className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-slate-200 focus:outline-none">
+                        {['mm','in','ft','m','m²','%'].map(u => <option key={u} value={u}>{u}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-slate-500 mb-1 uppercase tracking-wide">Design Limit</label>
+                    <input value={selNode.measurementLimit ?? ''}
+                      onChange={e => commit({...graph, nodes: graph.nodes.map(n => n.id===selNode.id ? {...n, measurementLimit: e.target.value} : n)})}
+                      placeholder="e.g. 0.20 mm ACI"
+                      className={`w-full bg-slate-700 border rounded px-2 py-1 text-xs text-slate-200 focus:outline-none focus:border-blue-500 ${
+                        selNode.measurementValue && selNode.measurementLimit && Number(selNode.measurementValue) > Number(selNode.measurementLimit.split(' ')[0])
+                          ? 'border-red-500' : 'border-slate-600'
+                      }`}/>
+                    {selNode.measurementValue && selNode.measurementLimit && Number(selNode.measurementValue) > Number(selNode.measurementLimit.split(' ')[0]) && (
+                      <p className="text-[9px] text-red-400 mt-0.5">⚠ Exceeds design limit</p>
+                    )}
+                  </div>
+                </>
+              )}
+
               {/* Status */}
               <div>
                 <label className="block text-[10px] text-slate-500 mb-1 uppercase tracking-wide">Status</label>
@@ -903,7 +1191,7 @@ export function RelationshipMap({ graph, onChange, boardNames, activeBoardId }: 
                   <label className="block text-[10px] text-slate-500 mb-1 uppercase tracking-wide">Photo</label>
                   {selNode.photoData && (
                     <div className="mb-1">
-                      <img src={selNode.photoData} alt="attached" className="w-full rounded border border-slate-600" style={{ maxHeight: 80, objectFit: 'cover' }}
+                      <img src={selNode.photoData} alt="attached"
                         onClick={() => setPhotoLightbox(selNode.photoData!)}
                         style={{ cursor: 'pointer', maxHeight: 80, objectFit: 'cover', width: '100%', borderRadius: 4, border: '1px solid #475569' }}/>
                     </div>
@@ -986,7 +1274,7 @@ export function RelationshipMap({ graph, onChange, boardNames, activeBoardId }: 
               </div>
 
               <button onClick={() => {
-                onChange({ ...graph, nodes: graph.nodes.filter(n => n.id !== selNode.id), edges: graph.edges.filter(e => e.from !== selNode.id && e.to !== selNode.id) });
+                commit({ ...graph, nodes: graph.nodes.filter(n => n.id !== selNode.id), edges: graph.edges.filter(e => e.from !== selNode.id && e.to !== selNode.id) });
                 setSelectedNode(null);
               }} className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded bg-red-900/30 border border-red-800/50 text-red-400 hover:bg-red-900/50 text-xs">
                 <Trash2 size={11}/> Delete node
@@ -1015,12 +1303,12 @@ export function RelationshipMap({ graph, onChange, boardNames, activeBoardId }: 
               <div>
                 <label className="block text-[10px] text-slate-500 mb-1 uppercase tracking-wide">Relationship label</label>
                 <input value={selEdge.label ?? ''}
-                  onChange={e => onChange({ ...graph, edges: graph.edges.map(ed => ed.id === selEdge.id ? { ...ed, label: e.target.value } : ed) })}
+                  onChange={e => commit({ ...graph, edges: graph.edges.map(ed => ed.id === selEdge.id ? { ...ed, label: e.target.value } : ed) })}
                   placeholder="e.g. references, drives, requires…"
                   className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-slate-200 focus:outline-none focus:border-blue-500"/>
               </div>
               <button onClick={() => {
-                onChange({ ...graph, edges: graph.edges.filter(e => e.id !== selEdge.id) });
+                commit({ ...graph, edges: graph.edges.filter(e => e.id !== selEdge.id) });
                 setSelectedEdge(null);
               }} className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded bg-red-900/30 border border-red-800/50 text-red-400 hover:bg-red-900/50 text-xs">
                 <Trash2 size={11}/> Delete connection
@@ -1083,6 +1371,12 @@ export function RelationshipMap({ graph, onChange, boardNames, activeBoardId }: 
               <Download size={11}/> CSV
             </button>
 
+            {/* Export PNG (Feature 5) */}
+            <button onClick={exportPng}
+              className="flex items-center gap-1 text-[10px] text-slate-300 hover:text-white border border-slate-700 rounded px-2 py-1 hover:bg-slate-700 transition-colors">
+              <Download size={11}/> PNG
+            </button>
+
             {/* Templates */}
             <div className="relative">
               <button onClick={() => setShowTemplates(v => !v)}
@@ -1108,7 +1402,7 @@ export function RelationshipMap({ graph, onChange, boardNames, activeBoardId }: 
 
             {selectedNode && (
               <button onClick={() => {
-                onChange({ ...graph, nodes: graph.nodes.filter(n => n.id !== selectedNode), edges: graph.edges.filter(e => e.from !== selectedNode && e.to !== selectedNode) });
+                commit({ ...graph, nodes: graph.nodes.filter(n => n.id !== selectedNode), edges: graph.edges.filter(e => e.from !== selectedNode && e.to !== selectedNode) });
                 setSelectedNode(null);
               }} className="flex items-center gap-1 text-[10px] text-red-400 hover:text-red-300 border border-red-800/50 rounded px-2 py-1">
                 <Trash2 size={10}/> Delete node
@@ -1116,12 +1410,18 @@ export function RelationshipMap({ graph, onChange, boardNames, activeBoardId }: 
             )}
             {selectedEdge && (
               <button onClick={() => {
-                onChange({ ...graph, edges: graph.edges.filter(e => e.id !== selectedEdge) });
+                commit({ ...graph, edges: graph.edges.filter(e => e.id !== selectedEdge) });
                 setSelectedEdge(null);
               }} className="flex items-center gap-1 text-[10px] text-red-400 hover:text-red-300 border border-red-800/50 rounded px-2 py-1">
                 <Trash2 size={10}/> Delete edge
               </button>
             )}
+
+            {/* Undo/Redo (Feature 1) */}
+            <button onClick={undo} title="Undo (Ctrl+Z)"
+              className="p-1 text-slate-400 hover:text-white rounded hover:bg-slate-700"><Undo2 size={13}/></button>
+            <button onClick={redo} title="Redo (Ctrl+Y)"
+              className="p-1 text-slate-400 hover:text-white rounded hover:bg-slate-700"><Redo2 size={13}/></button>
 
             <span className="text-[10px] text-slate-500 font-mono">{Math.round(scale * 100)}%</span>
             <button onClick={() => setScale(s => Math.min(s * 1.2, 3))}
@@ -1130,6 +1430,13 @@ export function RelationshipMap({ graph, onChange, boardNames, activeBoardId }: 
               className="p-1 text-slate-400 hover:text-white rounded hover:bg-slate-700"><ZoomOut size={13}/></button>
             <button onClick={() => { setPan({ x: 60, y: 60 }); setScale(1); }}
               className="text-[10px] text-slate-400 hover:text-white border border-slate-700 rounded px-2 py-1">Fit</button>
+
+            {/* Auto-layout (Feature 2) */}
+            <button onClick={autoLayout} title="Auto-arrange nodes"
+              className="flex items-center gap-1 text-[10px] text-slate-300 hover:text-white border border-slate-700 rounded px-2 py-1 hover:bg-slate-700 transition-colors">
+              <LayoutGrid size={11}/> Arrange
+            </button>
+
             <button onClick={() => { setExpanded(false); setSelectedNode(null); setSelectedEdge(null); }}
               title="Collapse (Esc)"
               className="p-1 text-slate-400 hover:text-white rounded hover:bg-slate-700">
