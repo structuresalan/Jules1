@@ -9,7 +9,7 @@ import {
   ChevronRight, ChevronDown, Plus, X,
   Eye, EyeOff, Trash2, Upload,
   Filter, RefreshCw, ChevronLeft,
-  Image, Tag, Stamp, RotateCcw, Hash,
+  Image, Tag, Stamp, RotateCcw, Hash, Minimize2, Search,
 } from 'lucide-react';
 import { getActiveProjectId } from '../utils/projectDocuments';
 
@@ -62,7 +62,7 @@ interface BoardItem { id: string; name: string; parentId: string | null }
 
 type ActivePanel =
   | 'color' | 'photo' | 'file' | 'note' | 'scale'
-  | 'report' | 'export' | 'photo-library' | 'link' | 'stamps' | null;
+  | 'report' | 'export' | 'photo-library' | 'link' | 'stamps' | 'compare' | null;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -257,6 +257,13 @@ export function VisualWorkspace() {
   useEffect(() => { fillColorRef.current     = fillColor;     }, [fillColor]);
   useEffect(() => { clipboardRef.current     = clipboard;     }, [clipboard]);
 
+  // Feature 17: Track fullscreen state
+  useEffect(() => {
+    const h = () => setIsFullscreen(!!document.fullscreenElement);
+    document.addEventListener('fullscreenchange', h);
+    return () => document.removeEventListener('fullscreenchange', h);
+  }, []);
+
   // View toggles
   const [showGrid,     setShowGrid]     = useState(false);
   const [snapEnabled,  setSnapEnabled]  = useState(false);
@@ -327,6 +334,24 @@ export function VisualWorkspace() {
   const pdfDocRef     = useRef<unknown>(null);
   const [pdfPageNum,    setPdfPageNum]    = useState(1);
   const [pdfTotalPages, setPdfTotalPages] = useState(1);
+
+  // Feature 16: PDF thumbnail strip
+  const [pdfThumbnails, setPdfThumbnails] = useState<string[]>([]);
+  const [showPdfPages,  setShowPdfPages]  = useState(true);
+
+  // Feature 17: Fullscreen
+  const workspaceRef  = useRef<HTMLDivElement>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  // Feature 18: Compare / overlay
+  const compareInputRef = useRef<HTMLInputElement>(null);
+  const [compareImage,   setCompareImage]   = useState<string | null>(null);
+  const [compareOpacity, setCompareOpacity] = useState(0.5);
+  const [showCompare,    setShowCompare]    = useState(true);
+
+  // Feature 19: Schedule search
+  const [scheduleSearch,     setScheduleSearch]     = useState('');
+  const [showScheduleSearch, setShowScheduleSearch] = useState(false);
 
   // Boards
   const [activeBoardId, setActiveBoardId] = useState('b1');
@@ -512,6 +537,21 @@ export function VisualWorkspace() {
           setPdfTotalPages(pdf.numPages);
           setPdfPageNum(1);
           await renderPdfPage(pdf, 1);
+          // Feature 16: Generate thumbnails for all pages (capped at 40)
+          const thumbs: string[] = [];
+          const maxThumb = Math.min(pdf.numPages, 40);
+          for (let i = 1; i <= maxThumb; i++) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const pg = await (pdf as any).getPage(i);
+            const vp = pg.getViewport({ scale: 0.15 });
+            const tc = document.createElement('canvas');
+            tc.width = vp.width; tc.height = vp.height;
+            const tctx = tc.getContext('2d')!;
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            await pg.render({ canvasContext: tctx as any, viewport: vp } as any).promise;
+            thumbs.push(tc.toDataURL('image/jpeg', 0.6));
+          }
+          setPdfThumbnails(thumbs);
         } catch (err) {
           console.error('PDF load error', err);
         }
@@ -1661,7 +1701,7 @@ export function VisualWorkspace() {
   // ─────────────────────────────────────────────────────────────────────────
 
   return (
-    <div className="flex flex-col h-full bg-slate-900 text-slate-200 overflow-hidden select-none">
+    <div ref={workspaceRef} className="flex flex-col h-full bg-slate-900 text-slate-200 overflow-hidden select-none">
 
       {/* ── Header tabs ──────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between px-4 bg-slate-950 border-b border-slate-800 shrink-0 h-9">
@@ -1678,7 +1718,23 @@ export function VisualWorkspace() {
               }`}>{tab}</button>
           ))}
         </div>
-        <span className="text-xs text-slate-500">Project: 1234 – Riverside Office Building</span>
+        <div className="flex items-center gap-2">
+          {/* Feature 18: Compare / overlay */}
+          <button onClick={() => setActivePanel(prev => prev === 'compare' ? null : 'compare')}
+            title="Compare overlay"
+            className={`text-[10px] px-2 py-0.5 rounded border transition-colors ${activePanel === 'compare' ? 'border-blue-500 bg-blue-600/20 text-blue-300' : 'border-slate-700 text-slate-400 hover:text-white'}`}>
+            {compareImage && showCompare ? '◧ On' : '◧ Off'}
+          </button>
+          {/* Feature 17: Fullscreen */}
+          <button onClick={() => {
+            if (isFullscreen) document.exitFullscreen();
+            else workspaceRef.current?.requestFullscreen();
+          }} title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+            className="text-slate-400 hover:text-white p-1 rounded hover:bg-slate-700">
+            {isFullscreen ? <Minimize2 size={13}/> : <Maximize2 size={13}/>}
+          </button>
+          <span className="text-xs text-slate-500">Project: 1234 – Riverside Office Building</span>
+        </div>
       </div>
 
       {/* ── Toolbar ──────────────────────────────────────────────────────── */}
@@ -1903,6 +1959,29 @@ export function VisualWorkspace() {
               ))}
             </div>
           )}
+
+          {/* Feature 16: PDF page thumbnail strip */}
+          {pdfTotalPages > 1 && (
+            <div className="border-t border-slate-700 shrink-0">
+              <button
+                onClick={() => setShowPdfPages(v => !v)}
+                className="flex items-center justify-between w-full px-3 py-2 text-slate-400 hover:text-white">
+                <span className="text-[10px] font-bold uppercase tracking-wider">Pages ({pdfTotalPages})</span>
+                {showPdfPages ? <ChevronDown size={11}/> : <ChevronRight size={11}/>}
+              </button>
+              {showPdfPages && (
+                <div className="max-h-52 overflow-y-auto px-2 pb-2 grid grid-cols-2 gap-1.5">
+                  {pdfThumbnails.map((thumb, i) => (
+                    <button key={i} onClick={() => setPdfPageNum(i + 1)}
+                      className={`relative rounded overflow-hidden border-2 transition-colors bg-slate-700 ${pdfPageNum === i + 1 ? 'border-blue-500' : 'border-transparent hover:border-slate-500'}`}>
+                      <img src={thumb} alt={`Page ${i + 1}`} className="w-full h-auto block"/>
+                      <span className="absolute bottom-0.5 right-0.5 bg-black/70 text-white text-[9px] px-1 rounded">{i + 1}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* ── Canvas + schedule ───────────────────────────────────────────── */}
@@ -1929,6 +2008,11 @@ export function VisualWorkspace() {
                   ? <image href={bgImage} x={0} y={0} width={bgSize.w} height={bgSize.h}/>
                   : <rect x={0} y={0} width={1200} height={900} fill="#334155" rx={4}/>
                 }
+                {/* Feature 18: Compare overlay */}
+                {showCompare && compareImage && (
+                  <image href={compareImage} x={0} y={0} width={bgSize.w} height={bgSize.h}
+                    opacity={compareOpacity} style={{ pointerEvents: 'none' as const }}/>
+                )}
                 {markups.map(m => renderMarkup(m))}
                 {renderPreview()}
                 {renderHandles()}
@@ -2024,6 +2108,20 @@ export function VisualWorkspace() {
 
             <input ref={fileInputRef} type="file" accept="image/*,application/pdf" className="hidden"
               onChange={e => e.target.files?.[0] && handleBgFile(e.target.files[0])}/>
+            {/* Feature 18: Compare image upload */}
+            <input ref={compareInputRef} type="file" accept="image/*,application/pdf" className="hidden"
+              onChange={e => {
+                const f = e.target.files?.[0];
+                if (!f) return;
+                const reader = new FileReader();
+                reader.onload = ev => {
+                  const img = new window.Image();
+                  img.onload = () => setCompareImage(ev.target!.result as string);
+                  img.src = ev.target!.result as string;
+                };
+                reader.readAsDataURL(f);
+                setShowCompare(true);
+              }}/>
             <input ref={photoInputRef} type="file" accept="image/*" className="hidden"
               onChange={e => {
                 const f = e.target.files?.[0];
@@ -2038,9 +2136,18 @@ export function VisualWorkspace() {
           <div className="h-44 shrink-0 border-t border-slate-700 bg-slate-800 overflow-auto">
             <div className="flex items-center justify-between px-4 py-1.5 border-b border-slate-700 sticky top-0 bg-slate-800 z-10">
               <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                Markup Schedule <span className="normal-case font-normal text-slate-500 ml-1">({markups.length})</span>
+                Markup Schedule
+                <span className="normal-case font-normal text-slate-500 ml-1">
+                  ({scheduleSearch ? `${markups.filter(m => { const q = scheduleSearch.toLowerCase(); return m.text.toLowerCase().includes(q) || m.type.toLowerCase().includes(q) || m.status.toLowerCase().includes(q); }).length} of ${markups.length}` : markups.length})
+                </span>
               </span>
-              <div className="flex gap-2">
+              <div className="flex gap-2 items-center">
+                {/* Feature 19: Search toggle */}
+                <button onClick={() => { setShowScheduleSearch(v => !v); if (showScheduleSearch) setScheduleSearch(''); }}
+                  title="Search markups"
+                  className={`transition-colors ${showScheduleSearch ? 'text-blue-400' : 'text-slate-400 hover:text-white'}`}>
+                  <Search size={11}/>
+                </button>
                 <button aria-label="Reset active board"
                   onClick={() => { updateMarkups(activeBoardId, () => activeBoardId === 'b1' ? SEED : []); setSelectedId(null); }}
                   className="text-[10px] text-slate-400 hover:text-white flex items-center gap-1"><RefreshCw size={11}/> Reset</button>
@@ -2050,43 +2157,67 @@ export function VisualWorkspace() {
                 )}
               </div>
             </div>
-            {markups.length === 0
-              ? <div className="px-4 py-6 text-xs text-slate-500 text-center">No markups yet. Draw on the canvas to start.</div>
-              : (
-                <table className="w-full text-xs">
-                  <thead className="text-[10px] uppercase text-slate-500 border-b border-slate-700">
-                    <tr>
-                      <th className="px-4 py-1 text-left w-8">#</th>
-                      <th className="px-2 py-1 text-left">Type</th>
-                      <th className="px-2 py-1 text-left">Label</th>
-                      <th className="px-2 py-1 text-left">Status</th>
-                      <th className="px-2 py-1 text-left">Priority</th>
-                      <th className="px-2 py-1 text-left">Created</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {markups.map(m => (
-                      <tr key={m.id} onClick={() => setSelectedId(m.id)}
-                        className={`border-b border-slate-700/40 cursor-pointer transition-colors ${m.id === selectedId ? 'bg-blue-600/20' : 'hover:bg-slate-700/40'}`}>
-                        <td className="px-4 py-1">
-                          <span className="w-5 h-5 rounded-full inline-flex items-center justify-center text-[10px] font-bold text-white" style={{background:m.color}}>{m.number}</span>
-                        </td>
-                        <td className="px-2 py-1 capitalize text-slate-300">{m.type}</td>
-                        <td className="px-2 py-1 text-slate-300 max-w-[180px] truncate">{m.text || '—'}</td>
-                        <td className="px-2 py-1"><span className={`px-1.5 py-0.5 rounded text-[10px] ${STATUS_CFG[m.status].cls}`}>{STATUS_CFG[m.status].label}</span></td>
-                        <td className="px-2 py-1">
-                          <div className="flex items-center gap-1">
-                            <span className={`w-2 h-2 rounded-full ${PRI_CFG[m.priority].dot}`}/>
-                            <span className="text-slate-400">{PRI_CFG[m.priority].label}</span>
-                          </div>
-                        </td>
-                        <td className="px-2 py-1 text-slate-500">{new Date(m.createdAt).toLocaleDateString()}</td>
+            {/* Feature 19: Search input */}
+            {showScheduleSearch && (
+              <div className="px-3 py-1.5 border-b border-slate-700 sticky top-[31px] bg-slate-800 z-10">
+                <input
+                  autoFocus
+                  value={scheduleSearch}
+                  onChange={e => setScheduleSearch(e.target.value)}
+                  placeholder="Filter by label, type, status…"
+                  className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-slate-200 focus:outline-none focus:border-blue-500"
+                />
+              </div>
+            )}
+            {(() => {
+              const q = scheduleSearch.toLowerCase().trim();
+              const filtered = q
+                ? markups.filter(m =>
+                    m.text.toLowerCase().includes(q) ||
+                    m.type.toLowerCase().includes(q) ||
+                    m.status.toLowerCase().includes(q) ||
+                    STATUS_CFG[m.status].label.toLowerCase().includes(q)
+                  )
+                : markups;
+              return filtered.length === 0
+                ? <div className="px-4 py-6 text-xs text-slate-500 text-center">
+                    {markups.length === 0 ? 'No markups yet. Draw on the canvas to start.' : 'No markups match the filter.'}
+                  </div>
+                : (
+                  <table className="w-full text-xs">
+                    <thead className="text-[10px] uppercase text-slate-500 border-b border-slate-700">
+                      <tr>
+                        <th className="px-4 py-1 text-left w-8">#</th>
+                        <th className="px-2 py-1 text-left">Type</th>
+                        <th className="px-2 py-1 text-left">Label</th>
+                        <th className="px-2 py-1 text-left">Status</th>
+                        <th className="px-2 py-1 text-left">Priority</th>
+                        <th className="px-2 py-1 text-left">Created</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )
-            }
+                    </thead>
+                    <tbody>
+                      {filtered.map(m => (
+                        <tr key={m.id} onClick={() => setSelectedId(m.id)}
+                          className={`border-b border-slate-700/40 cursor-pointer transition-colors ${m.id === selectedId ? 'bg-blue-600/20' : 'hover:bg-slate-700/40'}`}>
+                          <td className="px-4 py-1">
+                            <span className="w-5 h-5 rounded-full inline-flex items-center justify-center text-[10px] font-bold text-white" style={{background:m.color}}>{m.number}</span>
+                          </td>
+                          <td className="px-2 py-1 capitalize text-slate-300">{m.type}</td>
+                          <td className="px-2 py-1 text-slate-300 max-w-[180px] truncate">{m.text || '—'}</td>
+                          <td className="px-2 py-1"><span className={`px-1.5 py-0.5 rounded text-[10px] ${STATUS_CFG[m.status].cls}`}>{STATUS_CFG[m.status].label}</span></td>
+                          <td className="px-2 py-1">
+                            <div className="flex items-center gap-1">
+                              <span className={`w-2 h-2 rounded-full ${PRI_CFG[m.priority].dot}`}/>
+                              <span className="text-slate-400">{PRI_CFG[m.priority].label}</span>
+                            </div>
+                          </td>
+                          <td className="px-2 py-1 text-slate-500">{new Date(m.createdAt).toLocaleDateString()}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                );
+            })()}
           </div>
         </div>
 
@@ -2231,6 +2362,28 @@ export function VisualWorkspace() {
                         className="w-5 h-5 rounded cursor-pointer bg-transparent border-0 p-0" title="Custom color"/>
                     </div>
                   </div>
+
+                  {/* Feature 20: Fill color — for box / ellipse / area */}
+                  {['box','ellipse','area'].includes(selectedMarkup.type) && (
+                    <div>
+                      <label className="block text-[10px] text-slate-500 mb-1 uppercase tracking-wide">Fill Color</label>
+                      <div className="flex gap-1.5 flex-wrap items-center">
+                        <button onClick={() => upd({ fillColor: 'transparent' })}
+                          title="No fill"
+                          className={`w-5 h-5 rounded border-2 flex items-center justify-center text-[8px] ${!selectedMarkup.fillColor || selectedMarkup.fillColor === 'transparent' ? 'border-white text-slate-300' : 'border-transparent text-slate-500'}`}
+                          style={{background:'transparent'}}>∅</button>
+                        {COLORS.slice(0,7).map(c => (
+                          <button key={c} onClick={() => upd({ fillColor: c })}
+                            className={`w-5 h-5 rounded-full border-2 transition-transform hover:scale-110 ${selectedMarkup.fillColor===c ? 'border-white scale-110' : 'border-transparent'}`}
+                            style={{background:c}}/>
+                        ))}
+                        <input type="color"
+                          value={selectedMarkup.fillColor && selectedMarkup.fillColor !== 'transparent' ? selectedMarkup.fillColor : '#3b82f6'}
+                          onChange={e => upd({ fillColor: e.target.value })}
+                          className="w-5 h-5 rounded cursor-pointer bg-transparent border-0 p-0" title="Custom fill"/>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Stroke width */}
                   <div>
@@ -2406,6 +2559,7 @@ export function VisualWorkspace() {
                 {activePanel === 'export'        && 'Export project deliverables'}
                 {activePanel === 'stamps'        && 'Stamp library'}
                 {activePanel === 'photo-library' && <span data-testid="photo-library-title">Photo Library</span>}
+                {activePanel === 'compare'       && 'Compare overlay'}
               </h2>
               <button data-testid="close-active-panel" onClick={() => setActivePanel(null)} className="text-slate-400 hover:text-white"><X size={16}/></button>
             </div>
@@ -2616,6 +2770,41 @@ export function VisualWorkspace() {
                       </div>
                     ))}
                   </div>
+                </div>
+              )}
+
+              {/* Feature 18: Compare panel */}
+              {activePanel === 'compare' && (
+                <div className="space-y-4">
+                  <p className="text-xs text-slate-400">Upload a second drawing or image to overlay on the canvas.</p>
+                  <button onClick={() => compareInputRef.current?.click()}
+                    className="w-full py-2.5 rounded bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium flex items-center justify-center gap-2">
+                    <Upload size={14}/> Upload Overlay Image
+                  </button>
+                  {compareImage && (<>
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => setShowCompare(v => !v)}
+                        className={`flex-1 py-1.5 rounded border text-xs transition-colors ${showCompare ? 'border-blue-500 bg-blue-600/20 text-blue-300' : 'border-slate-600 text-slate-400'}`}>
+                        {showCompare ? '◧ Visible' : '◫ Hidden'}
+                      </button>
+                      <button onClick={() => { setCompareImage(null); setShowCompare(false); setActivePanel(null); }}
+                        className="py-1.5 px-3 rounded border border-red-800/50 bg-red-900/20 text-red-400 hover:bg-red-900/40 text-xs">
+                        Clear
+                      </button>
+                    </div>
+                    <div>
+                      <div className="flex justify-between text-xs text-slate-400 mb-1">
+                        <span>Opacity</span>
+                        <span className="font-mono">{Math.round(compareOpacity * 100)}%</span>
+                      </div>
+                      <input type="range" min={0} max={1} step={0.05} value={compareOpacity}
+                        onChange={e => setCompareOpacity(Number(e.target.value))}
+                        className="w-full accent-blue-500 h-1.5"/>
+                    </div>
+                    <div className="rounded overflow-hidden bg-slate-700 border border-slate-600">
+                      <img src={compareImage} alt="Overlay preview" className="w-full h-auto opacity-80"/>
+                    </div>
+                  </>)}
                 </div>
               )}
 
