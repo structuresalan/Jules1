@@ -9,7 +9,7 @@ import {
   ChevronRight, ChevronDown, Plus, X,
   Eye, EyeOff, Trash2, Upload,
   Filter, RefreshCw, ChevronLeft,
-  Image, Tag, Stamp, RotateCcw,
+  Image, Tag, Stamp, RotateCcw, Hash,
 } from 'lucide-react';
 import { getActiveProjectId } from '../utils/projectDocuments';
 
@@ -18,7 +18,7 @@ import { getActiveProjectId } from '../utils/projectDocuments';
 type Tool =
   | 'select' | 'pan' | 'zoom' | 'fit' | 'zoom-area'
   | 'arrow' | 'cloud' | 'text' | 'box' | 'ellipse' | 'callout'
-  | 'dimension' | 'distance' | 'angle' | 'area'
+  | 'dimension' | 'distance' | 'angle' | 'area' | 'count'
   | 'note' | 'photo' | 'file' | 'link' | 'stamps'
   | 'highlighter' | 'pen' | 'polyline' | 'eraser' | 'color'
   | 'layers' | 'scale' | 'grid' | 'snap'
@@ -27,7 +27,7 @@ type Tool =
 type MarkupType =
   | 'arrow' | 'cloud' | 'text' | 'box' | 'ellipse' | 'callout'
   | 'pen' | 'highlighter' | 'polyline' | 'dimension' | 'distance'
-  | 'angle' | 'area' | 'image';
+  | 'angle' | 'area' | 'image' | 'count';
 
 type Priority = 'high' | 'medium' | 'low';
 type MarkupStatus = 'field-verify' | 'monitor' | 'complete' | 'open';
@@ -54,6 +54,7 @@ interface Markup {
   layerId: string;
   createdAt: string;
   imageData?: string;
+  comments?: { id: string; text: string; author: string; createdAt: string }[];
 }
 
 interface Layer { id: string; name: string; visible: boolean }
@@ -89,6 +90,7 @@ function normalizeMarkup(raw: Record<string, unknown>): Markup {
     layerId:     String(raw.layerId ?? 'l1'),
     createdAt:   String(raw.createdAt ?? new Date().toISOString()),
     imageData:   raw.imageData as string | undefined,
+    comments:    (raw.comments as Markup['comments']) ?? [],
   };
 }
 
@@ -98,6 +100,10 @@ function s2c(sx: number, sy: number, pan: Pt, zoom: number): Pt {
 
 function mkBounds(m: Markup) {
   if (!m.points.length) return { x: 0, y: 0, w: 0, h: 0 };
+  if (m.type === 'count') {
+    const r = 12;
+    return { x: m.points[0].x - r, y: m.points[0].y - r, w: r * 2, h: r * 2 };
+  }
   const xs = m.points.map(p => p.x), ys = m.points.map(p => p.y);
   const x = Math.min(...xs), y = Math.min(...ys);
   return { x, y, w: Math.max(...xs) - x || 1, h: Math.max(...ys) - y || 1 };
@@ -172,7 +178,7 @@ const SEED: Markup[] = [
 const TOOL_NAMES: Partial<Record<Tool, string>> = {
   select: 'Select', pan: 'Pan', zoom: 'Zoom', fit: 'Fit', 'zoom-area': 'Zoom Area',
   arrow: 'Arrow', cloud: 'Cloud', text: 'Text', box: 'Box', ellipse: 'Ellipse', callout: 'Callout',
-  dimension: 'Dimension', distance: 'Distance', angle: 'Angle', area: 'Area',
+  dimension: 'Dimension', distance: 'Distance', angle: 'Angle', area: 'Area', count: 'Count',
   note: 'Note', photo: 'Photo', file: 'File', link: 'Link', stamps: 'Stamps',
   highlighter: 'Highlighter', pen: 'Pen', polyline: 'Polyline', eraser: 'Eraser', color: 'Color',
   layers: 'Layers', scale: 'Scale', grid: 'Grid', snap: 'Snap',
@@ -249,6 +255,7 @@ export function VisualWorkspace() {
   useEffect(() => { calibRatioRef.current    = calibRatio;    }, [calibRatio]);
   useEffect(() => { calibUnitRef.current     = calibUnit;     }, [calibUnit]);
   useEffect(() => { fillColorRef.current     = fillColor;     }, [fillColor]);
+  useEffect(() => { clipboardRef.current     = clipboard;     }, [clipboard]);
 
   // View toggles
   const [showGrid,     setShowGrid]     = useState(false);
@@ -308,6 +315,18 @@ export function VisualWorkspace() {
 
   // Feature 10: Area polygon accumulator
   const areaPtsRef = useRef<{ x: number; y: number }[]>([]);
+
+  // Feature 12: Clipboard
+  const [clipboard, setClipboard] = useState<Markup[]>([]);
+  const clipboardRef = useRef<Markup[]>([]);
+
+  // Feature 14: Comment input
+  const [commentInput, setCommentInput] = useState('');
+
+  // Feature 15: PDF page navigation
+  const pdfDocRef     = useRef<unknown>(null);
+  const [pdfPageNum,    setPdfPageNum]    = useState(1);
+  const [pdfTotalPages, setPdfTotalPages] = useState(1);
 
   // Boards
   const [activeBoardId, setActiveBoardId] = useState('b1');
@@ -454,28 +473,47 @@ export function VisualWorkspace() {
     setZoom(nz);
   }, [setPan, setZoom]);
 
+  // ── Feature 15: Render a specific PDF page to the background ─────────────
+  const renderPdfPage = useCallback(async (doc: unknown, pageNum: number) => {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const page = await (doc as any).getPage(pageNum);
+      const vp = page.getViewport({ scale: 2 });
+      const canvas = document.createElement('canvas');
+      canvas.width = vp.width; canvas.height = vp.height;
+      const ctx = canvas.getContext('2d')!;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await page.render({ canvasContext: ctx as any, viewport: vp } as any).promise;
+      setBgImage(canvas.toDataURL('image/png'));
+      setBgSize({ w: vp.width, h: vp.height });
+    } catch (err) {
+      console.error('PDF render error', err);
+    }
+  }, []);
+
+  // Re-render when page number changes (user clicks Prev/Next)
+  useEffect(() => {
+    if (pdfDocRef.current && pdfTotalPages > 1) {
+      renderPdfPage(pdfDocRef.current, pdfPageNum);
+    }
+  }, [pdfPageNum, renderPdfPage, pdfTotalPages]);
+
   // ── File upload (background — image or PDF) ───────────────────────────────
   const handleBgFile = useCallback((file: File) => {
     if (file.type === 'application/pdf') {
       const reader = new FileReader();
       reader.onload = async ev => {
         try {
-          const { getDocument, GlobalWorkerOptions } = await import('pdfjs-dist');
+          const pdfjs = await import('pdfjs-dist');
           // Use CDN worker to avoid bundling the huge worker file
-          GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${(await import('pdfjs-dist')).version}/pdf.worker.min.mjs`;
-          const pdf = await getDocument({ data: ev.target!.result as ArrayBuffer }).promise;
-          const page = await pdf.getPage(1);
-          const vp = page.getViewport({ scale: 2 });
-          const canvas = document.createElement('canvas');
-          canvas.width = vp.width; canvas.height = vp.height;
-          const ctx = canvas.getContext('2d')!;
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          await page.render({ canvasContext: ctx as any, viewport: vp } as any).promise;
-          const src = canvas.toDataURL('image/png');
-          setBgImage(src);
-          setBgSize({ w: vp.width, h: vp.height });
+          pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.mjs`;
+          const pdf = await pdfjs.getDocument({ data: ev.target!.result as ArrayBuffer }).promise;
+          pdfDocRef.current = pdf;
+          setPdfTotalPages(pdf.numPages);
+          setPdfPageNum(1);
+          await renderPdfPage(pdf, 1);
         } catch (err) {
-          console.error('PDF render error', err);
+          console.error('PDF load error', err);
         }
       };
       reader.readAsArrayBuffer(file);
@@ -490,7 +528,7 @@ export function VisualWorkspace() {
       img.src = src;
     };
     reader.readAsDataURL(file);
-  }, []);
+  }, [renderPdfPage]);
 
   // ── Photo → place on canvas ───────────────────────────────────────────────
   const placeImageOnCanvas = useCallback((src: string) => {
@@ -535,6 +573,66 @@ export function VisualWorkspace() {
     setActivePanel(null);
     setTool('select');  // return to select so the stamp can be immediately dragged
   }, [activeBoardId, canvasSize, counter, updateMarkups, setTool]);
+
+  // ── Feature 13: Align & distribute selected markups ──────────────────────
+  const alignMarkups = useCallback((mode: string) => {
+    const sel = (boardMarkups[activeBoardId] ?? []).filter(m => selectedIds.includes(m.id));
+    if (sel.length < 2) return;
+    const bounds = sel.map(m => ({ id: m.id, m, b: mkBounds(m) }));
+    const patched: Record<string, Pt[]> = {};
+
+    if (mode === 'left') {
+      const minX = Math.min(...bounds.map(({ b }) => b.x));
+      bounds.forEach(({ id, m, b }) => { const dx = minX - b.x; patched[id] = m.points.map(p => ({ x: p.x + dx, y: p.y })); });
+    } else if (mode === 'center-h') {
+      const minX = Math.min(...bounds.map(({ b }) => b.x));
+      const maxX = Math.max(...bounds.map(({ b }) => b.x + b.w));
+      const cx   = (minX + maxX) / 2;
+      bounds.forEach(({ id, m, b }) => { const dx = cx - (b.x + b.w / 2); patched[id] = m.points.map(p => ({ x: p.x + dx, y: p.y })); });
+    } else if (mode === 'right') {
+      const maxX = Math.max(...bounds.map(({ b }) => b.x + b.w));
+      bounds.forEach(({ id, m, b }) => { const dx = maxX - (b.x + b.w); patched[id] = m.points.map(p => ({ x: p.x + dx, y: p.y })); });
+    } else if (mode === 'top') {
+      const minY = Math.min(...bounds.map(({ b }) => b.y));
+      bounds.forEach(({ id, m, b }) => { const dy = minY - b.y; patched[id] = m.points.map(p => ({ x: p.x, y: p.y + dy })); });
+    } else if (mode === 'center-v') {
+      const minY = Math.min(...bounds.map(({ b }) => b.y));
+      const maxY = Math.max(...bounds.map(({ b }) => b.y + b.h));
+      const cy   = (minY + maxY) / 2;
+      bounds.forEach(({ id, m, b }) => { const dy = cy - (b.y + b.h / 2); patched[id] = m.points.map(p => ({ x: p.x, y: p.y + dy })); });
+    } else if (mode === 'bottom') {
+      const maxY = Math.max(...bounds.map(({ b }) => b.y + b.h));
+      bounds.forEach(({ id, m, b }) => { const dy = maxY - (b.y + b.h); patched[id] = m.points.map(p => ({ x: p.x, y: p.y + dy })); });
+    } else if (mode === 'dist-h') {
+      const sorted = [...bounds].sort((a, b) => a.b.x - b.b.x);
+      const totalW = sorted.reduce((s, { b }) => s + b.w, 0);
+      const span   = sorted[sorted.length - 1].b.x + sorted[sorted.length - 1].b.w - sorted[0].b.x;
+      const gap    = (span - totalW) / Math.max(sorted.length - 1, 1);
+      let curX = sorted[0].b.x + sorted[0].b.w + gap;
+      for (let i = 1; i < sorted.length - 1; i++) {
+        const { id, m, b } = sorted[i];
+        const dx = curX - b.x;
+        patched[id] = m.points.map(p => ({ x: p.x + dx, y: p.y }));
+        curX += b.w + gap;
+      }
+    } else if (mode === 'dist-v') {
+      const sorted = [...bounds].sort((a, b) => a.b.y - b.b.y);
+      const totalH = sorted.reduce((s, { b }) => s + b.h, 0);
+      const span   = sorted[sorted.length - 1].b.y + sorted[sorted.length - 1].b.h - sorted[0].b.y;
+      const gap    = (span - totalH) / Math.max(sorted.length - 1, 1);
+      let curY = sorted[0].b.y + sorted[0].b.h + gap;
+      for (let i = 1; i < sorted.length - 1; i++) {
+        const { id, m, b } = sorted[i];
+        const dy = curY - b.y;
+        patched[id] = m.points.map(p => ({ x: p.x, y: p.y + dy }));
+        curY += b.h + gap;
+      }
+    }
+
+    updateMarkups(activeBoardId, prev =>
+      prev.map(m => patched[m.id] ? { ...m, points: patched[m.id] } : m)
+    );
+  }, [activeBoardId, boardMarkups, selectedIds, updateMarkups]);
 
   // ── Hit test ─────────────────────────────────────────────────────────────
   const hitTest = useCallback((pt: Pt, list: Markup[]): Markup | null => {
@@ -813,13 +911,30 @@ export function VisualWorkspace() {
       return;
     }
 
+    // Feature 11: Count — each click places a numbered tally circle
+    if (t === 'count') {
+      const countNum = (boardMarkups[activeBoardId] ?? []).filter(m => m.type === 'count').length + 1;
+      const m: Markup = {
+        id: genId(), type: 'count', number: counter,
+        points: [pt], text: String(countNum),
+        color: colorRef.current, strokeWidth: 2, fontSize: 14,
+        opacity: 1, priority: 'medium', status: 'open', layerId: 'l1',
+        createdAt: new Date().toISOString(),
+      };
+      updateMarkups(activeBoardId, prev => [...prev, m]);
+      setCounter(c => c + 1);
+      setSelectedId(m.id);
+      setSelectedIds([m.id]);
+      return;
+    }
+
     if (['arrow','cloud','text','box','ellipse','callout','dimension','distance','zoom-area'].includes(t)) {
       isDrawing.current  = true;
       drawStart.current  = pt;
       drawCurrent.current = pt;
       setPreview({ type: t, start: pt, cur: pt });
     }
-  }, [editingId, commitEdit, tool, selectedId, markups, activeBoardId, toPt, hitTest,
+  }, [editingId, commitEdit, tool, selectedId, markups, activeBoardId, boardMarkups, toPt, hitTest,
       updateMarkups, zoomAt, fitView, scaleSet, setTool, counter]);
 
   // ── Pointer move ──────────────────────────────────────────────────────────
@@ -1054,10 +1169,54 @@ export function VisualWorkspace() {
       }
       if ((e.metaKey || e.ctrlKey) && e.key === 'z') { e.preventDefault(); undo(); }
       if ((e.metaKey || e.ctrlKey) && (e.key === 'y' || (e.shiftKey && e.key === 'z'))) { e.preventDefault(); redo(); }
+
+      // Feature 12: Clipboard
+      if ((e.metaKey || e.ctrlKey) && e.key === 'c' && selectedIds.length > 0 && !editingId) {
+        e.preventDefault();
+        setClipboard(markups.filter(m => selectedIds.includes(m.id)));
+        return;
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === 'x' && selectedIds.length > 0 && !editingId) {
+        e.preventDefault();
+        setClipboard(markups.filter(m => selectedIds.includes(m.id)));
+        const toDelete = new Set(selectedIds);
+        updateMarkups(activeBoardId, prev => prev.filter(m => !toDelete.has(m.id)));
+        clearSelection();
+        return;
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === 'v' && clipboardRef.current.length > 0 && !editingId) {
+        e.preventDefault();
+        const off = 20;
+        let ctr = counter;
+        const pasted = clipboardRef.current.map(m => ({
+          ...m, id: genId(), number: ctr++,
+          points: m.points.map(p => ({ x: p.x + off, y: p.y + off })),
+          createdAt: new Date().toISOString(),
+        }));
+        updateMarkups(activeBoardId, prev => [...prev, ...pasted]);
+        setCounter(ctr);
+        setSelectedIds(pasted.map(m => m.id));
+        setSelectedId(pasted[pasted.length - 1].id);
+        return;
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === 'd' && selectedIds.length > 0 && !editingId) {
+        e.preventDefault();
+        let ctr = counter;
+        const duped = markups.filter(m => selectedIds.includes(m.id)).map(m => ({
+          ...m, id: genId(), number: ctr++,
+          points: m.points.map(p => ({ x: p.x + 20, y: p.y + 20 })),
+          createdAt: new Date().toISOString(),
+        }));
+        updateMarkups(activeBoardId, prev => [...prev, ...duped]);
+        setCounter(ctr);
+        setSelectedIds(duped.map(m => m.id));
+        setSelectedId(duped[duped.length - 1].id);
+        return;
+      }
     };
     window.addEventListener('keydown', h);
     return () => window.removeEventListener('keydown', h);
-  }, [selectedIds, selectedId, editingId, activeBoardId, updateMarkups, undo, redo, setTool, commitEdit, clearSelection]);
+  }, [selectedIds, selectedId, editingId, activeBoardId, markups, counter, updateMarkups, undo, redo, setTool, commitEdit, clearSelection]);
 
   // ── Tool activation ───────────────────────────────────────────────────────
   const activateTool = useCallback((t: Tool) => {
@@ -1085,7 +1244,7 @@ export function VisualWorkspace() {
       arrow: 'arrow', cloud: 'cloud', box: 'box', ellipse: 'ellipse', text: 'text', pen: 'pen',
       polyline: 'polyline', select: 'select', pan: 'pan', callout: 'callout',
       highlighter: 'highlighter', eraser: 'eraser', distance: 'distance',
-      dimension: 'dimension', angle: 'angle', area: 'area',
+      dimension: 'dimension', angle: 'angle', area: 'area', count: 'count',
     };
     if (toolMap[c]) { activateTool(toolMap[c]!); }
     else if (c === 'fit')       { fitView(); }
@@ -1229,6 +1388,19 @@ export function VisualWorkspace() {
           <text x={cx} y={cy} fill={stroke}
             fontSize={(m.fontSize ?? 10)/zoom} fontFamily={m.fontFamily ?? 'sans-serif'}
             textAnchor="middle" dominantBaseline="middle">
+            {m.text}
+          </text>
+        </g>
+      );
+
+    } else if (m.type === 'count') {
+      const cx = m.points[0].x, cy = m.points[0].y;
+      const r = 12 / zoom;
+      shape = (
+        <g key={m.id} {...tp}>
+          <circle cx={cx} cy={cy} r={r} fill={stroke}/>
+          <text x={cx} y={cy} fill="white" fontSize={9/zoom} fontFamily="sans-serif"
+            textAnchor="middle" dominantBaseline="middle" fontWeight="bold">
             {m.text}
           </text>
         </g>
@@ -1528,6 +1700,7 @@ export function VisualWorkspace() {
         <TB tid="tool-distance"  active={tool==='distance'}  onClick={()=>activateTool('distance')}  icon={<Minus size={15}/>}         label="Distance"/>
         <TB tid="tool-angle"     active={tool==='angle'}     onClick={()=>activateTool('angle')}     icon={<TrendingUp size={15}/>}    label="Angle"/>
         <TB tid="tool-area"      active={tool==='area'}      onClick={()=>activateTool('area')}      icon={<Hexagon size={15}/>}       label="Area"/>
+        <TB tid="tool-count"     active={tool==='count'}     onClick={()=>activateTool('count')}     icon={<Hash size={15}/>}          label="Count"/>
         <Sep/>
         <TB tid="tool-note"        active={activePanel==='note'}   onClick={()=>activateTool('note')}        icon={<StickyNote size={15}/>}    label="Note"/>
         <TB tid="tool-photo"       active={activePanel==='photo'}  onClick={()=>activateTool('photo')}       icon={<Camera size={15}/>}        label="Photo"/>
@@ -1662,8 +1835,19 @@ export function VisualWorkspace() {
           <span className="font-mono text-slate-300 shrink-0">{selectedMarkup.strokeWidth}px</span>
         </>)}
 
+        {/* Feature 15: PDF page navigation */}
+        {pdfTotalPages > 1 && (<>
+          <span className="text-slate-500 shrink-0">Page:</span>
+          <button onClick={() => setPdfPageNum(p => Math.max(1, p - 1))} disabled={pdfPageNum <= 1}
+            className="px-1.5 py-0 rounded border border-slate-600 text-slate-400 hover:text-white disabled:opacity-30 text-[10px]">◀</button>
+          <span className="font-mono text-slate-300 shrink-0">{pdfPageNum} / {pdfTotalPages}</span>
+          <button onClick={() => setPdfPageNum(p => Math.min(pdfTotalPages, p + 1))} disabled={pdfPageNum >= pdfTotalPages}
+            className="px-1.5 py-0 rounded border border-slate-600 text-slate-400 hover:text-white disabled:opacity-30 text-[10px]">▶</button>
+          <span className="text-slate-600 shrink-0">|</span>
+        </>)}
+
         {/* Empty fallback */}
-        {!['text','callout','arrow','cloud','box','pen','highlighter','dimension','distance'].includes(tool) && !selectedMarkup && (
+        {!['text','callout','arrow','cloud','box','pen','highlighter','dimension','distance'].includes(tool) && !selectedMarkup && pdfTotalPages <= 1 && (
           <span className="text-slate-700 italic">Select a tool or markup to see properties</span>
         )}
       </div>
@@ -1783,6 +1967,11 @@ export function VisualWorkspace() {
               </>) : <span className="text-slate-600">Move cursor over canvas</span>}
               <span className="text-slate-700">·</span>
               <span>{markups.length} markup{markups.length !== 1 ? 's' : ''}</span>
+              {markups.filter(m => m.type === 'count').length > 0 && (
+                <span className="text-purple-400 text-[9px]">
+                  ● Count: {markups.filter(m => m.type === 'count').length}
+                </span>
+              )}
               <span className="ml-auto font-mono">{Math.round(zoom * 100)}%</span>
               {calibRatio !== null && (
                 <span className="text-green-400 text-[9px]">● Calibrated ({calibUnit})</span>
@@ -1953,6 +2142,36 @@ export function VisualWorkspace() {
                       {Object.entries(STATUS_CFG).map(([k,v]) => <option key={k} value={k}>{v.label}</option>)}
                     </select>
                   </div>
+                  {/* Feature 13: Align & distribute */}
+                  <div>
+                    <label className="block text-[10px] text-slate-500 mb-1 uppercase tracking-wide">Align</label>
+                    <div className="grid grid-cols-3 gap-1">
+                      {([
+                        ['left',     '⬛▫▫', 'Align Left'],
+                        ['center-h', '▫⬛▫', 'Center H'],
+                        ['right',    '▫▫⬛', 'Align Right'],
+                        ['top',      '⬛▫▫', 'Align Top'],
+                        ['center-v', '▫⬛▫', 'Center V'],
+                        ['bottom',   '▫▫⬛', 'Align Bottom'],
+                      ] as [string, string, string][]).map(([mode, , label]) => (
+                        <button key={mode} onClick={() => alignMarkups(mode)}
+                          className="py-1 rounded text-[10px] border border-slate-600 text-slate-400 hover:border-slate-500 hover:text-white transition-colors truncate"
+                          title={label}>{label}</button>
+                      ))}
+                    </div>
+                    <label className="block text-[10px] text-slate-500 mb-1 mt-2 uppercase tracking-wide">Distribute</label>
+                    <div className="grid grid-cols-2 gap-1">
+                      <button onClick={() => alignMarkups('dist-h')}
+                        className="py-1 rounded text-[10px] border border-slate-600 text-slate-400 hover:border-slate-500 hover:text-white">
+                        ↔ H-Space
+                      </button>
+                      <button onClick={() => alignMarkups('dist-v')}
+                        className="py-1 rounded text-[10px] border border-slate-600 text-slate-400 hover:border-slate-500 hover:text-white">
+                        ↕ V-Space
+                      </button>
+                    </div>
+                  </div>
+
                   <button onClick={() => { const toDelete = new Set(selectedIds); updateMarkups(activeBoardId, p => p.filter(m => !toDelete.has(m.id))); clearSelection(); }}
                     className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded bg-red-900/30 border border-red-800/50 text-red-400 hover:bg-red-900/50 text-xs">
                     <Trash2 size={11}/> Delete all {selectedIds.length}
@@ -2110,9 +2329,44 @@ export function VisualWorkspace() {
                     ))}
                   </div>
 
-                  <div className="border-t border-slate-700 pt-2 flex gap-2">
-                    <button aria-label="Edit note" className="flex-1 text-[10px] py-1.5 rounded bg-slate-700 hover:bg-slate-600 text-slate-300">Edit note</button>
-                    <button aria-label="Add Comment" className="flex-1 text-[10px] py-1.5 rounded bg-slate-700 hover:bg-slate-600 text-slate-300">Add Comment</button>
+                  {/* Feature 14: Comment thread */}
+                  <div className="border-t border-slate-700 pt-2 space-y-2">
+                    <label className="block text-[10px] text-slate-500 uppercase tracking-wide">
+                      Comments ({(selectedMarkup.comments ?? []).length})
+                    </label>
+                    {(selectedMarkup.comments ?? []).map(c => (
+                      <div key={c.id} className="bg-slate-700/60 rounded px-2 py-1.5 space-y-0.5">
+                        <div className="flex items-center justify-between text-[9px]">
+                          <span className="text-blue-400 font-medium">{c.author}</span>
+                          <span className="text-slate-500">{new Date(c.createdAt).toLocaleDateString()}</span>
+                        </div>
+                        <p className="text-xs text-slate-300 leading-snug">{c.text}</p>
+                      </div>
+                    ))}
+                    <div className="flex gap-1">
+                      <input
+                        value={commentInput}
+                        onChange={e => setCommentInput(e.target.value)}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter' && !e.shiftKey && commentInput.trim()) {
+                            e.preventDefault();
+                            upd({ comments: [...(selectedMarkup.comments ?? []), { id: genId(), text: commentInput.trim(), author: 'You', createdAt: new Date().toISOString() }] });
+                            setCommentInput('');
+                          }
+                        }}
+                        placeholder="Add comment…"
+                        className="flex-1 bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-slate-200 focus:outline-none focus:border-blue-500 min-w-0"
+                      />
+                      <button
+                        onClick={() => {
+                          if (!commentInput.trim()) return;
+                          upd({ comments: [...(selectedMarkup.comments ?? []), { id: genId(), text: commentInput.trim(), author: 'You', createdAt: new Date().toISOString() }] });
+                          setCommentInput('');
+                        }}
+                        className="px-2 py-1 rounded bg-blue-600 hover:bg-blue-500 text-white text-[10px] shrink-0">
+                        Add
+                      </button>
+                    </div>
                   </div>
 
                   <button onClick={() => { updateMarkups(activeBoardId, p => p.filter(m => m.id !== selectedId)); setSelectedId(null); }}
