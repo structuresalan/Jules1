@@ -56,10 +56,14 @@ interface Markup {
   createdAt: string;
   imageData?: string;
   comments?: { id: string; text: string; author: string; createdAt: string }[];
+  linkedPhotoIds?: string[];
+  linkedDocIds?:   string[];
 }
 
 interface Layer { id: string; name: string; visible: boolean }
 interface BoardItem { id: string; name: string; parentId: string | null }
+interface SitePhoto { id: string; name: string; data: string; createdAt: string }
+interface AttachedDoc { id: string; name: string; type: string; createdAt: string }
 
 type ActivePanel =
   | 'color' | 'photo' | 'file' | 'note' | 'scale'
@@ -92,6 +96,8 @@ function normalizeMarkup(raw: Record<string, unknown>): Markup {
     createdAt:   String(raw.createdAt ?? new Date().toISOString()),
     imageData:   raw.imageData as string | undefined,
     comments:    (raw.comments as Markup['comments']) ?? [],
+    linkedPhotoIds: (raw.linkedPhotoIds as string[] | undefined) ?? [],
+    linkedDocIds:   (raw.linkedDocIds   as string[] | undefined) ?? [],
   };
 }
 
@@ -454,6 +460,21 @@ export function VisualWorkspace() {
   // More menu
   const [showMoreMenu, setShowMoreMenu] = useState(false);
 
+  // Site photos library
+  const [sitePhotos,         setSitePhotos]         = useState<SitePhoto[]>([]);
+  const photoLibInputRef   = useRef<HTMLInputElement>(null);
+  // Attached documents library
+  const [attachedDocs,       setAttachedDocs]       = useState<AttachedDoc[]>([
+    { id: 'd1', name: 'Steel Design Report', type: 'calculation', createdAt: new Date().toISOString() },
+    { id: 'd2', name: 'Wind Load Summary',   type: 'report',      createdAt: new Date().toISOString() },
+    { id: 'd3', name: 'Foundation Report',   type: 'report',      createdAt: new Date().toISOString() },
+  ]);
+  const [newDocName,         setNewDocName]         = useState('');
+  // Grid spacing
+  const [gridSpacing,        setGridSpacing]        = useState(50);
+  // Photo filter (filter site photos panel to linked-only)
+  const [photoFilterLinked,  setPhotoFilterLinked]  = useState(false);
+
   // Boards
   const [activeBoardId, setActiveBoardId] = useState('b1');
   const [expanded, setExpanded] = useState<Set<string>>(new Set(['cat3', 'cat7']));
@@ -545,6 +566,25 @@ export function VisualWorkspace() {
     }, 400);
     return () => clearTimeout(t);
   }, [boardGraphs, GRAPH_KEY]);
+
+  const PHOTOS_KEY = `vw.photos.${projectId || 'default'}`;
+  const DOCS_KEY   = `vw.docs.${projectId || 'default'}`;
+  useEffect(() => {
+    try { const s = localStorage.getItem(PHOTOS_KEY); if (s) setSitePhotos(JSON.parse(s)); } catch {}
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [PHOTOS_KEY]);
+  useEffect(() => {
+    const t = setTimeout(() => { try { localStorage.setItem(PHOTOS_KEY, JSON.stringify(sitePhotos)); } catch {} }, 400);
+    return () => clearTimeout(t);
+  }, [sitePhotos, PHOTOS_KEY]);
+  useEffect(() => {
+    try { const s = localStorage.getItem(DOCS_KEY); if (s) setAttachedDocs(JSON.parse(s)); } catch {}
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [DOCS_KEY]);
+  useEffect(() => {
+    const t = setTimeout(() => { try { localStorage.setItem(DOCS_KEY, JSON.stringify(attachedDocs)); } catch {} }, 400);
+    return () => clearTimeout(t);
+  }, [attachedDocs, DOCS_KEY]);
 
   // ── Resize observer ───────────────────────────────────────────────────────
   useEffect(() => {
@@ -1720,7 +1760,7 @@ export function VisualWorkspace() {
   // ── Grid ──────────────────────────────────────────────────────────────────
   const renderGrid = () => {
     if (!showGrid) return null;
-    const g = 50, cw = canvasSize.w, ch = canvasSize.h;
+    const g = gridSpacing, cw = canvasSize.w, ch = canvasSize.h;
     const x0 = Math.floor(-pan.x / zoom / g) * g, y0 = Math.floor(-pan.y / zoom / g) * g;
     const lines: React.ReactNode[] = [];
     for (let x = x0; x < x0 + cw / zoom + g; x += g)
@@ -2451,24 +2491,47 @@ export function VisualWorkspace() {
               <div className="flex items-center justify-between px-3 py-1.5">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Site Photos</span>
                 <div className="flex gap-1">
-                  <button aria-label="Filter linked photos" className="text-slate-400 hover:text-white p-0.5"><Filter size={11}/></button>
+                  <button
+                    aria-label="Filter linked photos"
+                    title={photoFilterLinked ? 'Show all photos' : 'Show only linked photos'}
+                    onClick={() => setPhotoFilterLinked(v => !v)}
+                    className={`p-0.5 transition-colors ${photoFilterLinked ? 'text-blue-400' : 'text-slate-400 hover:text-white'}`}>
+                    <Filter size={11}/>
+                  </button>
+                  <button onClick={() => photoLibInputRef.current?.click()} title="Add photo to library"
+                    className="p-0.5 text-slate-400 hover:text-white"><Plus size={11}/></button>
                   <button aria-label="Collapse photos panel" onClick={() => setShowInspector(false)} className="text-slate-400 hover:text-white p-0.5"><ChevronLeft size={11}/></button>
                 </div>
               </div>
-              <div className="grid grid-cols-3 gap-1 px-2 pb-2">
-                {[1,2,3,4,5].map(i => (
-                  <div key={i} className="aspect-square rounded bg-slate-700 flex items-center justify-center overflow-hidden">
-                    <Image size={14} className="text-slate-500"/>
+              {(() => {
+                const photos = photoFilterLinked && selectedMarkup
+                  ? sitePhotos.filter(p => selectedMarkup.linkedPhotoIds?.includes(p.id))
+                  : sitePhotos;
+                return photos.length === 0 ? (
+                  <div className="px-3 pb-2 text-[10px] text-slate-600 text-center py-2">
+                    {photoFilterLinked ? 'No linked photos.' : 'No photos yet. Click + to add.'}
                   </div>
-                ))}
-              </div>
-              <div className="px-3 pb-2">
-                <button aria-label="View all photos (5)" data-testid="view-all-photos"
-                  onClick={() => setActivePanel('photo-library')}
-                  className="text-[10px] text-blue-400 hover:text-blue-300 w-full text-left">
-                  View all photos (5)
-                </button>
-              </div>
+                ) : (
+                  <div className="grid grid-cols-3 gap-1 px-2 pb-1">
+                    {photos.slice(0, 6).map(p => (
+                      <div key={p.id}
+                        onClick={() => setActivePanel('photo-library')}
+                        className="aspect-square rounded bg-slate-700 overflow-hidden cursor-pointer hover:ring-2 ring-blue-500">
+                        <img src={p.data} alt={p.name} className="w-full h-full object-cover"/>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+              {sitePhotos.length > 0 && (
+                <div className="px-3 pb-2">
+                  <button aria-label={`View all photos (${sitePhotos.length})`} data-testid="view-all-photos"
+                    onClick={() => setActivePanel('photo-library')}
+                    className="text-[10px] text-blue-400 hover:text-blue-300 w-full text-left">
+                    View all photos ({sitePhotos.length})
+                  </button>
+                </div>
+              )}
             </div>
 
             <div className="flex-1 overflow-y-auto">
@@ -2817,13 +2880,19 @@ export function VisualWorkspace() {
                     <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-slate-600"/></div>
                     <div className="relative flex justify-center text-[10px] uppercase text-slate-500"><span className="bg-slate-800 px-2">or choose existing</span></div>
                   </div>
-                  <div className="grid grid-cols-3 gap-2">
-                    {[1,2,3,4,5].map(i => (
-                      <div key={i} className="aspect-square rounded bg-slate-700 flex items-center justify-center cursor-pointer hover:bg-slate-600 hover:ring-2 ring-blue-500">
-                        <Image size={20} className="text-slate-500"/>
-                      </div>
-                    ))}
-                  </div>
+                  {sitePhotos.length === 0 ? (
+                    <p className="text-[10px] text-slate-500 text-center py-2">No photos in library yet.</p>
+                  ) : (
+                    <div className="grid grid-cols-3 gap-2">
+                      {sitePhotos.map(p => (
+                        <div key={p.id}
+                          onClick={() => { placeImageOnCanvas(p.data); setActivePanel(null); }}
+                          className="aspect-square rounded bg-slate-700 overflow-hidden cursor-pointer hover:ring-2 ring-blue-500">
+                          <img src={p.data} alt={p.name} className="w-full h-full object-cover"/>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
 
