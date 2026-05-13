@@ -15,12 +15,12 @@ type RoofExposure = "Fully Exposed" | "Partially Exposed" | "Sheltered";
 
 export const Loads: React.FC = () => {
   const { toPDF, targetRef } = usePDF({filename: 'asce-snow-load-report.pdf'});
-  
+
   // Code Logic
   const [ibcYear, setIbcYear] = useState('IBC 2018');
   const [asceYear, setAsceYear] = useState(IBC_TO_ASCE_MAP['IBC 2018']);
   const [isOverridden, setIsOverridden] = useState(false);
-  
+
   // Navigation
   const [activeTab, setActiveTab] = useState('Snow');
 
@@ -31,7 +31,7 @@ export const Loads: React.FC = () => {
   // Inputs
   const [pg, setPg] = useState(20); // Ground snow load (psf)
   const [roofPitch, setRoofPitch] = useState(0); // degrees
-  
+
   // Categorical Inputs
   const [riskCategory, setRiskCategory] = useState<"I"|"II"|"III"|"IV">("II");
   const [thermalCondition, setThermalCondition] = useState("All structures except as indicated below");
@@ -42,20 +42,20 @@ export const Loads: React.FC = () => {
 
   // Dynamically extract ASCE Factors based on the ACTIVE YEAR
   const isAsce22 = asceYear === 'ASCE 7-22';
-  
+
   // In ASCE 7-22, Is is baked into the reliability-targeted ground snow load pg, so we effectively treat it as 1.0 for math, but we hide it in the UI.
   const Is = activeSnowData.importance_factor_Is[riskCategory];
   const mathIs = isAsce22 ? 1.0 : Is;
-  
+
   const Ct = activeSnowData.thermal_factor_Ct[thermalCondition as keyof typeof activeSnowData.thermal_factor_Ct];
   const Ce = activeSnowData.exposure_factor_Ce[terrain][roofExposure];
 
   // Calculation: pf = 0.7 * Ce * Ct * (Is) * pg
   const pf_raw = 0.7 * Ce * Ct * mathIs * pg;
-  
+
   // ASCE 7 Minimum Snow Load Check (pm) for low-slope roofs
   // Applies if roof slope < 15 deg (for normal roofs) or < W/50 for curved
-  const pm = isAsce22 
+  const pm = isAsce22
     ? (pg <= 20 ? pg : 20)
     : (pg <= 20 ? Is * pg : Is * 20);
 
@@ -66,11 +66,11 @@ export const Loads: React.FC = () => {
   // Slope Factor Cs Calculation
   const ctKey = Ct <= 1.0 ? "Ct<=1.0" : "Ct>=1.1";
   const limitAngle = activeSnowData.roof_slope_factor_Cs[surfaceCondition][ctKey];
-  
-  const Cs = roofShape === "Flat" || roofPitch <= limitAngle 
-    ? 1.0 
-    : roofPitch >= 70 
-      ? 0.0 
+
+  const Cs = roofShape === "Flat" || roofPitch <= limitAngle
+    ? 1.0
+    : roofPitch >= 70
+      ? 0.0
       : 1.0 - (roofPitch - limitAngle) / (70 - limitAngle);
 
   // Final Sloped Roof Snow Load
@@ -79,7 +79,7 @@ export const Loads: React.FC = () => {
 
   // --- Wind Load Logic ---
   const activeWindData = (windData as Record<string, typeof windData["ASCE 7-16"]>)[asceYear];
-  
+
   // Wind Inputs
   const [vWind, setVWind] = useState(115); // mph
   const [meanRoofHeight, setMeanRoofHeight] = useState(30); // ft
@@ -98,10 +98,10 @@ export const Loads: React.FC = () => {
 
   // Calculate Kz (Exposure Coefficient)
   const z = Math.max(15, meanRoofHeight); // ASCE 7 limits z to minimum 15ft for calculations
-  const Kz = z < 15 
-    ? 2.01 * Math.pow(15 / zg, 2 / alpha) 
+  const Kz = z < 15
+    ? 2.01 * Math.pow(15 / zg, 2 / alpha)
     : 2.01 * Math.pow(z / zg, 2 / alpha);
-  
+
   // Calculate Ke (Ground Elevation Factor) - Introduced in ASCE 7-16
   const isAscePre16 = asceYear === 'ASCE 7-10' || asceYear === 'ASCE 7-05';
   let Ke = 1.0;
@@ -125,11 +125,11 @@ export const Loads: React.FC = () => {
   const gcpi = (windCpData.gcpi as Record<string, number[]>)[enclosureType];
   const gcpi_pos = gcpi[0];
   const gcpi_neg = gcpi[1];
-  
+
   // External Pressure Coefficients (Cp)
   const cp_windward = windCpData.wall_cp.windward;
   const cp_side = windCpData.wall_cp.side;
-  
+
   const G = windCpData.gust_effect_factor_G;
 
   // Helper to calculate MWFRS case based on wind direction
@@ -164,10 +164,10 @@ export const Loads: React.FC = () => {
     const data = (windCpData.cnc_gcp as Record<string, typeof windCpData.cnc_gcp.roof_zone_1>)[zoneKey];
     const val10 = isPositive ? data.pos_10 : data.neg_10;
     const val500 = isPositive ? data.pos_500 : data.neg_500;
-    
+
     if (area <= 10) return val10;
     if (area >= 500) return val500;
-    
+
     // Logarithmic interpolation: C = C10 - (C10 - C500) * log10(A/10) / log10(500/10)
     // Note: log10(500/10) = log10(50) ≈ 1.69897
     const interp = val10 - (val10 - val500) * (Math.log10(area / 10) / Math.log10(50));
@@ -178,54 +178,54 @@ export const Loads: React.FC = () => {
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
-      
+
       {/* Header and Global Settings */}
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-gray-900 flex items-center gap-3">
-            <Wind className="text-blue-600" />
+          <h1 className="text-3xl font-bold tracking-tight text-slate-100 flex items-center gap-3">
+            <Wind className="text-blue-400" />
             Environmental Loads
           </h1>
-          <p className="mt-2 text-gray-500">Calculate gravity and lateral environmental loads.</p>
+          <p className="mt-2 text-slate-400">Calculate gravity and lateral environmental loads.</p>
         </div>
-        
-        <div className="flex items-center gap-4 bg-white p-2 rounded-lg border border-gray-200 shadow-sm w-full lg:w-auto">
+
+        <div className="flex items-center gap-4 bg-slate-800 p-2 rounded-lg border border-slate-700 w-full lg:w-auto">
           {/* Top Right Code Selectors */}
-          <div className="flex items-center gap-3 pr-4 border-r border-gray-200">
+          <div className="flex items-center gap-3 pr-4 border-r border-slate-600">
             <div>
-              <div className="text-[10px] text-gray-500 uppercase font-semibold">IBC</div>
-              <select 
-                value={ibcYear} 
+              <div className="text-[10px] text-slate-500 uppercase font-semibold">IBC</div>
+              <select
+                value={ibcYear}
                 onChange={(e) => {
                   const newIbc = e.target.value;
                   setIbcYear(newIbc);
                   setAsceYear(IBC_TO_ASCE_MAP[newIbc] || "ASCE 7-16");
                   setIsOverridden(false);
                 }}
-                className="text-sm font-medium bg-transparent focus:outline-none focus:ring-0 cursor-pointer text-gray-900"
+                className="bg-slate-700 border border-slate-600 rounded px-2 py-1 text-sm text-slate-200 cursor-pointer focus:outline-none focus:border-blue-500"
               >
                 {Object.keys(IBC_TO_ASCE_MAP).map(year => (
                   <option key={year} value={year}>{year}</option>
                 ))}
               </select>
             </div>
-            
+
             <div className="relative">
               <div className="flex items-center gap-2">
-                <div className="text-[10px] text-gray-500 uppercase font-semibold">ASCE</div>
+                <div className="text-[10px] text-slate-500 uppercase font-semibold">ASCE</div>
                 {isOverridden && (
-                  <span className="absolute -top-1 -right-2 transform translate-x-full text-[8px] font-bold bg-amber-100 text-amber-800 px-1 rounded border border-amber-200">
+                  <span className="absolute -top-1 -right-2 transform translate-x-full text-[8px] font-bold bg-amber-900/30 text-amber-400 px-1 rounded border border-amber-700">
                     OVERRIDE
                   </span>
                 )}
               </div>
-              <select 
-                value={asceYear} 
+              <select
+                value={asceYear}
                 onChange={(e) => {
                   setAsceYear(e.target.value);
                   setIsOverridden(e.target.value !== IBC_TO_ASCE_MAP[ibcYear]);
                 }}
-                className="text-sm font-medium bg-transparent focus:outline-none focus:ring-0 cursor-pointer text-gray-900"
+                className="bg-slate-700 border border-slate-600 rounded px-2 py-1 text-sm text-slate-200 cursor-pointer focus:outline-none focus:border-blue-500"
               >
                 <option>ASCE 7-22</option>
                 <option>ASCE 7-16</option>
@@ -235,9 +235,9 @@ export const Loads: React.FC = () => {
             </div>
           </div>
 
-          <button 
+          <button
             onClick={() => toPDF()}
-            className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 text-blue-700 rounded hover:bg-blue-100 transition-colors text-sm font-medium shrink-0"
+            className="flex items-center gap-2 px-3 py-1.5 bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 border border-blue-700 rounded transition-colors text-sm font-medium shrink-0"
           >
             <Download size={16} />
             Export
@@ -246,7 +246,7 @@ export const Loads: React.FC = () => {
       </div>
 
       {/* Navigation Sub-tabs */}
-      <div className="border-b border-gray-200">
+      <div className="border-b border-slate-700">
         <nav className="-mb-px flex space-x-8">
           {['Snow', 'Wind', 'Dead', 'Live'].map((tab) => (
             <button
@@ -255,8 +255,8 @@ export const Loads: React.FC = () => {
               className={`
                 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors
                 ${activeTab === tab
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  ? 'border-blue-500 text-blue-400'
+                  : 'border-transparent text-slate-500 hover:text-slate-300 hover:border-slate-500'
                 }
               `}
             >
@@ -272,22 +272,22 @@ export const Loads: React.FC = () => {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             {/* Input Section */}
             <div className="lg:col-span-1 space-y-6">
-              <div className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm">
-                <h2 className="text-lg font-semibold text-gray-900 mb-4 border-b pb-2">Snow Parameters</h2>
-                
+              <div className="bg-slate-800 p-6 rounded-lg border border-slate-700">
+                <h2 className="text-lg font-semibold text-slate-100 mb-4 border-b border-slate-700 pb-2">Snow Parameters</h2>
+
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Ground Snow Load, pg (psf)</label>
-                    <input type="number" value={pg} onChange={(e) => setPg(Number(e.target.value))} className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2" />
+                    <label className="block text-sm font-medium text-slate-400 mb-1">Ground Snow Load, pg (psf)</label>
+                    <input type="number" value={pg} onChange={(e) => setPg(Number(e.target.value))} className="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-blue-500" />
                   </div>
 
                   {!isAsce22 && (
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Risk Category</label>
-                      <select 
-                        value={riskCategory} 
+                      <label className="block text-sm font-medium text-slate-400 mb-1">Risk Category</label>
+                      <select
+                        value={riskCategory}
                         onChange={(e) => setRiskCategory(e.target.value as "I"|"II"|"III"|"IV")}
-                        className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2 bg-gray-50"
+                        className="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-sm text-slate-200 cursor-pointer focus:outline-none focus:border-blue-500"
                       >
                         {Object.keys(activeSnowData.importance_factor_Is).map(cat => (
                           <option key={cat} value={cat}>{cat}</option>
@@ -297,11 +297,11 @@ export const Loads: React.FC = () => {
                   )}
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Thermal Condition</label>
-                    <select 
-                      value={thermalCondition} 
+                    <label className="block text-sm font-medium text-slate-400 mb-1">Thermal Condition</label>
+                    <select
+                      value={thermalCondition}
                       onChange={(e) => setThermalCondition(e.target.value)}
-                      className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2 bg-gray-50"
+                      className="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-sm text-slate-200 cursor-pointer focus:outline-none focus:border-blue-500"
                     >
                       {Object.keys(activeSnowData.thermal_factor_Ct).map(cond => (
                         <option key={cond} value={cond}>{cond}</option>
@@ -311,11 +311,11 @@ export const Loads: React.FC = () => {
 
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Terrain</label>
-                      <select 
-                        value={terrain} 
+                      <label className="block text-sm font-medium text-slate-400 mb-1">Terrain</label>
+                      <select
+                        value={terrain}
                         onChange={(e) => setTerrain(e.target.value as ExposureCategory)}
-                        className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2 bg-gray-50"
+                        className="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-sm text-slate-200 cursor-pointer focus:outline-none focus:border-blue-500"
                       >
                         {Object.keys(activeSnowData.exposure_factor_Ce).map(t => (
                           <option key={t} value={t}>Exposure {t}</option>
@@ -323,11 +323,11 @@ export const Loads: React.FC = () => {
                       </select>
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Roof Exposure</label>
-                      <select 
-                        value={roofExposure} 
+                      <label className="block text-sm font-medium text-slate-400 mb-1">Roof Exposure</label>
+                      <select
+                        value={roofExposure}
                         onChange={(e) => setRoofExposure(e.target.value as RoofExposure)}
-                        className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2 bg-gray-50"
+                        className="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-sm text-slate-200 cursor-pointer focus:outline-none focus:border-blue-500"
                       >
                         {Object.keys(activeSnowData.exposure_factor_Ce["B"]).map(exp => (
                           <option key={exp} value={exp}>{exp}</option>
@@ -336,18 +336,18 @@ export const Loads: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="pt-4 border-t border-gray-200">
-                    <h3 className="text-sm font-semibold text-gray-900 mb-3">Roof Geometry</h3>
+                  <div className="pt-4 border-t border-slate-700">
+                    <h3 className="text-sm font-semibold text-slate-100 mb-3">Roof Geometry</h3>
                     <div className="space-y-4">
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Roof Shape</label>
-                        <select 
-                          value={roofShape} 
+                        <label className="block text-sm font-medium text-slate-400 mb-1">Roof Shape</label>
+                        <select
+                          value={roofShape}
                           onChange={(e) => {
                             setRoofShape(e.target.value as "Flat"|"Monoslope"|"Hip and Gable"|"Curved");
                             if (e.target.value === "Flat") setRoofPitch(0);
                           }}
-                          className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2 bg-gray-50"
+                          className="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-sm text-slate-200 cursor-pointer focus:outline-none focus:border-blue-500"
                         >
                           <option>Flat</option>
                           <option>Monoslope</option>
@@ -355,19 +355,19 @@ export const Loads: React.FC = () => {
                           <option>Curved</option>
                         </select>
                       </div>
-                      
+
                       {roofShape !== "Flat" && (
                         <div className="grid grid-cols-2 gap-4">
                           <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Roof Pitch (°)</label>
-                            <input type="number" value={roofPitch} onChange={(e) => setRoofPitch(Number(e.target.value))} className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2" />
+                            <label className="block text-sm font-medium text-slate-400 mb-1">Roof Pitch (°)</label>
+                            <input type="number" value={roofPitch} onChange={(e) => setRoofPitch(Number(e.target.value))} className="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-blue-500" />
                           </div>
                           <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Surface Condition</label>
-                            <select 
-                              value={surfaceCondition} 
+                            <label className="block text-sm font-medium text-slate-400 mb-1">Surface Condition</label>
+                            <select
+                              value={surfaceCondition}
                               onChange={(e) => setSurfaceCondition(e.target.value as "Slippery"|"Non-Slippery")}
-                              className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2 bg-gray-50"
+                              className="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-sm text-slate-200 cursor-pointer focus:outline-none focus:border-blue-500"
                             >
                               <option>Non-Slippery</option>
                               <option>Slippery</option>
@@ -384,40 +384,40 @@ export const Loads: React.FC = () => {
 
             {/* Output Section (Tedds Style) */}
             <div className="lg:col-span-2 space-y-6">
-              <div className="bg-white p-8 rounded-lg border border-gray-200 shadow-sm h-full">
-                <h2 className="text-xl font-semibold text-gray-900 mb-6 border-b pb-2">Calculation Output: {asceYear}</h2>
-                
+              <div className="bg-slate-800 p-8 rounded-lg border border-slate-700 h-full">
+                <h2 className="text-xl font-semibold text-slate-100 mb-6 border-b border-slate-700 pb-2">Calculation Output: {asceYear}</h2>
+
                 {/* Calculation Block */}
-                <div className="font-mono text-sm text-gray-800 space-y-4">
-                  
+                <div className="font-mono text-sm text-slate-300 space-y-4">
+
                   <div className="border-l-4 border-blue-500 pl-4 py-1 mb-6">
-                    <h3 className="font-bold text-gray-900 uppercase">Flat Roof Snow Load</h3>
+                    <h3 className="font-bold text-slate-200 uppercase">Flat Roof Snow Load</h3>
                   </div>
 
                   {/* Factors */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-y-2 mb-6">
                     <div>Ground snow load</div>
                     <div>p<sub className="text-[10px]">g</sub> = <strong>{pg} psf</strong></div>
-                    
+
                     {!isAsce22 && (
                       <>
                         <div>Importance factor (Table 1.5-2)</div>
                         <div>I<sub className="text-[10px]">s</sub> = <strong>{Is.toFixed(2)}</strong></div>
                       </>
                     )}
-                    
+
                     <div>Thermal factor (Table 7.3-2)</div>
                     <div>C<sub className="text-[10px]">t</sub> = <strong>{Ct.toFixed(2)}</strong></div>
-                    
+
                     <div>Exposure factor (Table 7.3-1)</div>
                     <div>C<sub className="text-[10px]">e</sub> = <strong>{Ce.toFixed(2)}</strong></div>
                   </div>
 
-                  <div className="my-4 border-t border-gray-200"></div>
+                  <div className="my-4 border-t border-slate-700"></div>
 
                   {/* Equation */}
                   <div className="space-y-2">
-                    <div className="text-gray-500">Calculate flat roof snow load (Eq. 7.3-1)</div>
+                    <div className="text-slate-500">Calculate flat roof snow load (Eq. 7.3-1)</div>
                     {isAsce22 ? (
                       <>
                         <div>p<sub className="text-[10px]">f_calc</sub> = 0.7 × C<sub className="text-[10px]">e</sub> × C<sub className="text-[10px]">t</sub> × p<sub className="text-[10px]">g</sub></div>
@@ -432,13 +432,13 @@ export const Loads: React.FC = () => {
                     <div className="font-bold">p<sub className="text-[10px]">f_calc</sub> = {pf_raw.toFixed(2)} psf</div>
                   </div>
 
-                  <div className="my-4 border-t border-gray-200"></div>
+                  <div className="my-4 border-t border-slate-700"></div>
 
                   {/* Minimum Check */}
                   <div className="space-y-2">
-                    <div className="text-gray-500">Minimum allowable snow load for low-slope roofs (Sec. 7.3.4)</div>
+                    <div className="text-slate-500">Minimum allowable snow load for low-slope roofs (Sec. 7.3.4)</div>
                     {!applyPm ? (
-                      <div className="text-gray-500 italic">Does not apply. Roof slope ({roofPitch}°) is not considered low-slope.</div>
+                      <div className="text-slate-500 italic">Does not apply. Roof slope ({roofPitch}°) is not considered low-slope.</div>
                     ) : isAsce22 ? (
                       pg <= 20 ? (
                         <>
@@ -466,15 +466,15 @@ export const Loads: React.FC = () => {
                     )}
                   </div>
 
-                  <div className="my-4 border-t border-gray-200"></div>
-                  
+                  <div className="my-4 border-t border-slate-700"></div>
+
                   {roofShape !== "Flat" && (
                     <>
-                      <div className="my-4 border-t border-gray-200"></div>
-                      
+                      <div className="my-4 border-t border-slate-700"></div>
+
                       {/* Roof Slope Factor */}
                       <div className="space-y-2">
-                        <div className="text-gray-500">Calculate roof slope factor (Fig. 7.4-1)</div>
+                        <div className="text-slate-500">Calculate roof slope factor (Fig. 7.4-1)</div>
                         <div>Roof Shape: <strong>{roofShape}</strong></div>
                         <div>Limit angle for C<sub className="text-[10px]">t</sub> {Ct <= 1.0 ? '≤ 1.0' : '≥ 1.1'} and {surfaceCondition} surface = <strong>{limitAngle}°</strong></div>
                         {Cs === 1.0 ? (
@@ -491,32 +491,32 @@ export const Loads: React.FC = () => {
                     </>
                   )}
 
-                  <div className="my-4 border-t border-gray-200"></div>
+                  <div className="my-4 border-t border-slate-700"></div>
 
                   {/* Final Result */}
-                  <div className="p-4 bg-gray-50 border border-gray-200 rounded">
+                  <div className="bg-slate-900 border border-slate-700 rounded p-4 text-slate-200">
                     {roofShape !== "Flat" && (
-                      <div className="flex items-center justify-between mb-4 border-b border-gray-200 pb-4">
+                      <div className="flex items-center justify-between mb-4 border-b border-slate-700 pb-4">
                         <div>
-                          <div className="text-gray-600 font-medium">Flat Roof Design Load</div>
-                          <div className="text-xs text-blue-600 mt-1 italic">{controls}</div>
+                          <div className="text-slate-400 font-medium">Flat Roof Design Load</div>
+                          <div className="text-xs text-blue-400 mt-1 italic">{controls}</div>
                         </div>
-                        <div className="text-xl font-bold text-gray-700">
+                        <div className="text-xl font-bold text-slate-100">
                           p<sub className="text-sm">f</sub> = {pf.toFixed(2)} psf
                         </div>
                       </div>
                     )}
-                    
+
                     <div className="flex items-center justify-between">
                       <div>
-                        <div className="text-gray-900 font-bold">{roofShape === "Flat" ? "Flat" : "Sloped"} Roof Design Load</div>
+                        <div className="text-slate-100 font-bold">{roofShape === "Flat" ? "Flat" : "Sloped"} Roof Design Load</div>
                         {roofShape !== "Flat" ? (
-                          <div className="text-xs text-gray-500 mt-1">p<sub className="text-[10px]">s</sub> = C<sub className="text-[10px]">s</sub> × p<sub className="text-[10px]">f</sub></div>
+                          <div className="text-xs text-slate-500 mt-1">p<sub className="text-[10px]">s</sub> = C<sub className="text-[10px]">s</sub> × p<sub className="text-[10px]">f</sub></div>
                         ) : (
-                          <div className="text-xs text-blue-600 mt-1 italic">{controls}</div>
+                          <div className="text-xs text-blue-400 mt-1 italic">{controls}</div>
                         )}
                       </div>
-                      <div className="text-3xl font-bold text-gray-900 border-b-2 border-gray-900 pb-1">
+                      <div className="text-3xl font-bold text-slate-100 border-b-2 border-slate-100 pb-1">
                         p<sub className="text-sm">{roofShape === "Flat" ? "f" : "s"}</sub> = {ps.toFixed(2)} psf
                       </div>
                     </div>
@@ -527,14 +527,14 @@ export const Loads: React.FC = () => {
             </div>
           </div>
         )}
-        
+
         {activeTab === 'Wind' && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             {/* Input Section */}
             <div className="lg:col-span-1 space-y-6">
-              <div className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm">
-                <h2 className="text-lg font-semibold text-gray-900 mb-4 border-b pb-2">Wind Parameters</h2>
-                
+              <div className="bg-slate-800 p-6 rounded-lg border border-slate-700">
+                <h2 className="text-lg font-semibold text-slate-100 mb-4 border-b border-slate-700 pb-2">Wind Parameters</h2>
+
                 <div className="space-y-4">
                   <VariableInput label="Basic Wind Speed, V" value={vWind} onChange={setVWind} unit="mph" />
 
@@ -546,11 +546,11 @@ export const Loads: React.FC = () => {
                   <div className="grid grid-cols-2 gap-4">
                     <VariableInput label="Mean Roof Height, h" value={meanRoofHeight} onChange={setMeanRoofHeight} unit="ft" />
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Exposure Category</label>
-                      <select 
-                        value={windExposure} 
+                      <label className="block text-sm font-medium text-slate-400 mb-1">Exposure Category</label>
+                      <select
+                        value={windExposure}
                         onChange={(e) => setWindExposure(e.target.value as ExposureCategory)}
-                        className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2 bg-gray-50"
+                        className="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-sm text-slate-200 cursor-pointer focus:outline-none focus:border-blue-500"
                       >
                         <option value="B">Exposure B</option>
                         <option value="C">Exposure C</option>
@@ -561,23 +561,23 @@ export const Loads: React.FC = () => {
 
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Wind Procedure</label>
-                      <select 
-                        value={windProcedure} 
+                      <label className="block text-sm font-medium text-slate-400 mb-1">Wind Procedure</label>
+                      <select
+                        value={windProcedure}
                         onChange={(e) => setWindProcedure(e.target.value)}
-                        className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2 bg-gray-50"
+                        className="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-sm text-slate-200 cursor-pointer focus:outline-none focus:border-blue-500"
                       >
-                        <option>Components & Cladding</option>
+                        <option>Components &amp; Cladding</option>
                         <option>MWFRS (Directional)</option>
                         <option>MWFRS (Envelope)</option>
                       </select>
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Enclosure Type (GCpi)</label>
-                      <select 
-                        value={enclosureType} 
+                      <label className="block text-sm font-medium text-slate-400 mb-1">Enclosure Type (GCpi)</label>
+                      <select
+                        value={enclosureType}
                         onChange={(e) => setEnclosureType(e.target.value)}
-                        className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2 bg-gray-50"
+                        className="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-sm text-slate-200 cursor-pointer focus:outline-none focus:border-blue-500"
                       >
                         <option>Enclosed</option>
                         <option>Partially Enclosed</option>
@@ -586,8 +586,8 @@ export const Loads: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="pt-4 border-t border-gray-200">
-                    <h3 className="text-sm font-semibold text-gray-900 mb-3">Topography & Elevation</h3>
+                  <div className="pt-4 border-t border-slate-700">
+                    <h3 className="text-sm font-semibold text-slate-100 mb-3">Topography &amp; Elevation</h3>
                     <div className="space-y-4">
                       <VariableInput label="Topographic Factor, Kzt" value={kzt} onChange={setKzt} step="0.1" />
                       {!isAscePre16 && (
@@ -602,15 +602,15 @@ export const Loads: React.FC = () => {
 
             {/* Output Section */}
             <div className="lg:col-span-2 space-y-6">
-              <div className="bg-white p-8 rounded-lg border border-gray-200 shadow-sm h-full">
-                <h2 className="text-xl font-semibold text-gray-900 mb-6 border-b pb-2">Wind Load Output: {asceYear}</h2>
-                
+              <div className="bg-slate-800 p-8 rounded-lg border border-slate-700 h-full">
+                <h2 className="text-xl font-semibold text-slate-100 mb-6 border-b border-slate-700 pb-2">Wind Load Output: {asceYear}</h2>
+
                 {windProcedure === "Components & Cladding" && (
                   <div className="mb-8">
                     <WindZonesSVG L={bldgLength} B={bldgWidth} a={a_dim} />
                   </div>
                 )}
-                
+
                 {windProcedure === "MWFRS (Directional)" && (
                   <div className="mb-8 grid grid-cols-1 md:grid-cols-2 gap-4">
                     <WindPlanSVG bldgL={bldgLength} bldgB={bldgWidth} />
@@ -618,9 +618,9 @@ export const Loads: React.FC = () => {
                   </div>
                 )}
 
-                <div className="font-mono text-sm text-gray-800 space-y-4">
+                <div className="font-mono text-sm text-slate-300 space-y-4">
                   <div className="border-l-4 border-blue-500 pl-4 py-1 mb-6 mt-8">
-                    <h3 className="font-bold text-gray-900 uppercase">Velocity Pressure (q<sub className="text-[10px]">z</sub>)</h3>
+                    <h3 className="font-bold text-slate-200 uppercase">Velocity Pressure (q<sub className="text-[10px]">z</sub>)</h3>
                   </div>
 
                   {/* Coefficients Block */}
@@ -629,7 +629,7 @@ export const Loads: React.FC = () => {
                     <div>V = <strong>{vWind} mph</strong></div>
 
                     <div>Wind Directionality Factor</div>
-                    <div>K<sub className="text-[10px]">d</sub> = <strong>{Kd.toFixed(2)}</strong> <span className="text-xs text-gray-500">(Building)</span></div>
+                    <div>K<sub className="text-[10px]">d</sub> = <strong>{Kd.toFixed(2)}</strong> <span className="text-xs text-slate-500">(Building)</span></div>
 
                     <div>Topographic Factor</div>
                     <div>K<sub className="text-[10px]">zt</sub> = <strong>{kzt.toFixed(2)}</strong></div>
@@ -637,27 +637,27 @@ export const Loads: React.FC = () => {
                     {!isAscePre16 ? (
                       <>
                         <div>Ground Elevation Factor</div>
-                        <div>K<sub className="text-[10px]">e</sub> = <strong>{Ke.toFixed(3)}</strong> <span className="text-xs text-gray-500">(z_e = {groundElevation} ft)</span></div>
+                        <div>K<sub className="text-[10px]">e</sub> = <strong>{Ke.toFixed(3)}</strong> <span className="text-xs text-slate-500">(z_e = {groundElevation} ft)</span></div>
                       </>
                     ) : (
                       <>
                         <div>Ground Elevation Factor</div>
-                        <div>K<sub className="text-[10px]">e</sub> = <strong>N/A</strong> <span className="text-xs text-gray-500">(Not used in {asceYear})</span></div>
+                        <div>K<sub className="text-[10px]">e</sub> = <strong>N/A</strong> <span className="text-xs text-slate-500">(Not used in {asceYear})</span></div>
                       </>
                     )}
                   </div>
 
-                  <div className="my-4 border-t border-gray-200"></div>
+                  <div className="my-4 border-t border-slate-700"></div>
 
                   {/* Kz Derivation */}
                   <div className="space-y-2">
-                    <div className="text-gray-500">Velocity Pressure Exposure Coefficient (K<sub className="text-[10px]">z</sub>)</div>
+                    <div className="text-slate-500">Velocity Pressure Exposure Coefficient (K<sub className="text-[10px]">z</sub>)</div>
                     <div>Exposure Category = <strong>{windExposure}</strong></div>
                     <div>α = {alpha.toFixed(1)}, z<sub className="text-[10px]">g</sub> = {zg} ft</div>
-                    
+
                     {z < 15 ? (
                       <>
-                        <div className="mt-2 text-xs italic text-gray-500">Note: z &lt; 15 ft, using minimum height of 15 ft for calculation.</div>
+                        <div className="mt-2 text-xs italic text-slate-500">Note: z &lt; 15 ft, using minimum height of 15 ft for calculation.</div>
                         <div>K<sub className="text-[10px]">z</sub> = 2.01 × (15 / z<sub className="text-[10px]">g</sub>)<sup>2/α</sup></div>
                         <div>K<sub className="text-[10px]">z</sub> = 2.01 × (15 / {zg})<sup>2/{alpha.toFixed(1)}</sup> = <strong>{Kz.toFixed(3)}</strong></div>
                       </>
@@ -669,27 +669,27 @@ export const Loads: React.FC = () => {
                     )}
                   </div>
 
-                  <div className="my-4 border-t border-gray-200"></div>
+                  <div className="my-4 border-t border-slate-700"></div>
 
                   {/* Final qz calculation */}
-                  <div className="p-4 bg-gray-50 border border-gray-200 rounded mb-8">
-                    <div className="text-gray-500 mb-2">Velocity Pressure Eq.</div>
-                    
+                  <div className="bg-slate-900 border border-slate-700 rounded p-4 text-slate-200 mb-8">
+                    <div className="text-slate-500 mb-2">Velocity Pressure Eq.</div>
+
                     {!isAscePre16 ? (
                       <div>q<sub className="text-[10px]">z</sub> = 0.00256 × K<sub className="text-[10px]">z</sub> × K<sub className="text-[10px]">zt</sub> × K<sub className="text-[10px]">d</sub> × K<sub className="text-[10px]">e</sub> × V²</div>
                     ) : (
                       <div>q<sub className="text-[10px]">z</sub> = 0.00256 × K<sub className="text-[10px]">z</sub> × K<sub className="text-[10px]">zt</sub> × K<sub className="text-[10px]">d</sub> × V²</div>
                     )}
-                    
+
                     {!isAscePre16 ? (
                       <div className="mb-4">q<sub className="text-[10px]">z</sub> = 0.00256 × {Kz.toFixed(3)} × {kzt.toFixed(2)} × {Kd.toFixed(2)} × {Ke.toFixed(3)} × {vWind}²</div>
                     ) : (
                       <div className="mb-4">q<sub className="text-[10px]">z</sub> = 0.00256 × {Kz.toFixed(3)} × {kzt.toFixed(2)} × {Kd.toFixed(2)} × {vWind}²</div>
                     )}
-                    
-                    <div className="flex justify-between items-end border-t border-gray-200 pt-4">
-                      <div className="font-bold text-gray-900">Final Velocity Pressure</div>
-                      <div className="text-3xl font-bold text-blue-900 border-b-2 border-blue-900 pb-1">
+
+                    <div className="flex justify-between items-end border-t border-slate-700 pt-4">
+                      <div className="font-bold text-slate-100">Final Velocity Pressure</div>
+                      <div className="text-3xl font-bold text-slate-100 border-b-2 border-slate-100 pb-1">
                         q<sub className="text-sm">z</sub> = {qz.toFixed(2)} psf
                       </div>
                     </div>
@@ -698,33 +698,33 @@ export const Loads: React.FC = () => {
                   {windProcedure === "Components & Cladding" && (
                     <>
                       <div className="border-l-4 border-blue-500 pl-4 py-1 mb-6 mt-8">
-                        <h3 className="font-bold text-gray-900 uppercase">C&C Edge Dimension 'a'</h3>
+                        <h3 className="font-bold text-slate-200 uppercase">C&amp;C Edge Dimension 'a'</h3>
                       </div>
-                      
+
                       <div className="space-y-2 mb-8">
                         <div>Least horizontal bldg dimension = <strong>{leastBldgDim} ft</strong></div>
                         <div>a = max( min(0.1 × {leastBldgDim}, 0.4 × {meanRoofHeight}), 3, 0.04 × {leastBldgDim} )</div>
                         <div>a = max( min({a_calc1.toFixed(1)}, {a_calc2.toFixed(1)}), 3, {(0.04 * leastBldgDim).toFixed(1)} )</div>
-                        <div className="font-bold text-lg mt-2 text-gray-900">a = {a_dim.toFixed(1)} ft</div>
+                        <div className="font-bold text-lg mt-2 text-slate-100">a = {a_dim.toFixed(1)} ft</div>
                       </div>
 
                       <div className="border-l-4 border-blue-500 pl-4 py-1 mb-6">
-                        <h3 className="font-bold text-gray-900 uppercase">Design Pressures (p = q × GC<sub className="text-[10px]">p</sub> - q<sub className="text-[10px]">i</sub> × GC<sub className="text-[10px]">pi</sub>)</h3>
+                        <h3 className="font-bold text-slate-200 uppercase">Design Pressures (p = q × GC<sub className="text-[10px]">p</sub> - q<sub className="text-[10px]">i</sub> × GC<sub className="text-[10px]">pi</sub>)</h3>
                       </div>
 
-                      <div className="bg-gray-50 rounded-md border border-gray-200 overflow-x-auto mb-4">
+                      <div className="bg-slate-800 border border-slate-700 rounded overflow-x-auto mb-4">
                         <table className="w-full text-left text-sm whitespace-nowrap">
-                          <thead className="bg-gray-100 border-b border-gray-200">
+                          <thead className="bg-slate-900 border-b border-slate-700">
                             <tr>
-                              <th className="p-2 font-semibold text-gray-700 border-r border-gray-200">Zone</th>
-                              <th className="p-2 font-semibold text-gray-700">Area <span className="text-[10px] font-normal">(sf)</span></th>
-                              <th className="p-2 font-semibold text-gray-700">+GC<sub className="text-[10px]">p</sub></th>
-                              <th className="p-2 font-semibold text-gray-700">-GC<sub className="text-[10px]">p</sub></th>
-                              <th className="p-2 font-semibold text-gray-700 text-blue-800 bg-blue-50/50">+p <span className="text-[10px] font-normal">(psf)</span></th>
-                              <th className="p-2 font-semibold text-gray-700 text-blue-800 bg-blue-50/50">-p <span className="text-[10px] font-normal">(psf)</span></th>
+                              <th className="p-2 font-semibold text-slate-400 border-r border-slate-700">Zone</th>
+                              <th className="p-2 font-semibold text-slate-400">Area <span className="text-[10px] font-normal">(sf)</span></th>
+                              <th className="p-2 font-semibold text-slate-400">+GC<sub className="text-[10px]">p</sub></th>
+                              <th className="p-2 font-semibold text-slate-400">-GC<sub className="text-[10px]">p</sub></th>
+                              <th className="p-2 font-semibold text-slate-400 text-blue-400 bg-blue-900/20">+p <span className="text-[10px] font-normal">(psf)</span></th>
+                              <th className="p-2 font-semibold text-slate-400 text-blue-400 bg-blue-900/20">-p <span className="text-[10px] font-normal">(psf)</span></th>
                             </tr>
                           </thead>
-                          <tbody className="divide-y divide-gray-200">
+                          <tbody className="divide-y divide-slate-700">
                             {[
                               { label: 'Roof 1 (Interior)', key: 'roof_zone_1', color: '#f8fafc' },
                               { label: 'Roof 2 (Edge)', key: 'roof_zone_2', color: '#bbf7d0' },
@@ -739,22 +739,22 @@ export const Loads: React.FC = () => {
                                   // p = qz * GCp - qz * GCpi (calculating max envelopes)
                                   const pPos = qz * gcpPos - qz * gcpi_neg;
                                   const pNeg = qz * gcpNeg - qz * gcpi_pos;
-                                  
+
                                   return (
-                                    <tr key={`${zone.key}-${area}`} className="bg-white hover:bg-blue-50/30">
+                                    <tr key={`${zone.key}-${area}`} className="hover:bg-slate-700/30">
                                       {idx === 0 && (
-                                        <td rowSpan={cncAreas.length} className="p-2 font-medium text-gray-900 border-r border-gray-200 align-top bg-white">
+                                        <td rowSpan={cncAreas.length} className="p-2 font-medium text-slate-200 border-r border-slate-700 align-top bg-slate-800">
                                           <div className="flex items-center gap-2">
-                                            <div className="w-3 h-3 rounded-full border border-gray-400" style={{ backgroundColor: zone.color }}></div>
+                                            <div className="w-3 h-3 rounded-full border border-slate-600" style={{ backgroundColor: zone.color }}></div>
                                             {zone.label}
                                           </div>
                                         </td>
                                       )}
-                                      <td className="p-2 text-gray-600">{area === 10 ? '≤ 10' : area === 500 ? '≥ 500' : area}</td>
-                                      <td className="p-2">{gcpPos.toFixed(2)}</td>
-                                      <td className="p-2">{gcpNeg.toFixed(2)}</td>
-                                      <td className="p-2 font-bold text-blue-900 bg-blue-50/30">{pPos.toFixed(1)}</td>
-                                      <td className="p-2 font-bold text-blue-900 bg-blue-50/30">{pNeg.toFixed(1)}</td>
+                                      <td className="p-2 text-slate-400">{area === 10 ? '≤ 10' : area === 500 ? '≥ 500' : area}</td>
+                                      <td className="p-2 text-slate-300">{gcpPos.toFixed(2)}</td>
+                                      <td className="p-2 text-slate-300">{gcpNeg.toFixed(2)}</td>
+                                      <td className="p-2 font-bold text-blue-300 bg-blue-900/10">{pPos.toFixed(1)}</td>
+                                      <td className="p-2 font-bold text-blue-300 bg-blue-900/10">{pNeg.toFixed(1)}</td>
                                     </tr>
                                   );
                                 })}
@@ -769,10 +769,10 @@ export const Loads: React.FC = () => {
                   {windProcedure === "MWFRS (Directional)" && (
                     <>
                       <div className="border-l-4 border-blue-500 pl-4 py-1 mb-6 mt-12">
-                        <h3 className="font-bold text-gray-900 uppercase">MWFRS Wall Pressures</h3>
-                        <p className="text-xs text-gray-500 mt-1">p = q × G × C<sub className="text-[10px]">p</sub> - q<sub className="text-[10px]">i</sub> × (GC<sub className="text-[10px]">pi</sub>)</p>
+                        <h3 className="font-bold text-slate-200 uppercase">MWFRS Wall Pressures</h3>
+                        <p className="text-xs text-slate-500 mt-1">p = q × G × C<sub className="text-[10px]">p</sub> - q<sub className="text-[10px]">i</sub> × (GC<sub className="text-[10px]">pi</sub>)</p>
                       </div>
-                      
+
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-y-3 mb-8">
                         <div>Enclosure Type</div>
                         <div><strong>{enclosureType}</strong></div>
@@ -783,78 +783,78 @@ export const Loads: React.FC = () => {
                       </div>
 
                       {/* Case X Table */}
-                      <h4 className="font-bold text-gray-900 mb-2 border-b border-gray-200 pb-1">Wind Case 1: X-Direction (Parallel to L)</h4>
-                      <div className="mb-2 text-xs text-gray-500">L/B Ratio = {caseX.lb_ratio.toFixed(2)} → Leeward Cp = {caseX.cp_leeward}</div>
-                      <div className="bg-gray-50 rounded-md border border-gray-200 overflow-hidden mb-8">
+                      <h4 className="font-bold text-slate-200 mb-2 border-b border-slate-700 pb-1">Wind Case 1: X-Direction (Parallel to L)</h4>
+                      <div className="mb-2 text-xs text-slate-500">L/B Ratio = {caseX.lb_ratio.toFixed(2)} → Leeward Cp = {caseX.cp_leeward}</div>
+                      <div className="bg-slate-800 border border-slate-700 rounded overflow-hidden mb-8">
                         <table className="w-full text-left text-sm">
-                          <thead className="bg-gray-100 border-b border-gray-200">
+                          <thead className="bg-slate-900 border-b border-slate-700">
                             <tr>
-                              <th className="p-3 font-semibold text-gray-700">Surface</th>
-                              <th className="p-3 font-semibold text-gray-700">C<sub className="text-[10px]">p</sub></th>
-                              <th className="p-3 font-semibold text-gray-700">p (Max) <span className="text-xs font-normal text-gray-500">psf</span></th>
-                              <th className="p-3 font-semibold text-gray-700">p (Min) <span className="text-xs font-normal text-gray-500">psf</span></th>
+                              <th className="p-3 font-semibold text-slate-400">Surface</th>
+                              <th className="p-3 font-semibold text-slate-400">C<sub className="text-[10px]">p</sub></th>
+                              <th className="p-3 font-semibold text-slate-400">p (Max) <span className="text-xs font-normal text-slate-500">psf</span></th>
+                              <th className="p-3 font-semibold text-slate-400">p (Min) <span className="text-xs font-normal text-slate-500">psf</span></th>
                             </tr>
                           </thead>
-                          <tbody className="divide-y divide-gray-200">
-                            <tr className="bg-white">
-                              <td className="p-3 font-medium text-gray-900">Windward</td>
-                              <td className="p-3">{cp_windward}</td>
-                              <td className="p-3 text-blue-700 font-bold">{caseX.p_ww_max.toFixed(1)}</td>
-                              <td className="p-3">{caseX.p_ww_min.toFixed(1)}</td>
+                          <tbody className="divide-y divide-slate-700">
+                            <tr className="hover:bg-slate-700/30">
+                              <td className="p-3 font-medium text-slate-200">Windward</td>
+                              <td className="p-3 text-slate-300">{cp_windward}</td>
+                              <td className="p-3 text-blue-300 font-bold">{caseX.p_ww_max.toFixed(1)}</td>
+                              <td className="p-3 text-slate-300">{caseX.p_ww_min.toFixed(1)}</td>
                             </tr>
-                            <tr className="bg-white">
-                              <td className="p-3 font-medium text-gray-900">Leeward</td>
-                              <td className="p-3">{caseX.cp_leeward}</td>
-                              <td className="p-3">{caseX.p_lw_max.toFixed(1)}</td>
-                              <td className="p-3 text-blue-700 font-bold">{caseX.p_lw_min.toFixed(1)}</td>
+                            <tr className="hover:bg-slate-700/30">
+                              <td className="p-3 font-medium text-slate-200">Leeward</td>
+                              <td className="p-3 text-slate-300">{caseX.cp_leeward}</td>
+                              <td className="p-3 text-slate-300">{caseX.p_lw_max.toFixed(1)}</td>
+                              <td className="p-3 text-blue-300 font-bold">{caseX.p_lw_min.toFixed(1)}</td>
                             </tr>
-                            <tr className="bg-white">
-                              <td className="p-3 font-medium text-gray-900">Side Walls</td>
-                              <td className="p-3">{cp_side}</td>
-                              <td className="p-3">{caseX.p_side_max.toFixed(1)}</td>
-                              <td className="p-3 text-blue-700 font-bold">{caseX.p_side_min.toFixed(1)}</td>
+                            <tr className="hover:bg-slate-700/30">
+                              <td className="p-3 font-medium text-slate-200">Side Walls</td>
+                              <td className="p-3 text-slate-300">{cp_side}</td>
+                              <td className="p-3 text-slate-300">{caseX.p_side_max.toFixed(1)}</td>
+                              <td className="p-3 text-blue-300 font-bold">{caseX.p_side_min.toFixed(1)}</td>
                             </tr>
                           </tbody>
                         </table>
                       </div>
 
                       {/* Case Y Table */}
-                      <h4 className="font-bold text-gray-900 mb-2 border-b border-gray-200 pb-1">Wind Case 2: Y-Direction (Parallel to B)</h4>
-                      <div className="mb-2 text-xs text-gray-500">L/B Ratio = {caseY.lb_ratio.toFixed(2)} → Leeward Cp = {caseY.cp_leeward}</div>
-                      <div className="bg-gray-50 rounded-md border border-gray-200 overflow-hidden mb-4">
+                      <h4 className="font-bold text-slate-200 mb-2 border-b border-slate-700 pb-1">Wind Case 2: Y-Direction (Parallel to B)</h4>
+                      <div className="mb-2 text-xs text-slate-500">L/B Ratio = {caseY.lb_ratio.toFixed(2)} → Leeward Cp = {caseY.cp_leeward}</div>
+                      <div className="bg-slate-800 border border-slate-700 rounded overflow-hidden mb-4">
                         <table className="w-full text-left text-sm">
-                          <thead className="bg-gray-100 border-b border-gray-200">
+                          <thead className="bg-slate-900 border-b border-slate-700">
                             <tr>
-                              <th className="p-3 font-semibold text-gray-700">Surface</th>
-                              <th className="p-3 font-semibold text-gray-700">C<sub className="text-[10px]">p</sub></th>
-                              <th className="p-3 font-semibold text-gray-700">p (Max) <span className="text-xs font-normal text-gray-500">psf</span></th>
-                              <th className="p-3 font-semibold text-gray-700">p (Min) <span className="text-xs font-normal text-gray-500">psf</span></th>
+                              <th className="p-3 font-semibold text-slate-400">Surface</th>
+                              <th className="p-3 font-semibold text-slate-400">C<sub className="text-[10px]">p</sub></th>
+                              <th className="p-3 font-semibold text-slate-400">p (Max) <span className="text-xs font-normal text-slate-500">psf</span></th>
+                              <th className="p-3 font-semibold text-slate-400">p (Min) <span className="text-xs font-normal text-slate-500">psf</span></th>
                             </tr>
                           </thead>
-                          <tbody className="divide-y divide-gray-200">
-                            <tr className="bg-white">
-                              <td className="p-3 font-medium text-gray-900">Windward</td>
-                              <td className="p-3">{cp_windward}</td>
-                              <td className="p-3 text-blue-700 font-bold">{caseY.p_ww_max.toFixed(1)}</td>
-                              <td className="p-3">{caseY.p_ww_min.toFixed(1)}</td>
+                          <tbody className="divide-y divide-slate-700">
+                            <tr className="hover:bg-slate-700/30">
+                              <td className="p-3 font-medium text-slate-200">Windward</td>
+                              <td className="p-3 text-slate-300">{cp_windward}</td>
+                              <td className="p-3 text-blue-300 font-bold">{caseY.p_ww_max.toFixed(1)}</td>
+                              <td className="p-3 text-slate-300">{caseY.p_ww_min.toFixed(1)}</td>
                             </tr>
-                            <tr className="bg-white">
-                              <td className="p-3 font-medium text-gray-900">Leeward</td>
-                              <td className="p-3">{caseY.cp_leeward}</td>
-                              <td className="p-3">{caseY.p_lw_max.toFixed(1)}</td>
-                              <td className="p-3 text-blue-700 font-bold">{caseY.p_lw_min.toFixed(1)}</td>
+                            <tr className="hover:bg-slate-700/30">
+                              <td className="p-3 font-medium text-slate-200">Leeward</td>
+                              <td className="p-3 text-slate-300">{caseY.cp_leeward}</td>
+                              <td className="p-3 text-slate-300">{caseY.p_lw_max.toFixed(1)}</td>
+                              <td className="p-3 text-blue-300 font-bold">{caseY.p_lw_min.toFixed(1)}</td>
                             </tr>
-                            <tr className="bg-white">
-                              <td className="p-3 font-medium text-gray-900">Side Walls</td>
-                              <td className="p-3">{cp_side}</td>
-                              <td className="p-3">{caseY.p_side_max.toFixed(1)}</td>
-                              <td className="p-3 text-blue-700 font-bold">{caseY.p_side_min.toFixed(1)}</td>
+                            <tr className="hover:bg-slate-700/30">
+                              <td className="p-3 font-medium text-slate-200">Side Walls</td>
+                              <td className="p-3 text-slate-300">{cp_side}</td>
+                              <td className="p-3 text-slate-300">{caseY.p_side_max.toFixed(1)}</td>
+                              <td className="p-3 text-blue-300 font-bold">{caseY.p_side_min.toFixed(1)}</td>
                             </tr>
                           </tbody>
                         </table>
                       </div>
 
-                      <div className="text-xs text-gray-500 mt-2 italic">
+                      <div className="text-xs text-slate-500 mt-2 italic">
                         * Note: Windward pressure varies with height z. Values shown are conservatively evaluated at mean roof height h = {meanRoofHeight}'. Positive indicates pressure towards surface, negative indicates suction away from surface.
                       </div>
                     </>
@@ -865,12 +865,12 @@ export const Loads: React.FC = () => {
             </div>
           </div>
         )}
-        
+
         {/* Placeholders for other tabs */}
         {activeTab !== 'Snow' && activeTab !== 'Wind' && (
-          <div className="p-12 text-center border-2 border-dashed border-gray-200 rounded-lg">
-            <h3 className="text-lg font-medium text-gray-900">{activeTab} Loads</h3>
-            <p className="mt-2 text-sm text-gray-500">This calculation module is under construction.</p>
+          <div className="p-12 text-center border-2 border-dashed border-slate-700 rounded-lg">
+            <h3 className="text-lg font-medium text-slate-500">{activeTab} Loads</h3>
+            <p className="mt-2 text-sm text-slate-500">This calculation module is under construction.</p>
           </div>
         )}
       </div>
