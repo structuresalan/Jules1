@@ -1,15 +1,15 @@
 import React, { useRef, useState, useCallback, useEffect } from 'react';
 import {
   MousePointer2, Hand, ZoomIn, Maximize2, Crosshair,
-  ArrowUpRight, Cloud, Type, Square, MessageSquare, StickyNote,
+  ArrowUpRight, Cloud, Type, Square, Circle, MessageSquare, StickyNote,
   PenLine, Highlighter, Eraser, Ruler, Minus, TrendingUp, Hexagon,
-  Link, Camera, FileText,
+  Link, Camera, FileText, Spline,
   Layers, LayoutGrid, Magnet,
   Undo2, Redo2, MoreHorizontal,
   ChevronRight, ChevronDown, Plus, X,
   Eye, EyeOff, Trash2, Upload,
   Filter, RefreshCw, ChevronLeft,
-  Image, Tag, Stamp,
+  Image, Tag, Stamp, RotateCcw,
 } from 'lucide-react';
 import { getActiveProjectId } from '../utils/projectDocuments';
 
@@ -17,16 +17,17 @@ import { getActiveProjectId } from '../utils/projectDocuments';
 
 type Tool =
   | 'select' | 'pan' | 'zoom' | 'fit' | 'zoom-area'
-  | 'arrow' | 'cloud' | 'text' | 'box' | 'callout'
+  | 'arrow' | 'cloud' | 'text' | 'box' | 'ellipse' | 'callout'
   | 'dimension' | 'distance' | 'angle' | 'area'
   | 'note' | 'photo' | 'file' | 'link' | 'stamps'
-  | 'highlighter' | 'pen' | 'eraser' | 'color'
+  | 'highlighter' | 'pen' | 'polyline' | 'eraser' | 'color'
   | 'layers' | 'scale' | 'grid' | 'snap'
   | 'undo' | 'redo' | 'more';
 
 type MarkupType =
-  | 'arrow' | 'cloud' | 'text' | 'box' | 'callout'
-  | 'pen' | 'highlighter' | 'dimension' | 'distance' | 'image';
+  | 'arrow' | 'cloud' | 'text' | 'box' | 'ellipse' | 'callout'
+  | 'pen' | 'highlighter' | 'polyline' | 'dimension' | 'distance'
+  | 'angle' | 'area' | 'image';
 
 type Priority = 'high' | 'medium' | 'low';
 type MarkupStatus = 'field-verify' | 'monitor' | 'complete' | 'open';
@@ -45,6 +46,8 @@ interface Markup {
   fontSize: number;
   fontFamily?: string;
   dashStyle?: 'solid' | 'dashed' | 'dotted';
+  rotation?: number;
+  fillColor?: string;
   opacity: number;
   priority: Priority;
   status: MarkupStatus;
@@ -78,6 +81,8 @@ function normalizeMarkup(raw: Record<string, unknown>): Markup {
     fontSize:    Number(raw.fontSize ?? 14),
     fontFamily:  String(raw.fontFamily ?? 'sans-serif'),
     dashStyle:   (raw.dashStyle as 'solid'|'dashed'|'dotted') ?? 'solid',
+    rotation:    Number(raw.rotation ?? 0),
+    fillColor:   raw.fillColor as string | undefined,
     opacity:     Number(raw.opacity ?? 1),
     priority:    (raw.priority as Priority) ?? 'medium',
     status:      (raw.status as MarkupStatus) ?? 'open',
@@ -132,7 +137,7 @@ const HANDLE_CURSORS: Record<HandlePos, string> = {
 };
 
 const TEXT_EDITABLE: MarkupType[] = ['text', 'callout', 'box', 'cloud'];
-const RESIZABLE_TYPES: MarkupType[] = ['arrow','cloud','text','box','callout','dimension','distance','image'];
+const RESIZABLE_TYPES: MarkupType[] = ['arrow','cloud','text','box','ellipse','callout','dimension','distance','image'];
 
 const DEFAULT_LAYERS: Layer[] = [
   { id: 'l1', name: 'Markups',    visible: true },
@@ -166,10 +171,10 @@ const SEED: Markup[] = [
 
 const TOOL_NAMES: Partial<Record<Tool, string>> = {
   select: 'Select', pan: 'Pan', zoom: 'Zoom', fit: 'Fit', 'zoom-area': 'Zoom Area',
-  arrow: 'Arrow', cloud: 'Cloud', text: 'Text', box: 'Box', callout: 'Callout',
+  arrow: 'Arrow', cloud: 'Cloud', text: 'Text', box: 'Box', ellipse: 'Ellipse', callout: 'Callout',
   dimension: 'Dimension', distance: 'Distance', angle: 'Angle', area: 'Area',
   note: 'Note', photo: 'Photo', file: 'File', link: 'Link', stamps: 'Stamps',
-  highlighter: 'Highlighter', pen: 'Pen', eraser: 'Eraser', color: 'Color',
+  highlighter: 'Highlighter', pen: 'Pen', polyline: 'Polyline', eraser: 'Eraser', color: 'Color',
   layers: 'Layers', scale: 'Scale', grid: 'Grid', snap: 'Snap',
   undo: 'Undo', redo: 'Redo', more: 'More',
 };
@@ -236,12 +241,14 @@ export function VisualWorkspace() {
   // Colour (ref + state so drawing handlers see latest)
   const [color, setColor] = useState('#ef4444');
   const colorRef = useRef('#ef4444');
-  useEffect(() => { colorRef.current = color; }, [color]);
-  useEffect(() => { ctxStrokeWidthRef.current = ctxStrokeWidth; }, [ctxStrokeWidth]);
-  useEffect(() => { ctxFontFamilyRef.current  = ctxFontFamily;  }, [ctxFontFamily]);
-  useEffect(() => { ctxFontSizeRef.current    = ctxFontSize;    }, [ctxFontSize]);
-  useEffect(() => { calibRatioRef.current     = calibRatio;     }, [calibRatio]);
-  useEffect(() => { calibUnitRef.current      = calibUnit;      }, [calibUnit]);
+  useEffect(() => { colorRef.current        = color;        }, [color]);
+  useEffect(() => { ctxStrokeWidthRef.current= ctxStrokeWidth;}, [ctxStrokeWidth]);
+  useEffect(() => { ctxFontFamilyRef.current = ctxFontFamily; }, [ctxFontFamily]);
+  useEffect(() => { ctxFontSizeRef.current   = ctxFontSize;   }, [ctxFontSize]);
+  useEffect(() => { ctxDashStyleRef.current  = ctxDashStyle;  }, [ctxDashStyle]);
+  useEffect(() => { calibRatioRef.current    = calibRatio;    }, [calibRatio]);
+  useEffect(() => { calibUnitRef.current     = calibUnit;     }, [calibUnit]);
+  useEffect(() => { fillColorRef.current     = fillColor;     }, [fillColor]);
 
   // View toggles
   const [showGrid,     setShowGrid]     = useState(false);
@@ -279,6 +286,28 @@ export function VisualWorkspace() {
   // Feature 5: Command bar
   const [showCmdBar, setShowCmdBar] = useState(false);
   const [cmdInput,   setCmdInput]   = useState('');
+
+  // Feature 7: Fill color (ellipse / area)
+  const [fillColor, setFillColor]   = useState<string>('transparent');
+  const fillColorRef = useRef<string>('transparent');
+
+  // ctxDashStyle ref (needed in onPointerUp callback)
+  const ctxDashStyleRef = useRef<'solid'|'dashed'|'dotted'>('solid');
+
+  // Feature 6: Rotation
+  const isRotating        = useRef(false);
+  const rotateCenter      = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const rotateStartAngle  = useRef(0);
+  const rotateOriginRot   = useRef(0);
+
+  // Feature 8: Polyline point accumulator
+  const polylinePtsRef = useRef<{ x: number; y: number }[]>([]);
+
+  // Feature 9: Angle point accumulator
+  const anglePtsRef = useRef<{ x: number; y: number }[]>([]);
+
+  // Feature 10: Area polygon accumulator
+  const areaPtsRef = useRef<{ x: number; y: number }[]>([]);
 
   // Boards
   const [activeBoardId, setActiveBoardId] = useState('b1');
@@ -533,7 +562,65 @@ export function VisualWorkspace() {
   }, [editingId, editingText, activeBoardId, pushHistory]);
 
   const onDoubleClick = useCallback((e: React.MouseEvent) => {
-    if (toolRef.current !== 'select') return;
+    const t = toolRef.current;
+
+    // Feature 8: Finish polyline on double-click (pop the last pt added by the 2nd click of dblclick)
+    if (t === 'polyline' && isDrawing.current) {
+      const pts = polylinePtsRef.current.slice(0, -1); // remove duplicate from 2nd single-click
+      polylinePtsRef.current = [];
+      isDrawing.current = false;
+      setPreview(null);
+      if (pts.length >= 2) {
+        const m: Markup = {
+          id: genId(), type: 'polyline', number: counter,
+          points: pts, text: '', color: colorRef.current,
+          strokeWidth: ctxStrokeWidthRef.current, fontSize: ctxFontSizeRef.current,
+          fontFamily: ctxFontFamilyRef.current, dashStyle: ctxDashStyleRef.current,
+          opacity: 1, priority: 'medium', status: 'open', layerId: 'l1',
+          createdAt: new Date().toISOString(),
+        };
+        updateMarkups(activeBoardId, prev => [...prev, m]);
+        setCounter(c => c + 1); setSelectedId(m.id);
+      }
+      return;
+    }
+
+    // Feature 10: Finish area polygon on double-click
+    if (t === 'area' && isDrawing.current) {
+      const pts = areaPtsRef.current.slice(0, -1); // remove duplicate from 2nd single-click
+      areaPtsRef.current = [];
+      isDrawing.current = false;
+      setPreview(null);
+      if (pts.length >= 3) {
+        // Shoelace formula for area
+        let areaVal = 0;
+        for (let i = 0; i < pts.length; i++) {
+          const j = (i + 1) % pts.length;
+          areaVal += pts[i].x * pts[j].y;
+          areaVal -= pts[j].x * pts[i].y;
+        }
+        areaVal = Math.abs(areaVal) / 2;
+        const ratio = calibRatioRef.current;
+        const unit  = calibUnitRef.current;
+        const areaLabel = ratio !== null
+          ? `${(Math.round(areaVal / (ratio * ratio) * 100) / 100)} ${unit}²`
+          : `${Math.round(areaVal)} px²`;
+        const m: Markup = {
+          id: genId(), type: 'area', number: counter,
+          points: pts, text: areaLabel, color: colorRef.current,
+          strokeWidth: ctxStrokeWidthRef.current, fontSize: ctxFontSizeRef.current,
+          fontFamily: ctxFontFamilyRef.current, dashStyle: ctxDashStyleRef.current,
+          fillColor: fillColorRef.current !== 'transparent' ? fillColorRef.current : 'rgba(59,130,246,0.15)',
+          opacity: 1, priority: 'medium', status: 'open', layerId: 'l1',
+          createdAt: new Date().toISOString(),
+        };
+        updateMarkups(activeBoardId, prev => [...prev, m]);
+        setCounter(c => c + 1); setSelectedId(m.id);
+      }
+      return;
+    }
+
+    if (t !== 'select') return;
     const pt = toPt(e);
     const hit = hitTest(pt, markups);
     if (hit && TEXT_EDITABLE.includes(hit.type)) {
@@ -543,7 +630,7 @@ export function VisualWorkspace() {
       setEditingText(hit.text);
       setSelectedId(hit.id);
     }
-  }, [toPt, hitTest, markups]);
+  }, [toPt, hitTest, markups, counter, activeBoardId, updateMarkups]);
 
   // ── Pointer down ─────────────────────────────────────────────────────────
   const onPointerDown = useCallback((e: React.PointerEvent) => {
@@ -579,10 +666,22 @@ export function VisualWorkspace() {
     if (e.button !== 0) return;
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
 
-    // Check if clicking a resize handle
-    const handleAttr = (e.target as SVGElement).getAttribute?.('data-handle') as HandlePos | null;
+    // Check if clicking a handle (resize or rotation)
+    const handleAttr = (e.target as SVGElement).getAttribute?.('data-handle') as string | null;
     if (handleAttr && t === 'select' && selectedId) {
-      resizingHandle.current  = handleAttr;
+      if (handleAttr === 'rotate') {
+        // Feature 6: start rotation drag
+        const sel = markups.find(m => m.id === selectedId);
+        if (!sel) return;
+        const b = mkBounds(sel);
+        rotateCenter.current     = { x: b.x + b.w / 2, y: b.y + b.h / 2 };
+        const pt = toPt(e);
+        rotateStartAngle.current = Math.atan2(pt.y - rotateCenter.current.y, pt.x - rotateCenter.current.x) * 180 / Math.PI;
+        rotateOriginRot.current  = sel.rotation ?? 0;
+        isRotating.current       = true;
+        return;
+      }
+      resizingHandle.current  = handleAttr as HandlePos;
       resizeStartPt.current   = toPt(e);
       const sel = markups.find(m => m.id === selectedId);
       resizeOriginPts.current = sel ? sel.points.map(p => ({ ...p })) : null;
@@ -653,14 +752,75 @@ export function VisualWorkspace() {
       return;
     }
 
-    if (['arrow','cloud','text','box','callout','dimension','distance','angle','area','zoom-area'].includes(t)) {
+    // Feature 8: Polyline — accumulate clicks; double-click finishes (handled in onDoubleClick)
+    if (t === 'polyline') {
+      if (!isDrawing.current) {
+        isDrawing.current = true;
+        polylinePtsRef.current = [pt];
+        setPreview({ type: 'polyline', start: pt, cur: pt, pts: [pt] });
+      } else {
+        polylinePtsRef.current = [...polylinePtsRef.current, pt];
+        setPreview(prev => prev ? { ...prev, pts: [...polylinePtsRef.current] } : null);
+      }
+      return;
+    }
+
+    // Feature 9: Angle — 3-click workflow
+    if (t === 'angle') {
+      if (anglePtsRef.current.length === 0) {
+        isDrawing.current = true;
+        anglePtsRef.current = [pt];
+        setPreview({ type: 'angle', start: pt, cur: pt, pts: [pt] });
+      } else if (anglePtsRef.current.length === 1) {
+        anglePtsRef.current = [...anglePtsRef.current, pt];
+        setPreview(prev => prev ? { ...prev, pts: [...anglePtsRef.current] } : null);
+      } else {
+        // 3rd click — commit
+        const allPts = [...anglePtsRef.current, pt];
+        anglePtsRef.current = [];
+        isDrawing.current = false;
+        setPreview(null);
+        const [orig, arm1, arm2] = allPts;
+        const a1 = Math.atan2(arm1.y - orig.y, arm1.x - orig.x);
+        const a2 = Math.atan2(arm2.y - orig.y, arm2.x - orig.x);
+        let deg = Math.abs(a2 - a1) * 180 / Math.PI;
+        if (deg > 180) deg = 360 - deg;
+        const m: Markup = {
+          id: genId(), type: 'angle', number: counter,
+          points: allPts, text: `${Math.round(deg * 10) / 10}°`,
+          color: colorRef.current, strokeWidth: ctxStrokeWidthRef.current,
+          fontSize: ctxFontSizeRef.current, fontFamily: ctxFontFamilyRef.current,
+          dashStyle: ctxDashStyleRef.current,
+          opacity: 1, priority: 'medium', status: 'open', layerId: 'l1',
+          createdAt: new Date().toISOString(),
+        };
+        updateMarkups(activeBoardId, prev => [...prev, m]);
+        setCounter(c => c + 1); setSelectedId(m.id);
+      }
+      return;
+    }
+
+    // Feature 10: Area polygon — accumulate clicks; double-click finishes
+    if (t === 'area') {
+      if (!isDrawing.current) {
+        isDrawing.current = true;
+        areaPtsRef.current = [pt];
+        setPreview({ type: 'area', start: pt, cur: pt, pts: [pt] });
+      } else {
+        areaPtsRef.current = [...areaPtsRef.current, pt];
+        setPreview(prev => prev ? { ...prev, pts: [...areaPtsRef.current] } : null);
+      }
+      return;
+    }
+
+    if (['arrow','cloud','text','box','ellipse','callout','dimension','distance','zoom-area'].includes(t)) {
       isDrawing.current  = true;
       drawStart.current  = pt;
       drawCurrent.current = pt;
       setPreview({ type: t, start: pt, cur: pt });
     }
   }, [editingId, commitEdit, tool, selectedId, markups, activeBoardId, toPt, hitTest,
-      updateMarkups, zoomAt, fitView, scaleSet, setTool]);
+      updateMarkups, zoomAt, fitView, scaleSet, setTool, counter]);
 
   // ── Pointer move ──────────────────────────────────────────────────────────
   const onPointerMove = useCallback((e: React.PointerEvent) => {
@@ -683,6 +843,19 @@ export function VisualWorkspace() {
     }
 
     const pt = toPt(e);
+
+    // Feature 6: Rotation drag
+    if (isRotating.current && selectedId) {
+      const angle = Math.atan2(pt.y - rotateCenter.current.y, pt.x - rotateCenter.current.x) * 180 / Math.PI;
+      const newRot = rotateOriginRot.current + (angle - rotateStartAngle.current);
+      setBoardMarkups(prev => ({
+        ...prev,
+        [activeBoardId]: (prev[activeBoardId] ?? []).map(m =>
+          m.id === selectedId ? { ...m, rotation: newRot } : m
+        ),
+      }));
+      return;
+    }
 
     // Resize
     if (resizingHandle.current && resizeOriginPts.current && selectedId) {
@@ -742,6 +915,9 @@ export function VisualWorkspace() {
     if (t === 'pen' || t === 'highlighter') {
       penPts.current = [...penPts.current, pt];
       setPreview(prev => prev ? { ...prev, cur: pt, pts: penPts.current } : null);
+    } else if (t === 'polyline' || t === 'angle' || t === 'area') {
+      // Multi-click tools: just update current cursor for live last-segment preview
+      setPreview(prev => prev ? { ...prev, cur: pt } : null);
     } else {
       drawCurrent.current = pt;
       setPreview(prev => prev ? { ...prev, cur: pt } : null);
@@ -752,6 +928,13 @@ export function VisualWorkspace() {
   const onPointerUp = useCallback((_e: React.PointerEvent) => {
     if (isPanning.current) {
       isPanning.current = false; panStart.current = null; panOrigin.current = null;
+      return;
+    }
+
+    // Feature 6: Commit rotation
+    if (isRotating.current) {
+      pushHistory({ ...boardMarkups });
+      isRotating.current = false;
       return;
     }
 
@@ -811,7 +994,7 @@ export function VisualWorkspace() {
     }
 
     const typeMap: Partial<Record<Tool, MarkupType>> = {
-      arrow: 'arrow', cloud: 'cloud', text: 'text', box: 'box',
+      arrow: 'arrow', cloud: 'cloud', text: 'text', box: 'box', ellipse: 'ellipse',
       callout: 'callout', dimension: 'dimension', distance: 'distance',
     };
     const mtype = typeMap[t];
@@ -824,7 +1007,8 @@ export function VisualWorkspace() {
       strokeWidth: ctxStrokeWidthRef.current,
       fontSize: ctxFontSizeRef.current,
       fontFamily: ctxFontFamilyRef.current,
-      dashStyle: ctxDashStyle,
+      dashStyle: ctxDashStyleRef.current,
+      fillColor: (mtype === 'ellipse' || mtype === 'box') ? fillColorRef.current : undefined,
       opacity: 1, priority: 'medium', status: 'open', layerId: 'l1',
       createdAt: new Date().toISOString(),
     };
@@ -898,10 +1082,10 @@ export function VisualWorkspace() {
   const executeCommand = useCallback((cmd: string) => {
     const c = cmd.trim().toLowerCase();
     const toolMap: Partial<Record<string, Tool>> = {
-      arrow: 'arrow', cloud: 'cloud', box: 'box', text: 'text', pen: 'pen',
-      select: 'select', pan: 'pan', callout: 'callout', highlighter: 'highlighter',
-      eraser: 'eraser', distance: 'distance', dimension: 'dimension',
-      angle: 'angle', area: 'area',
+      arrow: 'arrow', cloud: 'cloud', box: 'box', ellipse: 'ellipse', text: 'text', pen: 'pen',
+      polyline: 'polyline', select: 'select', pan: 'pan', callout: 'callout',
+      highlighter: 'highlighter', eraser: 'eraser', distance: 'distance',
+      dimension: 'dimension', angle: 'angle', area: 'area',
     };
     if (toolMap[c]) { activateTool(toolMap[c]!); }
     else if (c === 'fit')       { fitView(); }
@@ -939,7 +1123,9 @@ export function VisualWorkspace() {
     const dashArray = m.dashStyle === 'dashed' ? `${6/zoom}` : m.dashStyle === 'dotted' ? `${2/zoom} ${3/zoom}` : undefined;
 
     if (m.type === 'box') {
-      shape = <rect {...tp} key={m.id} x={bx} y={by} width={bw} height={bh} fill="none" stroke={stroke} strokeWidth={sw} strokeDasharray={dashArray}/>;
+      shape = <rect {...tp} key={m.id} x={bx} y={by} width={bw} height={bh}
+        fill={m.fillColor && m.fillColor !== 'transparent' ? m.fillColor + '40' : 'none'}
+        stroke={stroke} strokeWidth={sw} strokeDasharray={dashArray}/>;
 
     } else if (m.type === 'arrow') {
       const mid = `ah-${m.id}`, ms = 8 / zoom;
@@ -1005,6 +1191,49 @@ export function VisualWorkspace() {
         </g>
       );
 
+    } else if (m.type === 'ellipse') {
+      const rx = bw / 2, ry = bh / 2, ecx = bx + rx, ecy = by + ry;
+      shape = <ellipse {...tp} key={m.id} cx={ecx} cy={ecy} rx={rx} ry={ry}
+        fill={m.fillColor && m.fillColor !== 'transparent' ? m.fillColor + '40' : 'none'}
+        stroke={stroke} strokeWidth={sw} strokeDasharray={dashArray}/>;
+
+    } else if (m.type === 'polyline') {
+      const polyPts = m.points.map(p => `${p.x},${p.y}`).join(' ');
+      shape = <polyline {...tp} key={m.id} points={polyPts} fill="none" stroke={stroke} strokeWidth={sw}
+        strokeLinecap="round" strokeLinejoin="round" strokeDasharray={dashArray}/>;
+
+    } else if (m.type === 'angle') {
+      if (m.points.length < 3) return null;
+      const [orig, arm1, arm2] = m.points;
+      shape = (
+        <g key={m.id} {...tp}>
+          <line x1={orig.x} y1={orig.y} x2={arm1.x} y2={arm1.y} stroke={stroke} strokeWidth={sw}/>
+          <line x1={orig.x} y1={orig.y} x2={arm2.x} y2={arm2.y} stroke={stroke} strokeWidth={sw}/>
+          <circle cx={orig.x} cy={orig.y} r={4/zoom} fill={stroke}/>
+          <text x={orig.x + 12/zoom} y={orig.y - 5/zoom} fill={stroke}
+            fontSize={(m.fontSize ?? 10)/zoom} fontFamily={m.fontFamily ?? 'sans-serif'}>
+            {m.text}
+          </text>
+        </g>
+      );
+
+    } else if (m.type === 'area') {
+      const polyPts = m.points.map(p => `${p.x},${p.y}`).join(' ');
+      const cx = m.points.reduce((s, p) => s + p.x, 0) / m.points.length;
+      const cy = m.points.reduce((s, p) => s + p.y, 0) / m.points.length;
+      shape = (
+        <g key={m.id} {...tp}>
+          <polygon points={polyPts}
+            fill={m.fillColor ?? 'rgba(59,130,246,0.15)'}
+            stroke={stroke} strokeWidth={sw} strokeDasharray={dashArray}/>
+          <text x={cx} y={cy} fill={stroke}
+            fontSize={(m.fontSize ?? 10)/zoom} fontFamily={m.fontFamily ?? 'sans-serif'}
+            textAnchor="middle" dominantBaseline="middle">
+            {m.text}
+          </text>
+        </g>
+      );
+
     } else if (m.type === 'image' && m.imageData) {
       shape = (
         <g key={m.id} {...tp}>
@@ -1014,7 +1243,11 @@ export function VisualWorkspace() {
       );
     }
 
-    return shape ? <g key={m.id} opacity={m.opacity ?? 1}>{shape}{hitRect}</g> : null;
+    // Feature 6: Apply rotation transform around the markup center
+    const rotation = m.rotation ?? 0;
+    const cx = bx + bw / 2, cy = by + bh / 2;
+    const rotTransform = rotation ? `rotate(${rotation},${cx},${cy})` : undefined;
+    return shape ? <g key={m.id} opacity={m.opacity ?? 1} transform={rotTransform}>{shape}{hitRect}</g> : null;
   };
 
   // ── Render preview ────────────────────────────────────────────────────────
@@ -1032,8 +1265,68 @@ export function VisualWorkspace() {
         strokeWidth={(type === 'highlighter' ? 14 : 2) / zoom} strokeLinecap="round" strokeLinejoin="round"
         opacity={type === 'highlighter' ? 0.35 : 0.7} />;
     }
-    if (type === 'box' || type === 'zoom-area' || type === 'area' || type === 'angle')
+    if (type === 'box' || type === 'zoom-area')
       return <rect x={x} y={y} width={w} height={h} fill={type === 'zoom-area' ? 'rgba(59,130,246,0.08)' : 'none'} stroke={color} strokeWidth={sw} strokeDasharray={dash} />;
+
+    // Feature 7: Ellipse preview
+    if (type === 'ellipse') {
+      const rx = w / 2, ry = h / 2;
+      return <ellipse cx={x + rx} cy={y + ry} rx={Math.max(rx,1)} ry={Math.max(ry,1)}
+        fill={fillColor !== 'transparent' ? fillColor + '28' : 'none'}
+        stroke={color} strokeWidth={sw} strokeDasharray={dash}/>;
+    }
+
+    // Feature 8: Polyline preview
+    if (type === 'polyline') {
+      if (!pts || pts.length < 1) return null;
+      const last = pts[pts.length - 1];
+      return (
+        <g>
+          {pts.length >= 2 && <polyline points={pts.map(p => `${p.x},${p.y}`).join(' ')} fill="none"
+            stroke={color} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round" opacity={0.85}/>}
+          <line x1={last.x} y1={last.y} x2={cur.x} y2={cur.y} stroke={color} strokeWidth={sw} strokeDasharray={dash} opacity={0.7}/>
+          {pts.map((p, i) => <circle key={i} cx={p.x} cy={p.y} r={3/zoom} fill={color} opacity={0.8}/>)}
+        </g>
+      );
+    }
+
+    // Feature 9: Angle preview (live 2nd arm tracking cursor)
+    if (type === 'angle') {
+      if (!pts || pts.length < 1) return null;
+      const origin = pts[0];
+      const arm1   = pts.length >= 2 ? pts[1] : null;
+      return (
+        <g>
+          {arm1 && <line x1={origin.x} y1={origin.y} x2={arm1.x} y2={arm1.y} stroke={color} strokeWidth={sw}/>}
+          <line x1={origin.x} y1={origin.y} x2={cur.x} y2={cur.y} stroke={color} strokeWidth={sw} strokeDasharray={dash} opacity={0.7}/>
+          <circle cx={origin.x} cy={origin.y} r={4/zoom} fill={color}/>
+          {arm1 && (() => {
+            const a1 = Math.atan2(arm1.y - origin.y, arm1.x - origin.x);
+            const a2 = Math.atan2(cur.y  - origin.y, cur.x  - origin.x);
+            let deg = Math.abs(a2 - a1) * 180 / Math.PI;
+            if (deg > 180) deg = 360 - deg;
+            return <text x={origin.x + 10/zoom} y={origin.y - 6/zoom} fill={color}
+              fontSize={10/zoom} fontFamily="sans-serif">{Math.round(deg * 10)/10}°</text>;
+          })()}
+        </g>
+      );
+    }
+
+    // Feature 10: Area polygon preview
+    if (type === 'area') {
+      if (!pts || pts.length < 1) return null;
+      const allPts = [...pts, cur];
+      const polyPoints = allPts.map(p => `${p.x},${p.y}`).join(' ');
+      const last = pts[pts.length - 1];
+      return (
+        <g>
+          <polygon points={polyPoints} fill="rgba(59,130,246,0.1)" stroke={color} strokeWidth={sw} strokeDasharray={dash}/>
+          <line x1={last.x} y1={last.y} x2={cur.x} y2={cur.y} stroke={color} strokeWidth={sw} strokeDasharray={dash} opacity={0.6}/>
+          {pts.map((p, i) => <circle key={i} cx={p.x} cy={p.y} r={3/zoom} fill={color}/>)}
+        </g>
+      );
+    }
+
     if (type === 'cloud')
       return <path d={cloudPath(x, y, w, h)} fill="none" stroke={color} strokeWidth={sw} strokeDasharray={dash} />;
     if (type === 'arrow') {
@@ -1120,8 +1413,16 @@ export function VisualWorkspace() {
       { pos: 'br', x: b.x + b.w + pad, y: b.y + b.h + pad },
     ];
     const canResize = RESIZABLE_TYPES.includes(selectedMarkup.type);
+
+    // Feature 6: Rotation handle — above top-center
+    const rotHx = b.x + b.w / 2;
+    const rotHLineY = b.y - pad;
+    const rotHY = b.y - pad - 22 / zoom;
+    const rotHR = 6 / zoom;
+    const rot = selectedMarkup.rotation ?? 0;
+
     return (
-      <g>
+      <g transform={rot ? `rotate(${rot},${b.x + b.w/2},${b.y + b.h/2})` : undefined}>
         <rect x={b.x - pad} y={b.y - pad} width={b.w + pad * 2} height={b.h + pad * 2}
           fill="none" stroke="#3b82f6" strokeWidth={1.5 / zoom} strokeDasharray={`${4 / zoom}`} />
         {canResize && corners.map(({ pos, x, y }) => (
@@ -1131,6 +1432,16 @@ export function VisualWorkspace() {
             style={{ cursor: HANDLE_CURSORS[pos], pointerEvents: 'all' }}
           />
         ))}
+        {/* Rotation handle */}
+        <line x1={rotHx} y1={rotHLineY} x2={rotHx} y2={rotHY}
+          stroke="#8b5cf6" strokeWidth={1/zoom} strokeDasharray={`${3/zoom}`}/>
+        <circle data-handle="rotate" cx={rotHx} cy={rotHY} r={rotHR}
+          fill="#8b5cf6" stroke="white" strokeWidth={1/zoom}
+          style={{ cursor: 'crosshair', pointerEvents: 'all' }}/>
+        <text x={rotHx} y={rotHY + rotHR * 2.5} fill="#8b5cf6"
+          fontSize={8/zoom} fontFamily="sans-serif" textAnchor="middle">
+          {rot !== 0 ? `${Math.round(rot)}°` : '↻'}
+        </text>
       </g>
     );
   };
@@ -1210,6 +1521,7 @@ export function VisualWorkspace() {
         <TB tid="tool-cloud"     active={tool==='cloud'}     onClick={()=>activateTool('cloud')}     icon={<Cloud size={15}/>}         label="Cloud"/>
         <TB tid="tool-text"      active={tool==='text'}      onClick={()=>activateTool('text')}      icon={<Type size={15}/>}          label="Text"/>
         <TB tid="tool-box"       active={tool==='box'}       onClick={()=>activateTool('box')}       icon={<Square size={15}/>}        label="Box"/>
+        <TB tid="tool-ellipse"   active={tool==='ellipse'}   onClick={()=>activateTool('ellipse')}   icon={<Circle size={15}/>}        label="Ellipse"/>
         <TB tid="tool-callout"   active={tool==='callout'}   onClick={()=>activateTool('callout')}   icon={<MessageSquare size={15}/>} label="Callout"/>
         <Sep/>
         <TB tid="tool-dimension" active={tool==='dimension'} onClick={()=>activateTool('dimension')} icon={<Ruler size={15}/>}         label="Dimension"/>
@@ -1225,6 +1537,7 @@ export function VisualWorkspace() {
         <Sep/>
         <TB tid="tool-highlighter" active={tool==='highlighter'}  onClick={()=>activateTool('highlighter')} icon={<Highlighter size={15}/>}   label="Highlighter"/>
         <TB tid="tool-pen"         active={tool==='pen'}          onClick={()=>activateTool('pen')}         icon={<PenLine size={15}/>}       label="Pen"/>
+        <TB tid="tool-polyline"    active={tool==='polyline'}     onClick={()=>activateTool('polyline')}    icon={<Spline size={15}/>}        label="Polyline"/>
         <TB tid="tool-eraser"      active={tool==='eraser'}       onClick={()=>activateTool('eraser')}      icon={<Eraser size={15}/>}        label="Eraser"/>
         <Sep/>
         <TB tid="tool-color" active={activePanel==='color'} onClick={()=>activateTool('color')}
@@ -1295,8 +1608,27 @@ export function VisualWorkspace() {
           </select>
         </>)}
 
+        {/* Fill color — for ellipse / box / area tools */}
+        {['ellipse','box','area'].includes(tool) && (<>
+          <span className="text-slate-500 shrink-0">Fill:</span>
+          <button onClick={() => setFillColor('transparent')}
+            className={`w-4 h-4 rounded border text-[8px] flex items-center justify-center shrink-0 ${fillColor==='transparent' ? 'border-white' : 'border-slate-600'}`}
+            style={{background:'transparent'}} title="No fill">
+            <span className="text-slate-400">∅</span>
+          </button>
+          {COLORS.slice(0,7).map(c => (
+            <button key={c} onClick={() => setFillColor(c)}
+              className={`w-4 h-4 rounded-full border shrink-0 ${fillColor===c ? 'border-white scale-110' : 'border-slate-600 hover:border-slate-400'}`}
+              style={{background:c}}/>
+          ))}
+          <input type="color" value={fillColor === 'transparent' ? '#3b82f6' : fillColor}
+            onChange={e => setFillColor(e.target.value)}
+            className="w-4 h-4 rounded cursor-pointer bg-transparent border-0 p-0 shrink-0" title="Custom fill"/>
+          <span className="text-slate-600 shrink-0">|</span>
+        </>)}
+
         {/* Drawing tools: stroke width + dash style */}
-        {['arrow','cloud','box','pen','highlighter','dimension','distance'].includes(tool) && (<>
+        {['arrow','cloud','box','ellipse','pen','highlighter','dimension','distance','polyline'].includes(tool) && (<>
           <span className="text-slate-500 shrink-0">Stroke:</span>
           <input type="range" min={1} max={16} step={0.5} value={ctxStrokeWidth}
             onChange={e => setCtxStrokeWidth(Number(e.target.value))}
