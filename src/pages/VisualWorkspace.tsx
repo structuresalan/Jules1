@@ -2383,6 +2383,22 @@ export function VisualWorkspace() {
                 reader.onload = ev => { if (ev.target?.result) placeImageOnCanvas(ev.target.result as string); };
                 reader.readAsDataURL(f);
               }}/>
+            <input ref={photoLibInputRef} type="file" accept="image/*" className="hidden"
+              onChange={e => {
+                const f = e.target.files?.[0]; if (!f) return;
+                const reader = new FileReader();
+                reader.onload = ev => {
+                  if (ev.target?.result) {
+                    setSitePhotos(prev => [...prev, {
+                      id: `ph${Date.now()}`, name: f.name,
+                      data: ev.target!.result as string,
+                      createdAt: new Date().toISOString(),
+                    }]);
+                  }
+                };
+                reader.readAsDataURL(f);
+                e.target.value = '';
+              }}/>
           </div>
 
           {/* Bottom strip: markup schedule + relationship map */}
@@ -2759,13 +2775,18 @@ export function VisualWorkspace() {
 
                   {/* Linked items */}
                   <div className="border-t border-slate-700 pt-2 space-y-1">
-                    {([['Linked Photos', 3], ['Linked Documents', 2], ['Board Markups', 1], ['Linked Costs', 1]] as [string,number][]).map(([label, count]) => (
-                      <button key={label} aria-label={`${label} ${count}`}
-                        className="flex items-center justify-between w-full text-xs text-slate-400 hover:text-slate-200 py-0.5">
-                        <span>{label}</span>
-                        <span className="bg-slate-700 rounded px-1.5 py-0.5 text-[10px]">{count}</span>
-                      </button>
-                    ))}
+                    <button
+                      onClick={() => setActivePanel('photo-library')}
+                      className="flex items-center justify-between w-full text-xs text-slate-400 hover:text-slate-200 py-0.5">
+                      <span>Linked Photos</span>
+                      <span className="bg-slate-700 rounded px-1.5 py-0.5 text-[10px]">{selectedMarkup.linkedPhotoIds?.length ?? 0}</span>
+                    </button>
+                    <button
+                      onClick={() => setActivePanel('link')}
+                      className="flex items-center justify-between w-full text-xs text-slate-400 hover:text-slate-200 py-0.5">
+                      <span>Linked Documents</span>
+                      <span className="bg-slate-700 rounded px-1.5 py-0.5 text-[10px]">{selectedMarkup.linkedDocIds?.length ?? 0}</span>
+                    </button>
                   </div>
 
                   {/* Feature 14: Comment thread */}
@@ -2774,10 +2795,17 @@ export function VisualWorkspace() {
                       Comments ({(selectedMarkup.comments ?? []).length})
                     </label>
                     {(selectedMarkup.comments ?? []).map(c => (
-                      <div key={c.id} className="bg-slate-700/60 rounded px-2 py-1.5 space-y-0.5">
+                      <div key={c.id} className="group bg-slate-700/60 rounded px-2 py-1.5 space-y-0.5">
                         <div className="flex items-center justify-between text-[9px]">
                           <span className="text-blue-400 font-medium">{c.author}</span>
-                          <span className="text-slate-500">{new Date(c.createdAt).toLocaleDateString()}</span>
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-slate-500">{new Date(c.createdAt).toLocaleDateString()}</span>
+                            <button
+                              onClick={() => upd({ comments: (selectedMarkup.comments ?? []).filter(x => x.id !== c.id) })}
+                              className="text-slate-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <X size={9}/>
+                            </button>
+                          </div>
                         </div>
                         <p className="text-xs text-slate-300 leading-snug">{c.text}</p>
                       </div>
@@ -2898,12 +2926,32 @@ export function VisualWorkspace() {
 
               {activePanel === 'file' && (
                 <div className="space-y-3">
-                  <p className="text-xs text-slate-400">Attach a calculation or document to this markup.</p>
-                  <button className="w-full py-2 rounded bg-blue-600 hover:bg-blue-500 text-white text-xs">Browse documents</button>
-                  <div className="space-y-1.5 mt-2">
-                    {['Steel Design Report', 'Concrete Calc Sheet', 'Load Summary'].map(d => (
-                      <div key={d} className="flex items-center gap-2 px-3 py-2 rounded bg-slate-700 hover:bg-slate-600 cursor-pointer text-xs text-slate-300">
-                        <FileText size={13}/>{d}
+                  <p className="text-xs text-slate-400">Attach a calculation or document to this project.</p>
+                  <div className="flex gap-1.5">
+                    <input value={newDocName} onChange={e => setNewDocName(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter' && newDocName.trim()) {
+                          setAttachedDocs(prev => [...prev, { id: `d${Date.now()}`, name: newDocName.trim(), type: 'document', createdAt: new Date().toISOString() }]);
+                          setNewDocName('');
+                        }
+                      }}
+                      placeholder="Document name…"
+                      className="flex-1 bg-slate-700 border border-slate-600 rounded px-2 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-blue-500"/>
+                    <button onClick={() => {
+                      if (!newDocName.trim()) return;
+                      setAttachedDocs(prev => [...prev, { id: `d${Date.now()}`, name: newDocName.trim(), type: 'document', createdAt: new Date().toISOString() }]);
+                      setNewDocName('');
+                    }} className="px-3 py-1.5 rounded bg-blue-600 hover:bg-blue-500 text-white text-xs">Add</button>
+                  </div>
+                  <div className="space-y-1.5">
+                    {attachedDocs.map(d => (
+                      <div key={d.id} className="group flex items-center gap-2 px-3 py-2 rounded bg-slate-700 hover:bg-slate-600 cursor-pointer text-xs text-slate-300">
+                        <FileText size={13} className="shrink-0"/>
+                        <span className="flex-1 truncate">{d.name}</span>
+                        <button onClick={e => { e.stopPropagation(); setAttachedDocs(prev => prev.filter(x => x.id !== d.id)); }}
+                          className="text-slate-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                          <X size={10}/>
+                        </button>
                       </div>
                     ))}
                   </div>
@@ -2920,13 +2968,33 @@ export function VisualWorkspace() {
 
               {activePanel === 'link' && (
                 <div className="space-y-3">
-                  <p className="text-xs text-slate-400">Link this markup to a project document or calculation.</p>
+                  <p className="text-xs text-slate-400">
+                    {selectedMarkup ? `Link a document to markup #${selectedMarkup.number}.` : 'Select a markup first to link documents.'}
+                  </p>
                   <div className="space-y-1.5">
-                    {['Steel Beam B18 Design', 'Wind Load Summary', 'Foundation Report'].map(d => (
-                      <div key={d} className="flex items-center gap-2 px-3 py-2 rounded bg-slate-700 hover:bg-slate-600 cursor-pointer text-xs text-slate-300">
-                        <Tag size={13}/>{d}
-                      </div>
-                    ))}
+                    {attachedDocs.map(d => {
+                      const linked = selectedMarkup?.linkedDocIds?.includes(d.id) ?? false;
+                      return (
+                        <button key={d.id}
+                          onClick={() => {
+                            if (!selectedMarkup) return;
+                            const updLink = (patch: Partial<Markup>) =>
+                              setBoardMarkups(prev => ({ ...prev, [activeBoardId]: (prev[activeBoardId]??[]).map(m => m.id===selectedId ? {...m,...patch} : m) }));
+                            updLink({ linkedDocIds: linked
+                              ? (selectedMarkup.linkedDocIds ?? []).filter(id => id !== d.id)
+                              : [...(selectedMarkup.linkedDocIds ?? []), d.id]
+                            });
+                          }}
+                          className={`flex items-center gap-2 w-full px-3 py-2 rounded text-xs text-left transition-colors ${linked ? 'bg-blue-600/20 border border-blue-500/40 text-blue-300' : 'bg-slate-700 hover:bg-slate-600 text-slate-300'}`}>
+                          <Tag size={13} className="shrink-0"/>
+                          <span className="flex-1 truncate">{d.name}</span>
+                          {linked && <span className="text-[9px] text-blue-400 shrink-0">✓ linked</span>}
+                        </button>
+                      );
+                    })}
+                    {attachedDocs.length === 0 && (
+                      <p className="text-[10px] text-slate-500 text-center py-2">No documents yet. Add via the File panel.</p>
+                    )}
                   </div>
                 </div>
               )}
@@ -3019,8 +3087,9 @@ export function VisualWorkspace() {
                     {/* Grid spacing */}
                     <div className="border-t border-slate-700 pt-3">
                       <label className="block text-xs text-slate-400 mb-1">Grid spacing (px)</label>
-                      <input type="number" defaultValue={50}
-                        className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1.5 text-sm text-slate-200 focus:outline-none"/>
+                      <input type="number" min={10} max={200} value={gridSpacing}
+                        onChange={e => setGridSpacing(Math.max(10, Math.min(200, Number(e.target.value))))}
+                        className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1.5 text-sm text-slate-200 focus:outline-none focus:border-blue-500"/>
                     </div>
                     <button onClick={() => { setScaleSet(true); setActivePanel(null); }}
                       className="w-full py-2 rounded bg-blue-600 hover:bg-blue-500 text-white text-xs">Apply Settings</button>
@@ -3136,14 +3205,37 @@ export function VisualWorkspace() {
 
               {activePanel === 'photo-library' && (
                 <div className="space-y-3">
-                  <p data-testid="photo-library-title" className="text-xs text-slate-400 font-semibold">All site photos (5)</p>
-                  <div className="grid grid-cols-2 gap-2">
-                    {[1,2,3,4,5].map(i => (
-                      <div key={i} className="rounded bg-slate-700 aspect-video flex items-center justify-center cursor-pointer hover:bg-slate-600 hover:ring-2 ring-blue-500">
-                        <Image size={24} className="text-slate-500"/>
-                      </div>
-                    ))}
+                  <div className="flex items-center justify-between">
+                    <p data-testid="photo-library-title" className="text-xs text-slate-400 font-semibold">
+                      All site photos ({sitePhotos.length})
+                    </p>
+                    <button onClick={() => photoLibInputRef.current?.click()}
+                      className="text-[10px] text-blue-400 hover:text-blue-300 flex items-center gap-1">
+                      <Plus size={10}/> Add
+                    </button>
                   </div>
+                  {sitePhotos.length === 0 ? (
+                    <div className="py-6 text-center">
+                      <p className="text-xs text-slate-500 mb-3">No photos yet.</p>
+                      <button onClick={() => photoLibInputRef.current?.click()}
+                        className="text-xs text-blue-400 hover:text-blue-300 underline">Upload first photo</button>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-2">
+                      {sitePhotos.map(p => (
+                        <div key={p.id} className="group relative rounded bg-slate-700 aspect-video overflow-hidden cursor-pointer hover:ring-2 ring-blue-500">
+                          <img src={p.data} alt={p.name} className="w-full h-full object-cover"/>
+                          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-end">
+                            <span className="opacity-0 group-hover:opacity-100 text-[9px] text-white px-1.5 py-1 bg-black/50 w-full truncate transition-opacity">{p.name}</span>
+                          </div>
+                          <button onClick={e => { e.stopPropagation(); setSitePhotos(prev => prev.filter(x => x.id !== p.id)); }}
+                            className="absolute top-1 right-1 w-5 h-5 rounded-full bg-red-600/80 text-white opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                            <X size={10}/>
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
 
