@@ -1,16 +1,13 @@
 import React, { useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
-import { Sparkles } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import simplifyStructLogo from '../assets/simplifystruct-logo.png';
-import { useWebsiteStyleSettings } from '../utils/websiteStyle';
 
 type AuthMode = 'signin' | 'create';
 
 export const Login: React.FC = () => {
   const { user, login, createAccount, authConfigured } = useAuth();
   const navigate = useNavigate();
-  const { isDesktopStyle, isDesktopGlass } = useWebsiteStyleSettings();
   const [authMode, setAuthMode] = useState<AuthMode>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -57,290 +54,141 @@ export const Login: React.FC = () => {
     setInviteCode('');
   };
 
-  if (isDesktopStyle) {
-    return (
-      <div className="ss-shell relative flex min-h-screen items-center justify-center overflow-hidden px-4 py-10">
-        {isDesktopGlass && (
-          <>
-            <span className="ss-orb left-10 top-16 h-80 w-80 bg-blue-500/25" />
-            <span className="ss-orb right-10 top-24 h-96 w-96 bg-purple-500/20" />
-            <span className="ss-orb bottom-12 left-1/2 h-72 w-72 bg-amber-500/10" />
-          </>
-        )}
-
-        <div className="relative w-full max-w-5xl">
-          <div className="mb-10 text-center">
-            <div className="mb-6 flex justify-center">
-              <img src={simplifyStructLogo} alt="SimplifyStruct logo" className="h-16 max-w-[300px] rounded-xl bg-white/90 object-contain p-2" />
-            </div>
-            <h1 className="text-4xl font-semibold tracking-tight text-white md:text-6xl">
-              SimplifyStruct. Now in Desktop Style.
-            </h1>
-            <p className="mx-auto mt-4 max-w-2xl text-base text-slate-300">
-              A darker, glass-based workspace for structural design, documents, and visual maps.
-            </p>
-          </div>
-
-          <div className="mx-auto max-w-md rounded-[2rem] border border-white/15 bg-white/10 p-8 shadow-2xl backdrop-blur-3xl">
-            <div className="mb-8 flex gap-2">
-              <span className="ss-window-dot bg-red-400" />
-              <span className="ss-window-dot bg-amber-300" />
-              <span className="ss-window-dot bg-green-400" />
-            </div>
-
-            <div className="mb-6 flex justify-center">
-              <div className="rounded-2xl border border-white/15 bg-black/30 p-3 text-white">
-                <Sparkles size={24} />
-              </div>
-            </div>
-
-            <h2 className="text-center text-2xl font-bold text-white">
-              {authMode === 'create' ? 'Create a SimplifyStruct account' : 'Sign in to SimplifyStruct'}
-            </h2>
-            <p className="mt-3 text-center text-slate-300">
-              {authMode === 'create'
-                ? 'Create a tester account using the signup code.'
-                : 'Sign in with your SimplifyStruct account.'}
-            </p>
-
-            <div className="mt-6 grid grid-cols-2 rounded-xl border border-white/10 bg-black/25 p-1">
-              <button
-                type="button"
-                onClick={() => switchMode('signin')}
-                className={`rounded-lg px-3 py-2 text-sm font-semibold ${
-                  authMode === 'signin' ? 'bg-white text-slate-950 shadow-sm' : 'text-slate-300 hover:text-white'
-                }`}
-              >
-                Sign in
-              </button>
-              <button
-                type="button"
-                onClick={() => switchMode('create')}
-                className={`rounded-lg px-3 py-2 text-sm font-semibold ${
-                  authMode === 'create' ? 'bg-white text-slate-950 shadow-sm' : 'text-slate-300 hover:text-white'
-                }`}
-              >
-                Create account
-              </button>
-            </div>
-
-            {!authConfigured && (
-              <div className="mt-6 rounded-xl border border-amber-400/30 bg-amber-500/10 p-4 text-sm text-amber-200">
-                Firebase is not configured yet. Add the Firebase environment variables in Vercel, then redeploy.
-              </div>
-            )}
-
-            {errorMessage && (
-              <div className="mt-6 rounded-xl border border-red-400/30 bg-red-500/10 p-4 text-sm text-red-200">
-                {errorMessage}
-              </div>
-            )}
-
-            <form onSubmit={handleSubmit} className="mt-6 space-y-4">
-              <label className="block text-sm font-medium text-slate-200">
-                Email
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
-                  className="mt-1 w-full rounded-xl border px-3 py-2 text-sm focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                  placeholder="you@example.com"
-                  autoComplete="email"
-                  required
-                />
-              </label>
-
-              <label className="block text-sm font-medium text-slate-200">
-                Password
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
-                  className="mt-1 w-full rounded-xl border px-3 py-2 text-sm focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                  placeholder="Password"
-                  autoComplete={authMode === 'create' ? 'new-password' : 'current-password'}
-                  minLength={6}
-                  required
-                />
-              </label>
-
-              {authMode === 'create' && (
-                <>
-                  <label className="block text-sm font-medium text-slate-200">
-                    Confirm password
-                    <input
-                      type="password"
-                      value={confirmPassword}
-                      onChange={(event) => setConfirmPassword(event.target.value)}
-                      className="mt-1 w-full rounded-xl border px-3 py-2 text-sm focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                      placeholder="Confirm password"
-                      autoComplete="new-password"
-                      minLength={6}
-                      required
-                    />
-                  </label>
-
-                  <label className="block text-sm font-medium text-slate-200">
-                    Signup code
-                    <input
-                      type="text"
-                      value={inviteCode}
-                      onChange={(event) => setInviteCode(event.target.value)}
-                      className="mt-1 w-full rounded-xl border px-3 py-2 text-sm focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                      placeholder="Enter invite code"
-                      autoComplete="off"
-                      required
-                    />
-                  </label>
-                </>
-              )}
-
-              <button
-                type="submit"
-                disabled={!authConfigured || isSubmitting}
-                className="w-full rounded-xl bg-white px-4 py-3 text-sm font-bold text-slate-950 shadow-sm hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {isSubmitting
-                  ? authMode === 'create'
-                    ? 'Creating account...'
-                    : 'Signing in...'
-                  : authMode === 'create'
-                    ? 'Create Account'
-                    : 'Sign In'}
-              </button>
-            </form>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const inputClass =
+    'w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2.5 text-sm text-slate-200 focus:outline-none focus:border-blue-500 placeholder-slate-600';
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
-      <div className="max-w-md w-full bg-white rounded-xl shadow-sm border border-gray-200 p-8">
-        <div className="mb-6 flex justify-center">
+    <div className="min-h-screen bg-slate-950 flex items-center justify-center px-4">
+      <div className="w-full max-w-md">
+        {/* Logo */}
+        <div className="flex justify-center mb-8">
           <img
             src={simplifyStructLogo}
             alt="SimplifyStruct logo"
-            className="h-16 max-w-[280px] object-contain"
+            className="h-12 rounded-lg bg-white/90 object-contain px-2 py-1"
           />
         </div>
 
-        <h1 className="text-center text-2xl font-bold text-gray-900">
-          {authMode === 'create' ? 'Create a SimplifyStruct account' : 'Sign in to SimplifyStruct'}
-        </h1>
-        <p className="mt-3 text-center text-gray-500">
-          {authMode === 'create'
-            ? 'Create a tester account using the signup code.'
-            : 'Sign in with your SimplifyStruct account.'}
-        </p>
-
-        <div className="mt-6 grid grid-cols-2 rounded-lg border border-gray-200 bg-gray-50 p-1">
-          <button
-            type="button"
-            onClick={() => switchMode('signin')}
-            className={`rounded-md px-3 py-2 text-sm font-semibold ${
-              authMode === 'signin' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-500 hover:text-gray-800'
-            }`}
-          >
-            Sign in
-          </button>
-          <button
-            type="button"
-            onClick={() => switchMode('create')}
-            className={`rounded-md px-3 py-2 text-sm font-semibold ${
-              authMode === 'create' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-500 hover:text-gray-800'
-            }`}
-          >
-            Create account
-          </button>
-        </div>
-
-        {!authConfigured && (
-          <div className="mt-6 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-            Firebase is not configured yet. Add the Firebase environment variables in Vercel, then redeploy.
+        {/* Card */}
+        <div className="bg-slate-900 border border-slate-700 rounded-2xl p-8 shadow-2xl">
+          {/* Tabs */}
+          <div className="flex border-b border-slate-700 mb-6">
+            <button
+              type="button"
+              onClick={() => switchMode('signin')}
+              className={`flex-1 pb-3 text-sm font-semibold transition-colors ${
+                authMode === 'signin'
+                  ? 'text-white border-b-2 border-blue-500'
+                  : 'text-slate-500 hover:text-slate-300'
+              }`}
+            >
+              Sign In
+            </button>
+            <button
+              type="button"
+              onClick={() => switchMode('create')}
+              className={`flex-1 pb-3 text-sm font-semibold transition-colors ${
+                authMode === 'create'
+                  ? 'text-white border-b-2 border-blue-500'
+                  : 'text-slate-500 hover:text-slate-300'
+              }`}
+            >
+              Create Account
+            </button>
           </div>
-        )}
 
-        {errorMessage && (
-          <div className="mt-6 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-            {errorMessage}
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit} className="mt-6 space-y-4">
-          <label className="block text-sm font-medium text-gray-700">
-            Email
-            <input
-              type="email"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
-              placeholder="you@example.com"
-              autoComplete="email"
-              required
-            />
-          </label>
-
-          <label className="block text-sm font-medium text-gray-700">
-            Password
-            <input
-              type="password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
-              placeholder="Password"
-              autoComplete={authMode === 'create' ? 'new-password' : 'current-password'}
-              minLength={6}
-              required
-            />
-          </label>
-
-          {authMode === 'create' && (
-            <>
-              <label className="block text-sm font-medium text-gray-700">
-                Confirm password
-                <input
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(event) => setConfirmPassword(event.target.value)}
-                  className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
-                  placeholder="Confirm password"
-                  autoComplete="new-password"
-                  minLength={6}
-                  required
-                />
-              </label>
-
-              <label className="block text-sm font-medium text-gray-700">
-                Signup code
-                <input
-                  type="text"
-                  value={inviteCode}
-                  onChange={(event) => setInviteCode(event.target.value)}
-                  className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
-                  placeholder="Enter invite code"
-                  autoComplete="off"
-                  required
-                />
-              </label>
-            </>
+          {!authConfigured && (
+            <div className="mb-4 text-xs text-amber-300 bg-amber-900/20 border border-amber-700/50 rounded-lg px-3 py-2">
+              Firebase is not configured yet. Add the Firebase environment variables in Vercel, then redeploy.
+            </div>
           )}
 
-          <button
-            type="submit"
-            disabled={!authConfigured || isSubmitting}
-            className="w-full rounded-md bg-blue-600 px-4 py-3 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {isSubmitting
-              ? authMode === 'create'
-                ? 'Creating account...'
-                : 'Signing in...'
-              : authMode === 'create'
-                ? 'Create Account'
-                : 'Sign In'}
-          </button>
-        </form>
+          {errorMessage && (
+            <div className="mb-4 text-xs text-red-400 bg-red-900/20 border border-red-800/50 rounded-lg px-3 py-2">
+              {errorMessage}
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-xs text-slate-400 mb-1 uppercase tracking-wide">Email</label>
+              <input
+                type="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                className={inputClass}
+                placeholder="you@example.com"
+                autoComplete="email"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs text-slate-400 mb-1 uppercase tracking-wide">Password</label>
+              <input
+                type="password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                className={inputClass}
+                placeholder="Password"
+                autoComplete={authMode === 'create' ? 'new-password' : 'current-password'}
+                minLength={6}
+                required
+              />
+            </div>
+
+            {authMode === 'create' && (
+              <>
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1 uppercase tracking-wide">Confirm Password</label>
+                  <input
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(event) => setConfirmPassword(event.target.value)}
+                    className={inputClass}
+                    placeholder="Confirm password"
+                    autoComplete="new-password"
+                    minLength={6}
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1 uppercase tracking-wide">Invite Code</label>
+                  <input
+                    type="text"
+                    value={inviteCode}
+                    onChange={(event) => setInviteCode(event.target.value)}
+                    className={inputClass}
+                    placeholder="Enter invite code"
+                    autoComplete="off"
+                    required
+                  />
+                </div>
+              </>
+            )}
+
+            <button
+              type="submit"
+              disabled={!authConfigured || isSubmitting}
+              className="w-full bg-blue-600 hover:bg-blue-500 text-white rounded-lg py-2.5 text-sm font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isSubmitting
+                ? authMode === 'create'
+                  ? 'Creating account...'
+                  : 'Signing in...'
+                : authMode === 'create'
+                  ? 'Create Account'
+                  : 'Sign In'}
+            </button>
+          </form>
+        </div>
+
+        {/* Footer disclaimer */}
+        <p className="mt-6 text-center text-[10px] text-slate-600">
+          NOT FOR CONSTRUCTION. Engineer of Record must verify all calculations.
+          By using this tool, you accept the Terms of Use and liability disclaimer.
+        </p>
       </div>
     </div>
   );

@@ -20,7 +20,6 @@ import {
   requestOpenProjectDocument,
   type ProjectDocument,
 } from '../utils/projectDocuments';
-import { useWebsiteStyleSettings } from '../utils/websiteStyle';
 
 const beamPrintStyles = `
 @media screen {
@@ -52,7 +51,6 @@ const beamPrintStyles = `
 
 export const Documents: React.FC = () => {
   const navigate = useNavigate();
-  const { isDesktopStyle } = useWebsiteStyleSettings();
   const activeProject = getActiveProject();
 
   const [documents, setDocuments] = useState<ProjectDocument[]>(() =>
@@ -147,7 +145,7 @@ export const Documents: React.FC = () => {
 
   if (!activeProject) {
     return (
-      <div className="rounded-3xl border border-amber-200 bg-amber-50 p-6 text-amber-900">
+      <div className="bg-amber-900/20 border border-amber-700 text-amber-300 rounded-xl p-6">
         <h1 className="text-xl font-bold">No active project</h1>
         <p className="mt-2 text-sm">Go back to Projects and open a project before viewing documents.</p>
         <Link to="/" className="mt-4 inline-flex rounded-lg bg-amber-600 px-4 py-2 text-sm font-bold text-white">
@@ -166,28 +164,28 @@ export const Documents: React.FC = () => {
 
       <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
-          <h1 className={`flex items-center gap-3 text-3xl font-bold tracking-tight ${isDesktopStyle ? 'text-white' : 'text-gray-900'}`}>
-            <FileText className="text-blue-600" />
+          <h1 className="flex items-center gap-3 text-3xl font-bold tracking-tight text-slate-100">
+            <FileText className="text-blue-400" />
             Documents
           </h1>
-          <p className={`mt-2 ${isDesktopStyle ? 'text-slate-300' : 'text-gray-500'}`}>
-            Saved calculation reports, print outputs, and exports for <span className={isDesktopStyle ? 'font-semibold text-white' : 'font-semibold text-gray-800'}>{activeProject.name}</span>.
+          <p className="mt-2 text-slate-400">
+            Saved calculation reports, print outputs, and exports for <span className="font-semibold text-slate-200">{activeProject.name}</span>.
           </p>
         </div>
 
         <div className="flex flex-col gap-2 md:flex-row">
           <label className="relative w-full md:w-80">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
             <input
               value={searchText}
               onChange={(event) => setSearchText(event.target.value)}
-              className="w-full rounded-xl border border-gray-300 py-2 pl-9 pr-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+              className="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-blue-500 pl-9"
               placeholder="Search documents..."
             />
           </label>
           <Link
             to="/visual-workspace"
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700"
+            className="inline-flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl px-4 py-2 text-sm font-bold"
           >
             <Map size={16} />
             Open Visual Workspace
@@ -195,9 +193,9 @@ export const Documents: React.FC = () => {
         </div>
       </div>
 
-      <div className={`rounded-3xl border p-4 ${isDesktopStyle ? 'ss-glass text-slate-200' : 'border-blue-100 bg-blue-50 text-blue-900'}`}>
+      <div className="bg-blue-900/20 border border-blue-700/40 rounded-xl text-slate-300 p-4">
         <div className="flex items-start gap-3">
-          <Map className="mt-0.5 text-blue-600" size={18} />
+          <Map className="mt-0.5 text-blue-400" size={18} />
           <div>
             <div className="font-bold">Visual Map moved to Visual Workspace</div>
             <p className="mt-1 text-sm opacity-80">
@@ -207,10 +205,10 @@ export const Documents: React.FC = () => {
         </div>
       </div>
 
-      <section className={`overflow-hidden rounded-3xl border ${isDesktopStyle ? 'ss-glass-strong' : 'border-gray-200 bg-white shadow-sm'}`}>
+      <section className="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[900px] text-sm">
-            <thead className={isDesktopStyle ? 'bg-slate-900 text-slate-300' : 'bg-gray-50 text-gray-500'}>
+            <thead className="bg-slate-900/50 text-slate-400">
               <tr>
                 <th className="px-4 py-3 text-left">Document</th>
                 <th className="px-4 py-3 text-left">Type</th>
@@ -223,55 +221,55 @@ export const Documents: React.FC = () => {
             <tbody>
               {filteredDocuments.length === 0 && (
                 <tr>
-                  <td colSpan={6} className={`px-4 py-10 text-center ${isDesktopStyle ? 'text-slate-400' : 'text-gray-500'}`}>
+                  <td colSpan={6} className="px-4 py-10 text-center text-slate-400">
                     No documents found. Save a calculation output from one of the calculation modules.
                   </td>
                 </tr>
               )}
 
               {filteredDocuments.map((document) => (
-                <tr key={document.id} className={isDesktopStyle ? 'border-t border-white/10 hover:bg-white/5' : 'border-t border-gray-100 hover:bg-blue-50/50'}>
+                <tr key={document.id} className="border-t border-slate-700 hover:bg-slate-700/50">
                   <td className="px-4 py-3">
                     {renamingId === document.id ? (
                       <div className="flex gap-2">
                         <input
                           value={renameValue}
                           onChange={(event) => setRenameValue(event.target.value)}
-                          className="w-full rounded border border-gray-300 px-2 py-1 text-sm"
+                          className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-sm text-slate-200 focus:outline-none focus:border-blue-500"
                         />
                         <button onClick={saveRename} className="rounded bg-blue-600 px-2 py-1 text-xs font-semibold text-white">
                           Save
                         </button>
                       </div>
                     ) : (
-                      <div className={isDesktopStyle ? 'font-semibold text-white' : 'font-semibold text-gray-900'}>{document.name}</div>
+                      <div className="font-semibold text-slate-200">{document.name}</div>
                     )}
                   </td>
-                  <td className="px-4 py-3">{document.type}</td>
-                  <td className="px-4 py-3">{document.module}</td>
+                  <td className="px-4 py-3 text-slate-300">{document.type}</td>
+                  <td className="px-4 py-3 text-slate-300">{document.module}</td>
                   <td className="px-4 py-3">
-                    <span className="rounded-full bg-green-50 px-2 py-1 text-xs font-semibold text-green-700">{document.status}</span>
+                    <span className="bg-green-900/30 text-green-400 rounded-full px-2 py-0.5 text-xs font-semibold">{document.status}</span>
                   </td>
-                  <td className="px-4 py-3 text-xs opacity-75">{formatDocumentDate(document.createdAt)}</td>
+                  <td className="px-4 py-3 text-xs text-slate-500">{formatDocumentDate(document.createdAt)}</td>
                   <td className="px-4 py-3">
                     <div className="flex flex-wrap justify-end gap-2">
-                      <button onClick={() => handleOpen(document)} className="inline-flex items-center gap-1 rounded border border-blue-200 bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-100">
+                      <button onClick={() => handleOpen(document)} className="inline-flex items-center gap-1 rounded bg-blue-600/20 text-blue-400 border border-blue-700 px-2 py-1 text-xs font-semibold hover:bg-blue-600/30">
                         <ExternalLink size={13} />
                         Open
                       </button>
-                      <button onClick={() => setPrintDocument(document)} className="inline-flex items-center gap-1 rounded border border-gray-200 bg-white px-2 py-1 text-xs font-semibold text-gray-700 hover:bg-gray-50">
+                      <button onClick={() => setPrintDocument(document)} className="inline-flex items-center gap-1 rounded bg-slate-700 text-slate-300 border border-slate-600 px-2 py-1 text-xs font-semibold hover:bg-slate-600">
                         <Printer size={13} />
                         Print
                       </button>
-                      <button onClick={() => startRename(document)} className="inline-flex items-center gap-1 rounded border border-gray-200 bg-white px-2 py-1 text-xs font-semibold text-gray-700 hover:bg-gray-50">
+                      <button onClick={() => startRename(document)} className="inline-flex items-center gap-1 rounded bg-slate-700 text-slate-300 border border-slate-600 px-2 py-1 text-xs font-semibold hover:bg-slate-600">
                         <Pencil size={13} />
                         Rename
                       </button>
-                      <button onClick={() => handleDuplicate(document.id)} className="inline-flex items-center gap-1 rounded border border-gray-200 bg-white px-2 py-1 text-xs font-semibold text-gray-700 hover:bg-gray-50">
+                      <button onClick={() => handleDuplicate(document.id)} className="inline-flex items-center gap-1 rounded bg-slate-700 text-slate-300 border border-slate-600 px-2 py-1 text-xs font-semibold hover:bg-slate-600">
                         <Copy size={13} />
                         Duplicate
                       </button>
-                      <button onClick={() => handleDelete(document.id)} className="inline-flex items-center gap-1 rounded border border-red-200 bg-red-50 px-2 py-1 text-xs font-semibold text-red-700 hover:bg-red-100">
+                      <button onClick={() => handleDelete(document.id)} className="inline-flex items-center gap-1 rounded bg-red-900/20 text-red-400 border border-red-800 px-2 py-1 text-xs font-semibold hover:bg-red-900/30">
                         <Trash2 size={13} />
                         Delete
                       </button>

@@ -58,6 +58,19 @@ const formatDateTime = (isoDate: string) => {
   }
 };
 
+const statusBadgeClass = (status: ProjectStatus) => {
+  switch (status) {
+    case 'Active':
+      return 'bg-green-900/40 text-green-400 border border-green-800/50';
+    case 'On Hold':
+      return 'bg-amber-900/40 text-amber-400 border border-amber-800/50';
+    case 'Closed':
+    case 'Archived':
+    default:
+      return 'bg-slate-700 text-slate-400 border border-slate-600';
+  }
+};
+
 export const ProjectHome: React.FC = () => {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
@@ -185,336 +198,329 @@ export const ProjectHome: React.FC = () => {
     navigate('/login', { replace: true });
   };
 
+  const inputClass =
+    'w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2.5 text-sm text-slate-200 focus:outline-none focus:border-blue-500 placeholder-slate-600';
+
+  const labelClass = 'block text-xs text-slate-400 mb-1 uppercase tracking-wide';
+
   return (
-    <div className="min-h-screen bg-gray-50 px-6 py-8 text-gray-900">
-      <div className="mx-auto max-w-7xl">
-        <header className="mb-8 flex flex-col gap-4 border-b border-gray-200 pb-6 md:flex-row md:items-end md:justify-between">
-          <div>
-            <div className="mb-3 flex items-center gap-4">
-              <img src={simplifyStructLogo} alt="SimplifyStruct logo" className="h-12 w-auto rounded-md bg-white object-contain" />
-              <div>
-                <h1 className="text-3xl font-bold tracking-tight">SimplifyStruct Projects</h1>
-                <p className="text-sm text-gray-500">Create a project, open saved work, or run a quick calculation.</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="text-right text-xs text-gray-500">
-              <div className="font-semibold text-gray-700">{user?.email}</div>
-              <div>Signed in</div>
-            </div>
-            <button
-              onClick={startQuickCalculations}
-              className="inline-flex w-fit items-center gap-2 rounded-md bg-amber-500 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-600"
-            >
-              <Calculator size={18} />
-              Quick Calculations
-            </button>
-            <button
-              onClick={handleSignOut}
-              className="inline-flex w-fit items-center gap-2 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
-            >
-              <LogOut size={18} />
-              Sign Out
-            </button>
-          </div>
-        </header>
-
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+    <div className="min-h-screen bg-slate-950 flex flex-col text-slate-200 font-sans">
+      {/* Top bar */}
+      <div className="flex items-center justify-between px-6 py-3 bg-slate-950 border-b border-slate-800 shrink-0">
+        <img src={simplifyStructLogo} alt="SimplifyStruct logo" className="h-8 rounded bg-white/90 object-contain px-1" />
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-slate-500">{user?.email}</span>
           <button
-            onClick={() => setSelectedMode('new')}
-            className={`rounded-xl border p-5 text-left shadow-sm transition ${selectedMode === 'new' ? 'border-blue-500 bg-white ring-2 ring-blue-100' : 'border-gray-200 bg-white hover:border-gray-300'}`}
+            onClick={startQuickCalculations}
+            className="flex items-center gap-1.5 text-xs bg-slate-800 border border-slate-700 hover:bg-slate-700 hover:text-white text-slate-300 rounded px-3 py-1.5 transition-colors"
+            title="Quick Calculations"
           >
-            <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
-              <Plus size={22} />
-            </div>
-            <h2 className="text-lg font-semibold">New Project</h2>
-            <p className="mt-2 text-sm text-gray-500">Create a saved project that will appear in Existing Projects next time you open the site.</p>
+            <Calculator size={13} />
+            Quick Calc
           </button>
-
           <button
-            onClick={() => setSelectedMode('existing')}
-            className={`rounded-xl border p-5 text-left shadow-sm transition ${selectedMode === 'existing' ? 'border-blue-500 bg-white ring-2 ring-blue-100' : 'border-gray-200 bg-white hover:border-gray-300'}`}
+            onClick={handleSignOut}
+            className="text-slate-500 hover:text-white text-xs flex items-center gap-1 transition-colors"
           >
-            <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-lg bg-gray-100 text-gray-700">
-              <FolderOpen size={22} />
-            </div>
-            <h2 className="text-lg font-semibold">Existing Project</h2>
-            <p className="mt-2 text-sm text-gray-500">Open a saved project from a details-style project list.</p>
+            <LogOut size={13} />
+            Sign out
           </button>
         </div>
+      </div>
 
-        <main className="mt-6">
+      {/* Main content: two columns */}
+      <div className="flex-1 flex overflow-hidden">
+        {/* Left: project form */}
+        <div className="w-96 shrink-0 bg-slate-900 border-r border-slate-800 flex flex-col overflow-y-auto">
+          {/* Mode tabs */}
+          <div className="px-5 py-4 border-b border-slate-800">
+            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-3">Workspace</div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setSelectedMode('new')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-colors ${
+                  selectedMode === 'new'
+                    ? 'bg-blue-600/20 text-blue-300 border border-blue-700/50'
+                    : 'bg-slate-800 text-slate-400 border border-slate-700 hover:text-white hover:bg-slate-700'
+                }`}
+              >
+                <Plus size={12} />
+                New Project
+              </button>
+              <button
+                onClick={() => setSelectedMode('existing')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-colors ${
+                  selectedMode === 'existing'
+                    ? 'bg-blue-600/20 text-blue-300 border border-blue-700/50'
+                    : 'bg-slate-800 text-slate-400 border border-slate-700 hover:text-white hover:bg-slate-700'
+                }`}
+              >
+                <FolderOpen size={12} />
+                Open Existing
+              </button>
+            </div>
+          </div>
+
+          {/* Form content */}
           {selectedMode === 'new' && (
-            <form onSubmit={createProject} className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-              <div className="mb-6 flex items-start gap-3">
-                <FileText className="mt-1 text-blue-600" size={22} />
-                <div>
-                  <h2 className="text-xl font-semibold">Create a new project</h2>
-                  <p className="mt-1 text-sm text-gray-500">Enter basic details now. You can refine the project later.</p>
-                </div>
+            <form onSubmit={createProject} className="flex flex-col flex-1 px-5 py-4 gap-4">
+              <div className="flex items-center gap-2 mb-1">
+                <FileText size={15} className="text-blue-400" />
+                <span className="text-sm font-semibold text-slate-200">Create New Project</span>
               </div>
 
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <label className="text-sm font-medium text-gray-700">
-                  Project name
-                  <input
-                    value={projectName}
-                    onChange={(event) => setProjectName(event.target.value)}
-                    className="mt-1 w-full rounded-md border border-gray-300 p-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
-                    placeholder="Example: Office Building Framing"
-                    required
-                  />
-                </label>
-
-                <label className="text-sm font-medium text-gray-700">
-                  Project number
-                  <input
-                    value={projectNumber}
-                    onChange={(event) => setProjectNumber(event.target.value)}
-                    className="mt-1 w-full rounded-md border border-gray-300 p-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
-                    placeholder="Auto-filled if left blank"
-                  />
-                </label>
-
-                <label className="text-sm font-medium text-gray-700">
-                  Predicted end date
-                  <input
-                    type="date"
-                    value={predictedEndDate}
-                    onChange={(event) => setPredictedEndDate(event.target.value)}
-                    className="mt-1 w-full rounded-md border border-gray-300 p-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
-                  />
-                </label>
-
-                <label className="text-sm font-medium text-gray-700">
-                  Client
-                  <input
-                    value={client}
-                    onChange={(event) => setClient(event.target.value)}
-                    className="mt-1 w-full rounded-md border border-gray-300 p-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
-                    placeholder="Client name"
-                  />
-                </label>
-
-                <label className="text-sm font-medium text-gray-700">
-                  Location
-                  <input
-                    value={location}
-                    onChange={(event) => setLocation(event.target.value)}
-                    className="mt-1 w-full rounded-md border border-gray-300 p-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
-                    placeholder="City, State"
-                  />
-                </label>
-
-                <label className="text-sm font-medium text-gray-700">
-                  Calculation focus
-                  <select
-                    value={calculationType}
-                    onChange={(event) => setCalculationType(event.target.value as ProjectCalculationType)}
-                    className="mt-1 w-full rounded-md border border-gray-300 bg-white p-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
-                  >
-                    <option>Mixed</option>
-                    <option>Steel</option>
-                    <option>Concrete</option>
-                    <option>Loads</option>
-                  </select>
-                </label>
-
-                <label className="text-sm font-medium text-gray-700 md:col-span-2">
-                  Notes / description
-                  <textarea
-                    value={description}
-                    onChange={(event) => setDescription(event.target.value)}
-                    className="mt-1 min-h-24 w-full rounded-md border border-gray-300 p-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
-                    placeholder="Optional project notes"
-                  />
-                </label>
+              <div>
+                <label className={labelClass}>Project Name *</label>
+                <input
+                  value={projectName}
+                  onChange={(event) => setProjectName(event.target.value)}
+                  className={inputClass}
+                  placeholder="Office Building Framing"
+                  required
+                />
               </div>
 
-              <div className="mt-6 flex justify-end border-t border-gray-100 pt-5">
-                <button
-                  type="submit"
-                  className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
-                  disabled={!projectName.trim()}
+              <div>
+                <label className={labelClass}>Project Number</label>
+                <input
+                  value={projectNumber}
+                  onChange={(event) => setProjectNumber(event.target.value)}
+                  className={inputClass}
+                  placeholder="Auto-filled if blank"
+                />
+              </div>
+
+              <div>
+                <label className={labelClass}>Client</label>
+                <input
+                  value={client}
+                  onChange={(event) => setClient(event.target.value)}
+                  className={inputClass}
+                  placeholder="Client name"
+                />
+              </div>
+
+              <div>
+                <label className={labelClass}>Location</label>
+                <input
+                  value={location}
+                  onChange={(event) => setLocation(event.target.value)}
+                  className={inputClass}
+                  placeholder="City, State"
+                />
+              </div>
+
+              <div>
+                <label className={labelClass}>Predicted End Date</label>
+                <input
+                  type="date"
+                  value={predictedEndDate}
+                  onChange={(event) => setPredictedEndDate(event.target.value)}
+                  className={inputClass}
+                />
+              </div>
+
+              <div>
+                <label className={labelClass}>Calculation Focus</label>
+                <select
+                  value={calculationType}
+                  onChange={(event) => setCalculationType(event.target.value as ProjectCalculationType)}
+                  className="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-blue-500"
                 >
-                  Save Project & Open
-                </button>
+                  <option>Mixed</option>
+                  <option>Steel</option>
+                  <option>Concrete</option>
+                  <option>Loads</option>
+                </select>
               </div>
+
+              <div>
+                <label className={labelClass}>Notes / Description</label>
+                <textarea
+                  value={description}
+                  onChange={(event) => setDescription(event.target.value)}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2.5 text-sm text-slate-200 focus:outline-none focus:border-blue-500 placeholder-slate-600 min-h-20 resize-none"
+                  placeholder="Optional project notes"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={!projectName.trim()}
+                className="w-full bg-blue-600 hover:bg-blue-500 text-white rounded-lg py-2.5 text-sm font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed mt-auto"
+              >
+                Save Project &amp; Open
+              </button>
             </form>
           )}
 
           {selectedMode === 'existing' && (
-            <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
-              <div className="flex flex-col gap-3 border-b border-gray-200 p-4 md:flex-row md:items-center md:justify-between">
-                <div>
-                  <h2 className="text-xl font-semibold">Existing projects</h2>
-                  <p className="mt-1 text-sm text-gray-500">Details view, similar to a file explorer list.</p>
-                </div>
-
-                <label className="relative w-full md:w-80">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-                  <input
-                    value={searchText}
-                    onChange={(event) => setSearchText(event.target.value)}
-                    className="w-full rounded-md border border-gray-300 py-2 pl-9 pr-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
-                    placeholder="Search projects..."
-                  />
-                </label>
+            <div className="flex flex-col flex-1 px-5 py-4">
+              <div className="flex items-center gap-2 mb-4">
+                <FolderOpen size={15} className="text-slate-400" />
+                <span className="text-sm font-semibold text-slate-200">Open Existing Project</span>
               </div>
+              <p className="text-xs text-slate-500 mb-4">Select a project from the list on the right to open it.</p>
+              <button
+                onClick={() => setSelectedMode('new')}
+                className="w-full bg-blue-600 hover:bg-blue-500 text-white rounded-lg py-2.5 text-sm font-semibold transition-colors mt-auto"
+              >
+                + New Project
+              </button>
+            </div>
+          )}
+        </div>
 
-              <div className="overflow-x-auto">
-                <table className="min-w-[980px] w-full border-collapse text-sm">
-                  <thead className="bg-gray-50 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
-                    <tr>
-                      <th className="border-b border-gray-200 px-4 py-3">Name</th>
-                      <th className="border-b border-gray-200 px-4 py-3">Project No.</th>
-                      <th className="border-b border-gray-200 px-4 py-3">Client</th>
-                      <th className="border-b border-gray-200 px-4 py-3">Location</th>
-                      <th className="border-b border-gray-200 px-4 py-3">Type</th>
-                      <th className="border-b border-gray-200 px-4 py-3">Status</th>
-                      <th className="border-b border-gray-200 px-4 py-3">Predicted End</th>
-                      <th className="border-b border-gray-200 px-4 py-3">Created</th>
-                      <th className="border-b border-gray-200 px-4 py-3">Last Modified</th>
-                      <th className="border-b border-gray-200 px-4 py-3 text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredProjects.length === 0 ? (
-                      <tr>
-                        <td colSpan={10} className="px-4 py-10 text-center text-gray-500">
-                          {projects.length === 0 ? 'No saved projects yet. Create a new project to see it here.' : 'No projects match your search.'}
-                        </td>
-                      </tr>
-                    ) : (
-                      filteredProjects.map((project) => (
-                        <tr key={project.id} className="hover:bg-blue-50/50">
-                          <td className="border-b border-gray-100 px-4 py-3">
-                            <div className="font-semibold text-gray-900">{project.name}</div>
-                            {project.description && <div className="mt-1 max-w-xs truncate text-xs text-gray-500">{project.description}</div>}
-                          </td>
-                          <td className="border-b border-gray-100 px-4 py-3 font-mono text-xs text-gray-700">
-                            {editingProjectId === project.id ? (
-                              <input
-                                value={editProjectNumber}
-                                onChange={(event) => setEditProjectNumber(event.target.value)}
-                                className="w-28 rounded border border-gray-300 px-2 py-1 text-xs"
-                              />
-                            ) : (
-                              project.projectNumber
-                            )}
-                          </td>
-                          <td className="border-b border-gray-100 px-4 py-3 text-gray-700">{project.client || '-'}</td>
-                          <td className="border-b border-gray-100 px-4 py-3 text-gray-700">{project.location || '-'}</td>
-                          <td className="border-b border-gray-100 px-4 py-3 text-gray-700">{project.calculationType}</td>
-                          <td className="border-b border-gray-100 px-4 py-3">
-                            {editingProjectId === project.id ? (
-                              <select
-                                value={editStatus}
-                                onChange={(event) => setEditStatus(event.target.value as ProjectStatus)}
-                                className="rounded border border-gray-300 bg-white px-2 py-1 text-xs"
-                              >
-                                <option>Active</option>
-                                <option>On Hold</option>
-                                <option>Closed</option>
-                                <option>Archived</option>
-                              </select>
-                            ) : (
-                              <span className={`rounded-full px-2 py-1 text-xs font-semibold ${
-                                project.status === 'Active'
-                                  ? 'bg-green-50 text-green-700'
-                                  : project.status === 'Closed'
-                                    ? 'bg-gray-100 text-gray-700'
-                                    : project.status === 'On Hold'
-                                      ? 'bg-amber-50 text-amber-700'
-                                      : 'bg-slate-100 text-slate-600'
-                              }`}>
-                                {project.status}
-                              </span>
-                            )}
-                          </td>
-                          <td className="border-b border-gray-100 px-4 py-3 text-xs text-gray-600">
-                            {editingProjectId === project.id ? (
+        {/* Right: project list */}
+        <div className="flex-1 bg-slate-950 flex flex-col overflow-hidden">
+          {/* Search bar */}
+          <div className="px-5 py-3 border-b border-slate-800 shrink-0">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={14} />
+              <input
+                value={searchText}
+                onChange={(event) => setSearchText(event.target.value)}
+                className="w-full bg-slate-800 border border-slate-700 rounded-lg pl-9 pr-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-blue-500 placeholder-slate-600"
+                placeholder="Search projects..."
+              />
+            </div>
+          </div>
+
+          {/* Project cards */}
+          <div className="flex-1 overflow-y-auto">
+            {filteredProjects.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-full text-slate-500 gap-2">
+                <FolderOpen size={32} className="text-slate-700" />
+                <p className="text-sm">
+                  {projects.length === 0
+                    ? 'No saved projects yet. Create a new project to get started.'
+                    : 'No projects match your search.'}
+                </p>
+              </div>
+            ) : (
+              <div className="py-2">
+                {filteredProjects.map((project) => (
+                  <div
+                    key={project.id}
+                    className="mx-4 my-2 bg-slate-800 border border-slate-700 rounded-xl px-4 py-3"
+                  >
+                    {editingProjectId === project.id ? (
+                      /* Edit mode */
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-sm font-semibold text-slate-200">{project.name}</span>
+                          <div className="flex gap-1.5">
+                            <button
+                              onClick={() => saveProjectEdit(project.id)}
+                              className="flex items-center gap-1 bg-green-800/40 border border-green-700/50 text-green-400 hover:bg-green-800/60 rounded px-2 py-1 text-xs transition-colors"
+                              title="Save changes"
+                            >
+                              <Save size={12} /> Save
+                            </button>
+                            <button
+                              onClick={cancelEditProject}
+                              className="flex items-center gap-1 bg-slate-700 border border-slate-600 text-slate-400 hover:text-white rounded px-2 py-1 text-xs transition-colors"
+                              title="Cancel editing"
+                            >
+                              <X size={12} /> Cancel
+                            </button>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="block text-[10px] text-slate-500 mb-1 uppercase tracking-wide">Project No.</label>
+                            <input
+                              value={editProjectNumber}
+                              onChange={(event) => setEditProjectNumber(event.target.value)}
+                              className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-blue-500"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] text-slate-500 mb-1 uppercase tracking-wide">Status</label>
+                            <select
+                              value={editStatus}
+                              onChange={(event) => setEditStatus(event.target.value as ProjectStatus)}
+                              className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-blue-500"
+                            >
+                              <option>Active</option>
+                              <option>On Hold</option>
+                              <option>Closed</option>
+                              <option>Archived</option>
+                            </select>
+                          </div>
+                          {editStatus === 'Active' && (
+                            <div className="col-span-2">
+                              <label className="block text-[10px] text-slate-500 mb-1 uppercase tracking-wide">Predicted End Date</label>
                               <input
                                 type="date"
                                 value={editPredictedEndDate}
                                 onChange={(event) => setEditPredictedEndDate(event.target.value)}
-                                disabled={editStatus !== 'Active'}
-                                className="rounded border border-gray-300 px-2 py-1 text-xs disabled:bg-gray-100 disabled:text-gray-400"
+                                className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-blue-500"
                               />
-                            ) : (
-                              project.status === 'Active' && project.predictedEndDate ? project.predictedEndDate : '-'
-                            )}
-                          </td>
-                          <td className="border-b border-gray-100 px-4 py-3 text-xs text-gray-600">{formatDateTime(project.createdAt)}</td>
-                          <td className="border-b border-gray-100 px-4 py-3 text-xs text-gray-600">
-                            <div className="flex items-center gap-1">
-                              <Clock3 size={13} className="text-gray-400" />
-                              {formatDateTime(project.updatedAt)}
                             </div>
-                          </td>
-                          <td className="border-b border-gray-100 px-4 py-3">
-                            <div className="flex justify-end gap-2">
-                              {editingProjectId === project.id ? (
-                                <>
-                                  <button
-                                    onClick={() => saveProjectEdit(project.id)}
-                                    className="rounded border border-green-200 bg-green-50 p-1.5 text-green-700 hover:bg-green-100"
-                                    title="Save project changes"
-                                  >
-                                    <Save size={15} />
-                                  </button>
-                                  <button
-                                    onClick={cancelEditProject}
-                                    className="rounded border border-gray-200 bg-white p-1.5 text-gray-500 hover:bg-gray-50"
-                                    title="Cancel editing"
-                                  >
-                                    <X size={15} />
-                                  </button>
-                                </>
-                              ) : (
-                                <>
-                                  <button
-                                    onClick={() => openProject(project)}
-                                    className="rounded border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100"
-                                  >
-                                    Open
-                                  </button>
-                                  <button
-                                    onClick={() => startEditProject(project)}
-                                    className="rounded border border-gray-200 bg-white p-1.5 text-gray-600 hover:bg-gray-50"
-                                    title="Edit project"
-                                  >
-                                    <Pencil size={15} />
-                                  </button>
-                                  <button
-                                    onClick={() => deleteProject(project.id)}
-                                    className="rounded border border-gray-200 bg-white p-1.5 text-gray-500 hover:border-red-200 hover:bg-red-50 hover:text-red-600"
-                                    title="Delete project"
-                                  >
-                                    <Trash2 size={15} />
-                                  </button>
-                                </>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      ))
+                          )}
+                        </div>
+                      </div>
+                    ) : (
+                      /* View mode */
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-0.5">
+                            <span className="text-sm font-semibold text-slate-200 truncate">{project.name}</span>
+                            <span className={`text-[9px] px-2 py-0.5 rounded-full font-medium shrink-0 ${statusBadgeClass(project.status)}`}>
+                              {project.status}
+                            </span>
+                          </div>
+                          <div className="text-xs text-slate-500 truncate">
+                            {[project.projectNumber, project.client].filter(Boolean).join(' · ')}
+                            {project.location ? ` — ${project.location}` : ''}
+                          </div>
+                          {project.description && (
+                            <div className="mt-1 text-xs text-slate-600 truncate">{project.description}</div>
+                          )}
+                          <div className="mt-1.5 flex items-center gap-1 text-[10px] text-slate-600">
+                            <Clock3 size={10} />
+                            {formatDateTime(project.updatedAt)}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <button
+                            onClick={() => openProject(project)}
+                            className="bg-blue-600 hover:bg-blue-500 text-white rounded px-3 py-1.5 text-xs font-medium transition-colors"
+                          >
+                            Open
+                          </button>
+                          <button
+                            onClick={() => startEditProject(project)}
+                            className="bg-slate-700 hover:bg-slate-600 text-slate-400 hover:text-white rounded p-1.5 transition-colors"
+                            title="Edit project"
+                          >
+                            <Pencil size={13} />
+                          </button>
+                          <button
+                            onClick={() => deleteProject(project.id)}
+                            className="bg-slate-700 hover:bg-red-900/40 text-slate-500 hover:text-red-400 rounded p-1.5 transition-colors"
+                            title="Delete project"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      </div>
                     )}
-                  </tbody>
-                </table>
+                  </div>
+                ))}
               </div>
+            )}
+          </div>
 
-              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-gray-200 px-4 py-3 text-sm text-gray-500">
-                <span>{filteredProjects.length} project{filteredProjects.length === 1 ? '' : 's'} shown</span>
-                <button onClick={() => setSelectedMode('new')} className="rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700">
-                  New Project
-                </button>
-              </div>
-            </div>
-          )}
-        </main>
+          {/* Footer count */}
+          <div className="px-5 py-2.5 border-t border-slate-800 shrink-0 flex items-center justify-between">
+            <span className="text-xs text-slate-600">
+              {filteredProjects.length} project{filteredProjects.length === 1 ? '' : 's'} shown
+            </span>
+            <span className="text-[10px] text-slate-700 uppercase tracking-wider">SimplifyStruct</span>
+          </div>
+        </div>
       </div>
     </div>
   );
