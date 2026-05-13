@@ -9,7 +9,7 @@ import {
   ChevronRight, ChevronDown, Plus, X,
   Eye, EyeOff, Trash2, Upload,
   Filter, RefreshCw, ChevronLeft,
-  Image, Tag, Stamp, RotateCcw, Hash, Minimize2, Search,
+  Image, Tag, Stamp, RotateCcw, Hash, Minimize2, Search, Download,
 } from 'lucide-react';
 import { getActiveProjectId } from '../utils/projectDocuments';
 import { RelationshipMap, RelationshipGraph } from '../components/RelationshipMap';
@@ -63,7 +63,7 @@ interface BoardItem { id: string; name: string; parentId: string | null }
 
 type ActivePanel =
   | 'color' | 'photo' | 'file' | 'note' | 'scale'
-  | 'report' | 'export' | 'photo-library' | 'link' | 'stamps' | 'compare' | null;
+  | 'report' | 'export' | 'photo-library' | 'link' | 'stamps' | 'compare' | 'review' | null;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -219,6 +219,67 @@ function TB({ tid, active, onClick, icon, label, toggle }: {
   );
 }
 function Sep() { return <div className="w-px h-9 bg-slate-700 mx-0.5 self-center shrink-0" />; }
+
+// ─── Report / export helpers ─────────────────────────────────────────────────
+
+function generateMarkupReport(markups: Markup[], projectId: string | null): void {
+  const today = new Date().toLocaleDateString();
+  const counts = { high: 0, medium: 0, low: 0 };
+  markups.forEach(m => counts[m.priority]++);
+  const statusGroups: Record<string, Markup[]> = {};
+  markups.forEach(m => { (statusGroups[m.status] ??= []).push(m); });
+  const rows = markups.map(m => `
+    <tr style="border-bottom:1px solid #e2e8f0;">
+      <td style="padding:6px 10px;font-weight:600;color:${m.color}">${m.number}</td>
+      <td style="padding:6px 10px;text-transform:capitalize">${m.type}</td>
+      <td style="padding:6px 10px">${m.text || '—'}</td>
+      <td style="padding:6px 10px;text-transform:capitalize">${m.status.replace('-',' ')}</td>
+      <td style="padding:6px 10px;text-transform:capitalize">${m.priority}</td>
+      <td style="padding:6px 10px;color:#64748b">${new Date(m.createdAt).toLocaleDateString()}</td>
+    </tr>`).join('');
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+    <title>Inspection Report — ${today}</title>
+    <style>
+      body{font-family:Arial,sans-serif;margin:0;padding:32px;color:#1e293b;background:#fff}
+      h1{font-size:22px;margin:0 0 4px}h2{font-size:15px;margin:24px 0 8px;color:#1e293b;border-bottom:2px solid #3b82f6;padding-bottom:4px}
+      .meta{color:#64748b;font-size:13px;margin-bottom:24px}
+      .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px}
+      .stat{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:12px;text-align:center}
+      .stat .n{font-size:28px;font-weight:700;color:#3b82f6}.stat .l{font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:.05em}
+      table{width:100%;border-collapse:collapse;font-size:13px}
+      thead tr{background:#f1f5f9}th{padding:8px 10px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:#64748b}
+      @media print{button{display:none}}
+    </style></head><body>
+    <div style="display:flex;justify-content:space-between;align-items:flex-start">
+      <div><h1>Structural Inspection Report</h1><div class="meta">Project: ${projectId ?? 'Default'} &nbsp;·&nbsp; Date: ${today} &nbsp;·&nbsp; Markups: ${markups.length}</div></div>
+      <button onclick="window.print()" style="padding:8px 18px;background:#3b82f6;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px">Print / Save PDF</button>
+    </div>
+    <div class="stats">
+      <div class="stat"><div class="n">${markups.length}</div><div class="l">Total Markups</div></div>
+      <div class="stat"><div class="n" style="color:#ef4444">${counts.high}</div><div class="l">High Priority</div></div>
+      <div class="stat"><div class="n" style="color:#f97316">${counts.medium}</div><div class="l">Medium Priority</div></div>
+      <div class="stat"><div class="n" style="color:#22c55e">${(statusGroups['complete'] ?? []).length}</div><div class="l">Complete</div></div>
+    </div>
+    <h2>Markup Schedule</h2>
+    <table><thead><tr><th>#</th><th>Type</th><th>Label</th><th>Status</th><th>Priority</th><th>Created</th></tr></thead>
+    <tbody>${rows}</tbody></table>
+    </body></html>`;
+  const w = window.open('', '_blank');
+  if (w) { w.document.write(html); w.document.close(); }
+}
+
+function exportMarkupsCsv(markups: Markup[]): void {
+  const header = ['#', 'Type', 'Label', 'Status', 'Priority', 'Layer', 'Created'];
+  const rows = markups.map(m => [
+    m.number, m.type, `"${m.text.replace(/"/g, '""')}"`, m.status, m.priority, m.layerId,
+    new Date(m.createdAt).toLocaleDateString(),
+  ]);
+  const csv = [header, ...rows].map(r => r.join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+  a.download = `markups-${Date.now()}.csv`;
+  a.click();
+}
 
 // ─── Relationship graph seed data ────────────────────────────────────────────
 
@@ -379,6 +440,19 @@ export function VisualWorkspace() {
 
   // Relationship graphs (one per board)
   const [boardGraphs, setBoardGraphs] = useState<Record<string, RelationshipGraph>>({ b1: SEED_GRAPH });
+
+  // Board management (mutable board tree)
+  const [boardTree,      setBoardTree]      = useState<BoardItem[]>(BOARD_TREE);
+  const [showAddBoard,   setShowAddBoard]   = useState(false);
+  const [newBoardName,   setNewBoardName]   = useState('');
+  const [newBoardParent, setNewBoardParent] = useState('cat3');
+
+  // Layer management
+  const [renamingLayerId,  setRenamingLayerId]  = useState<string | null>(null);
+  const [renameLayerText,  setRenameLayerText]  = useState('');
+
+  // More menu
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
 
   // Boards
   const [activeBoardId, setActiveBoardId] = useState('b1');
@@ -1318,7 +1392,29 @@ export function VisualWorkspace() {
     if (t === 'layers') setShowLayers(v => !v);
     if (t === 'grid')   setShowGrid(v => !v);
     if (t === 'snap')   setSnapEnabled(v => !v);
+    if (t === 'more')   { setShowMoreMenu(v => !v); return; }
   }, [setTool, undo, redo, fitView]);
+
+  const addLayer = useCallback(() => {
+    const id = `l${Date.now()}`;
+    setLayers(prev => [...prev, { id, name: `Layer ${prev.length + 1}`, visible: true }]);
+  }, []);
+
+  const commitRenameLayer = useCallback((id: string) => {
+    if (renameLayerText.trim()) {
+      setLayers(prev => prev.map(l => l.id === id ? { ...l, name: renameLayerText.trim() } : l));
+    }
+    setRenamingLayerId(null);
+  }, [renameLayerText]);
+
+  const addBoard = useCallback(() => {
+    if (!newBoardName.trim()) return;
+    const id = `b${Date.now()}`;
+    setBoardTree(prev => [...prev, { id, name: newBoardName.trim(), parentId: newBoardParent }]);
+    setNewBoardName('');
+    setShowAddBoard(false);
+    setActiveBoardId(id);
+  }, [newBoardName, newBoardParent]);
 
   // ── Feature 5: Command bar execution ─────────────────────────────────────
   const executeCommand = useCallback((cmd: string) => {
@@ -1752,12 +1848,18 @@ export function VisualWorkspace() {
           {(['Workspace','Review','Report','Export'] as const).map(tab => (
             <button key={tab} aria-label={tab}
               onClick={() => {
-                if (tab === 'Report') setActivePanel('report');
-                else if (tab === 'Export') setActivePanel('export');
+                if (tab === 'Report')    setActivePanel('report');
+                else if (tab === 'Export')  setActivePanel('export');
+                else if (tab === 'Review')  setActivePanel('review');
                 else setActivePanel(null);
               }}
               className={`px-4 h-9 text-xs font-medium border-b-2 transition-colors ${
-                tab === 'Workspace' && !activePanel ? 'border-blue-500 text-white' : 'border-transparent text-slate-400 hover:text-white'
+                (tab === 'Workspace' && !activePanel) ||
+                (tab === 'Review'    && activePanel === 'review') ||
+                (tab === 'Report'    && activePanel === 'report') ||
+                (tab === 'Export'    && activePanel === 'export')
+                  ? 'border-blue-500 text-white'
+                  : 'border-transparent text-slate-400 hover:text-white'
               }`}>{tab}</button>
           ))}
         </div>
@@ -1823,7 +1925,36 @@ export function VisualWorkspace() {
         <TB tid="tool-undo" onClick={()=>activateTool('undo')} icon={<Undo2 size={15}/>}          label="Undo"/>
         <TB tid="tool-redo" onClick={()=>activateTool('redo')} icon={<Redo2 size={15}/>}          label="Redo"/>
         <Sep/>
-        <TB tid="tool-more" onClick={()=>activateTool('more')} icon={<MoreHorizontal size={15}/>} label="More"/>
+        <div className="relative">
+          <TB tid="tool-more" toggle={showMoreMenu} onClick={()=>setShowMoreMenu(v=>!v)} icon={<MoreHorizontal size={15}/>} label="More"/>
+          {showMoreMenu && (
+            <div className="absolute top-full left-0 mt-1 z-50 bg-slate-800 border border-slate-600 rounded-lg shadow-2xl py-1 w-52"
+              onPointerDown={e => e.stopPropagation()}>
+              <button onClick={() => { generateMarkupReport(markups, projectId); setShowMoreMenu(false); }}
+                className="flex items-center gap-2 w-full px-3 py-2 text-xs text-slate-300 hover:bg-slate-700">
+                <FileText size={11}/> Generate Report
+              </button>
+              <button onClick={() => { exportMarkupsCsv(markups); setShowMoreMenu(false); }}
+                className="flex items-center gap-2 w-full px-3 py-2 text-xs text-slate-300 hover:bg-slate-700">
+                <Download size={11}/> Export Markup CSV
+              </button>
+              <button onClick={() => { fitView(); setShowMoreMenu(false); }}
+                className="flex items-center gap-2 w-full px-3 py-2 text-xs text-slate-300 hover:bg-slate-700">
+                <Maximize2 size={11}/> Fit to View
+              </button>
+              <div className="border-t border-slate-700 my-1"/>
+              <button onClick={() => {
+                if (window.confirm('Clear all markups on this board?')) {
+                  updateMarkups(activeBoardId, () => []);
+                  setSelectedId(null);
+                }
+                setShowMoreMenu(false);
+              }} className="flex items-center gap-2 w-full px-3 py-2 text-xs text-red-400 hover:bg-red-900/30">
+                <Trash2 size={11}/> Clear Markups
+              </button>
+            </div>
+          )}
+        </div>
 
         <div className="ml-auto shrink-0 pr-2 flex items-center gap-2 text-[10px] text-slate-400">
           <span data-testid="status-message" data-active-tool={TOOL_NAMES[tool] ?? tool}>
@@ -1959,11 +2090,31 @@ export function VisualWorkspace() {
           <div className="flex-1 overflow-y-auto">
             <div className="flex items-center justify-between px-3 py-2 border-b border-slate-700">
               <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Boards</span>
-              <button aria-label="Add board" className="text-slate-400 hover:text-white"><Plus size={13}/></button>
+              <button aria-label="Add board" onClick={() => setShowAddBoard(v => !v)} className={`text-slate-400 hover:text-white transition-colors ${showAddBoard ? 'text-blue-400' : ''}`}><Plus size={13}/></button>
             </div>
+            {showAddBoard && (
+              <div className="px-3 py-2 bg-slate-750 border-b border-slate-700 space-y-1.5">
+                <input autoFocus value={newBoardName} onChange={e => setNewBoardName(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') addBoard(); if (e.key === 'Escape') setShowAddBoard(false); }}
+                  placeholder="Board name…"
+                  className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-slate-200 focus:outline-none focus:border-blue-500"/>
+                <select value={newBoardParent} onChange={e => setNewBoardParent(e.target.value)}
+                  className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-slate-200 focus:outline-none">
+                  {boardTree.filter(b => b.parentId === null).map(cat => (
+                    <option key={cat.id} value={cat.id}>{cat.name}</option>
+                  ))}
+                </select>
+                <div className="flex gap-1.5">
+                  <button onClick={addBoard}
+                    className="flex-1 py-1 rounded bg-blue-600 hover:bg-blue-500 text-white text-xs">Add</button>
+                  <button onClick={() => setShowAddBoard(false)}
+                    className="px-3 py-1 rounded bg-slate-600 hover:bg-slate-500 text-slate-300 text-xs">Cancel</button>
+                </div>
+              </div>
+            )}
             <div className="py-1 text-xs">
-              {BOARD_TREE.filter(b => b.parentId === null).map(cat => {
-                const children = BOARD_TREE.filter(b => b.parentId === cat.id);
+              {boardTree.filter(b => b.parentId === null).map(cat => {
+                const children = boardTree.filter(b => b.parentId === cat.id);
                 const isOpen = expanded.has(cat.id);
                 return (
                   <div key={cat.id}>
@@ -1989,15 +2140,34 @@ export function VisualWorkspace() {
 
           {showLayers && (
             <div className="border-t border-slate-700 shrink-0">
-              <div className="px-3 py-2">
+              <div className="flex items-center justify-between px-3 py-2">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Layers</span>
+                <button onClick={addLayer} title="Add layer" className="text-slate-400 hover:text-white"><Plus size={11}/></button>
               </div>
               {layers.map(l => (
-                <div key={l.id} className="flex items-center gap-2 px-3 py-1 text-xs text-slate-300 hover:bg-slate-700">
-                  <button onClick={() => setLayers(prev => prev.map(x => x.id === l.id ? { ...x, visible: !x.visible } : x))} className="text-slate-400 hover:text-white">
+                <div key={l.id} className="group flex items-center gap-2 px-3 py-1 text-xs text-slate-300 hover:bg-slate-700">
+                  <button onClick={() => setLayers(prev => prev.map(x => x.id === l.id ? { ...x, visible: !x.visible } : x))} className="text-slate-400 hover:text-white shrink-0">
                     {l.visible ? <Eye size={11}/> : <EyeOff size={11}/>}
                   </button>
-                  <span className="flex-1 truncate">{l.name}</span>
+                  {renamingLayerId === l.id ? (
+                    <input autoFocus value={renameLayerText}
+                      onChange={e => setRenameLayerText(e.target.value)}
+                      onBlur={() => commitRenameLayer(l.id)}
+                      onKeyDown={e => { if (e.key === 'Enter') commitRenameLayer(l.id); if (e.key === 'Escape') setRenamingLayerId(null); }}
+                      className="flex-1 bg-slate-600 border border-slate-500 rounded px-1 py-0.5 text-xs focus:outline-none focus:border-blue-500"/>
+                  ) : (
+                    <span className="flex-1 truncate cursor-pointer"
+                      onDoubleClick={() => { setRenamingLayerId(l.id); setRenameLayerText(l.name); }}>
+                      {l.name}
+                    </span>
+                  )}
+                  {layers.length > 1 && (
+                    <button onClick={() => setLayers(prev => prev.filter(x => x.id !== l.id))}
+                      title="Delete layer"
+                      className="text-slate-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                      <X size={10}/>
+                    </button>
+                  )}
                 </div>
               ))}
             </div>
@@ -2267,7 +2437,7 @@ export function VisualWorkspace() {
             <RelationshipMap
               graph={boardGraphs[activeBoardId] ?? { nodes: [], edges: [] }}
               onChange={g => setBoardGraphs(prev => ({ ...prev, [activeBoardId]: g }))}
-              boardNames={Object.fromEntries(BOARD_TREE.filter(b => b.parentId !== null).map(b => [b.id, b.name]))}
+              boardNames={Object.fromEntries(boardTree.filter(b => b.parentId !== null).map(b => [b.id, b.name]))}
               activeBoardId={activeBoardId}
             />
           </div>
@@ -2613,6 +2783,7 @@ export function VisualWorkspace() {
                 {activePanel === 'stamps'        && 'Stamp library'}
                 {activePanel === 'photo-library' && <span data-testid="photo-library-title">Photo Library</span>}
                 {activePanel === 'compare'       && 'Compare overlay'}
+                {activePanel === 'review'        && 'Markup Review'}
               </h2>
               <button data-testid="close-active-panel" onClick={() => setActivePanel(null)} className="text-slate-400 hover:text-white"><X size={16}/></button>
             </div>
@@ -2790,15 +2961,19 @@ export function VisualWorkspace() {
 
               {activePanel === 'report' && (
                 <div className="space-y-4">
-                  <p className="text-xs text-slate-400">Generate a PDF structural inspection report from all markups and photos.</p>
+                  <p className="text-xs text-slate-400">Generate a structured inspection report from all markups on the active board.</p>
                   <div className="space-y-2">
                     {['Cover page','Markup schedule','Photo log','Engineer summary'].map(s => (
                       <label key={s} className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
-                        <input type="checkbox" defaultChecked className="rounded"/> {s}
+                        <input type="checkbox" defaultChecked className="rounded accent-blue-500"/> {s}
                       </label>
                     ))}
                   </div>
-                  <button className="w-full py-2 rounded bg-blue-600 hover:bg-blue-500 text-white text-xs">Generate PDF Report</button>
+                  <button onClick={() => { generateMarkupReport(markups, projectId); setActivePanel(null); }}
+                    className="w-full py-2 rounded bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium flex items-center justify-center gap-2">
+                    <FileText size={13}/> Generate PDF Report
+                  </button>
+                  <p className="text-[10px] text-slate-500">Opens in a new tab — use your browser's Print dialog to save as PDF.</p>
                 </div>
               )}
 
@@ -2806,12 +2981,89 @@ export function VisualWorkspace() {
                 <div className="space-y-4">
                   <p className="text-xs text-slate-400">Export project deliverables in your preferred format.</p>
                   <div className="space-y-2">
-                    {['PDF (annotated drawings)','CSV (markup schedule)','ZIP (all photos + PDF)'].map(f => (
-                      <button key={f} className="w-full py-2 px-3 rounded bg-slate-700 hover:bg-slate-600 text-xs text-slate-300 text-left">{f}</button>
-                    ))}
+                    <button onClick={() => { generateMarkupReport(markups, projectId); setActivePanel(null); }}
+                      className="w-full py-2 px-3 rounded bg-slate-700 hover:bg-slate-600 text-xs text-slate-300 text-left flex items-center gap-2">
+                      <FileText size={11}/> PDF (annotated drawings)
+                    </button>
+                    <button onClick={() => { exportMarkupsCsv(markups); setActivePanel(null); }}
+                      className="w-full py-2 px-3 rounded bg-slate-700 hover:bg-slate-600 text-xs text-slate-300 text-left flex items-center gap-2">
+                      <Download size={11}/> CSV (markup schedule)
+                    </button>
+                    <button onClick={() => alert('ZIP export requires server-side processing.\nUse CSV + PDF exports in the meantime.')}
+                      className="w-full py-2 px-3 rounded bg-slate-700 hover:bg-slate-600 text-xs text-slate-400 text-left flex items-center gap-2">
+                      <Download size={11}/> ZIP (photos + PDF) <span className="ml-auto text-[9px] text-slate-600">coming soon</span>
+                    </button>
                   </div>
                 </div>
               )}
+
+              {activePanel === 'review' && (() => {
+                const total   = markups.length;
+                const byStatus = { 'field-verify': 0, monitor: 0, complete: 0, open: 0 } as Record<MarkupStatus, number>;
+                const byPri    = { high: 0, medium: 0, low: 0 } as Record<Priority, number>;
+                markups.forEach(m => { byStatus[m.status]++; byPri[m.priority]++; });
+                const pct = total > 0 ? Math.round((byStatus.complete / total) * 100) : 0;
+                const unresolved = markups.filter(m => m.priority === 'high' && m.status !== 'complete');
+                return (
+                  <div className="space-y-5">
+                    {/* Progress */}
+                    <div>
+                      <div className="flex justify-between text-xs text-slate-400 mb-1.5">
+                        <span>Completion</span><span className="font-mono font-semibold text-slate-200">{pct}%</span>
+                      </div>
+                      <div className="h-2 rounded-full bg-slate-700">
+                        <div className="h-2 rounded-full bg-green-500 transition-all" style={{ width: `${pct}%` }}/>
+                      </div>
+                    </div>
+                    {/* Status breakdown */}
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">By Status</p>
+                      <div className="space-y-1.5">
+                        {(Object.entries(byStatus) as [MarkupStatus, number][]).map(([s, n]) => (
+                          <div key={s} className="flex items-center justify-between text-xs">
+                            <span className={`px-1.5 py-0.5 rounded text-[10px] ${STATUS_CFG[s].cls}`}>{STATUS_CFG[s].label}</span>
+                            <span className="font-mono text-slate-300">{n}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    {/* Priority breakdown */}
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">By Priority</p>
+                      <div className="space-y-1.5">
+                        {(Object.entries(byPri) as [Priority, number][]).map(([p, n]) => (
+                          <div key={p} className="flex items-center gap-2 text-xs">
+                            <span className={`w-2 h-2 rounded-full ${PRI_CFG[p].dot}`}/>
+                            <span className="flex-1 text-slate-300">{PRI_CFG[p].label}</span>
+                            <span className="font-mono text-slate-300">{n}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    {/* Unresolved high-priority */}
+                    {unresolved.length > 0 && (
+                      <div>
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-red-400 mb-2">
+                          Unresolved High Priority ({unresolved.length})
+                        </p>
+                        <div className="space-y-1">
+                          {unresolved.map(m => (
+                            <button key={m.id} onClick={() => { setSelectedId(m.id); setActivePanel(null); }}
+                              className="w-full text-left px-2 py-1.5 rounded bg-slate-700 hover:bg-slate-600 text-xs transition-colors">
+                              <span className="w-4 h-4 rounded-full inline-flex items-center justify-center text-[9px] font-bold text-white mr-1.5" style={{ background: m.color }}>{m.number}</span>
+                              <span className="text-slate-200 truncate">{m.text || m.type}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    <button onClick={() => { generateMarkupReport(markups, projectId); setActivePanel(null); }}
+                      className="w-full py-2 rounded bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium flex items-center justify-center gap-2">
+                      <FileText size={13}/> Generate Full Report
+                    </button>
+                  </div>
+                );
+              })()}
 
               {activePanel === 'photo-library' && (
                 <div className="space-y-3">
