@@ -12,6 +12,7 @@ import {
   Image, Tag, Stamp, RotateCcw, Hash, Minimize2, Search,
 } from 'lucide-react';
 import { getActiveProjectId } from '../utils/projectDocuments';
+import { RelationshipMap, RelationshipGraph } from '../components/RelationshipMap';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -219,6 +220,29 @@ function TB({ tid, active, onClick, icon, label, toggle }: {
 }
 function Sep() { return <div className="w-px h-9 bg-slate-700 mx-0.5 self-center shrink-0" />; }
 
+// ─── Relationship graph seed data ────────────────────────────────────────────
+
+const SEED_GRAPH: RelationshipGraph = {
+  nodes: [
+    { id: 'rn1', type: 'markup',     label: 'Markup #1',         subtitle: 'Spalled concrete',  x: 60,  y: 80  },
+    { id: 'rn2', type: 'member',     label: 'Beam B-12',         subtitle: 'W18×55 steel',      x: 280, y: 40  },
+    { id: 'rn3', type: 'finding',    label: 'Section Loss',      subtitle: '~15% web loss',     x: 280, y: 130 },
+    { id: 'rn4', type: 'inspection', label: 'Site Inspection',   subtitle: '2024-11-08',        x: 500, y: 20  },
+    { id: 'rn5', type: 'cost',       label: 'Cost Estimate',     subtitle: '$12,400',           x: 500, y: 100 },
+    { id: 'rn6', type: 'action',     label: 'Repair Order',      subtitle: 'Priority: High',    x: 500, y: 180 },
+    { id: 'rn7', type: 'document',   label: 'Inspection Report', subtitle: 'PDF • 8 pages',     x: 720, y: 60  },
+  ],
+  edges: [
+    { id: 're1', from: 'rn1', to: 'rn2' },
+    { id: 're2', from: 'rn1', to: 'rn3' },
+    { id: 're3', from: 'rn2', to: 'rn4' },
+    { id: 're4', from: 'rn3', to: 'rn5' },
+    { id: 're5', from: 'rn3', to: 'rn6' },
+    { id: 're6', from: 'rn4', to: 'rn7' },
+    { id: 're7', from: 'rn5', to: 'rn7' },
+  ],
+};
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export function VisualWorkspace() {
@@ -353,6 +377,9 @@ export function VisualWorkspace() {
   const [scheduleSearch,     setScheduleSearch]     = useState('');
   const [showScheduleSearch, setShowScheduleSearch] = useState(false);
 
+  // Relationship graphs (one per board)
+  const [boardGraphs, setBoardGraphs] = useState<Record<string, RelationshipGraph>>({ b1: SEED_GRAPH });
+
   // Boards
   const [activeBoardId, setActiveBoardId] = useState('b1');
   const [expanded, setExpanded] = useState<Set<string>>(new Set(['cat3', 'cat7']));
@@ -428,6 +455,22 @@ export function VisualWorkspace() {
     }, 400);
     return () => clearTimeout(t);
   }, [boardMarkups, MARKUP_KEY]);
+
+  // ── Persistence: relationship graphs ─────────────────────────────────────
+  const GRAPH_KEY = `vw.graphs.${projectId || 'default'}`;
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(GRAPH_KEY);
+      if (saved) setBoardGraphs(JSON.parse(saved));
+    } catch { /* ignore */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [GRAPH_KEY]);
+  useEffect(() => {
+    const t = setTimeout(() => {
+      try { localStorage.setItem(GRAPH_KEY, JSON.stringify(boardGraphs)); } catch { /* storage full */ }
+    }, 400);
+    return () => clearTimeout(t);
+  }, [boardGraphs, GRAPH_KEY]);
 
   // ── Resize observer ───────────────────────────────────────────────────────
   useEffect(() => {
@@ -2132,8 +2175,9 @@ export function VisualWorkspace() {
               }}/>
           </div>
 
-          {/* Markup schedule */}
-          <div className="h-44 shrink-0 border-t border-slate-700 bg-slate-800 overflow-auto">
+          {/* Bottom strip: markup schedule + relationship map */}
+          <div className="h-44 shrink-0 border-t border-slate-700 flex overflow-hidden">
+          <div className="flex-1 bg-slate-800 overflow-auto">
             <div className="flex items-center justify-between px-4 py-1.5 border-b border-slate-700 sticky top-0 bg-slate-800 z-10">
               <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
                 Markup Schedule
@@ -2218,7 +2262,14 @@ export function VisualWorkspace() {
                   </table>
                 );
             })()}
+          </div>{/* end schedule flex-1 */}
+          <div className="w-72 shrink-0 border-l border-slate-700">
+            <RelationshipMap
+              graph={boardGraphs[activeBoardId] ?? { nodes: [], edges: [] }}
+              onChange={g => setBoardGraphs(prev => ({ ...prev, [activeBoardId]: g }))}
+            />
           </div>
+          </div>{/* end bottom strip flex */}
         </div>
 
         {/* ── Right panel ─────────────────────────────────────────────────── */}
