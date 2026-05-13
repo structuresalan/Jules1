@@ -43,6 +43,8 @@ interface Markup {
   color: string;
   strokeWidth: number;
   fontSize: number;
+  fontFamily?: string;
+  dashStyle?: 'solid' | 'dashed' | 'dotted';
   opacity: number;
   priority: Priority;
   status: MarkupStatus;
@@ -74,6 +76,8 @@ function normalizeMarkup(raw: Record<string, unknown>): Markup {
     color:       String(raw.color ?? '#ef4444'),
     strokeWidth: Number(raw.strokeWidth ?? 2),
     fontSize:    Number(raw.fontSize ?? 14),
+    fontFamily:  String(raw.fontFamily ?? 'sans-serif'),
+    dashStyle:   (raw.dashStyle as 'solid'|'dashed'|'dotted') ?? 'solid',
     opacity:     Number(raw.opacity ?? 1),
     priority:    (raw.priority as Priority) ?? 'medium',
     status:      (raw.status as MarkupStatus) ?? 'open',
@@ -233,6 +237,11 @@ export function VisualWorkspace() {
   const [color, setColor] = useState('#ef4444');
   const colorRef = useRef('#ef4444');
   useEffect(() => { colorRef.current = color; }, [color]);
+  useEffect(() => { ctxStrokeWidthRef.current = ctxStrokeWidth; }, [ctxStrokeWidth]);
+  useEffect(() => { ctxFontFamilyRef.current  = ctxFontFamily;  }, [ctxFontFamily]);
+  useEffect(() => { ctxFontSizeRef.current    = ctxFontSize;    }, [ctxFontSize]);
+  useEffect(() => { calibRatioRef.current     = calibRatio;     }, [calibRatio]);
+  useEffect(() => { calibUnitRef.current      = calibUnit;      }, [calibUnit]);
 
   // View toggles
   const [showGrid,     setShowGrid]     = useState(false);
@@ -241,6 +250,35 @@ export function VisualWorkspace() {
   const [showInspector,setShowInspector]= useState(true);
   const [activePanel,  setActivePanel]  = useState<ActivePanel>(null);
   const [scaleSet,     setScaleSet]     = useState(false);
+
+  // Feature 1: Zoom editable input
+  const [zoomInputStr,    setZoomInputStr]    = useState('');
+  const [zoomInputActive, setZoomInputActive] = useState(false);
+
+  // Feature 2: Context toolbar
+  const [ctxFontFamily, setCtxFontFamily] = useState('sans-serif');
+  const [ctxFontSize,   setCtxFontSize]   = useState(14);
+  const [ctxStrokeWidth,setCtxStrokeWidth]= useState(2);
+  const [ctxDashStyle,  setCtxDashStyle]  = useState<'solid'|'dashed'|'dotted'>('solid');
+  const ctxStrokeWidthRef = useRef(2);
+  const ctxFontFamilyRef  = useRef('sans-serif');
+  const ctxFontSizeRef    = useRef(14);
+
+  // Feature 3: Cursor coordinates
+  const [cursorPt, setCursorPt] = useState<Pt | null>(null);
+
+  // Feature 4: Calibration
+  const [calibMode,      setCalibMode]      = useState<'idle'|'pick1'|'pick2'|'dialog'>('idle');
+  const [calibPts,       setCalibPts]       = useState<Pt[]>([]);
+  const [calibRatio,     setCalibRatio]     = useState<number | null>(null);
+  const [calibUnit,      setCalibUnit]      = useState<'ft'|'in'|'m'>('ft');
+  const [calibDistInput, setCalibDistInput] = useState('');
+  const calibRatioRef = useRef<number | null>(null);
+  const calibUnitRef  = useRef<string>('ft');
+
+  // Feature 5: Command bar
+  const [showCmdBar, setShowCmdBar] = useState(false);
+  const [cmdInput,   setCmdInput]   = useState('');
 
   // Boards
   const [activeBoardId, setActiveBoardId] = useState('b1');
@@ -512,6 +550,22 @@ export function VisualWorkspace() {
     // Commit any open text edit on new pointer down
     if (editingId) { commitEdit(); return; }
 
+    // Feature 4: Calibration point picking
+    if (calibMode === 'pick1' || calibMode === 'pick2') {
+      if (e.button !== 0) return;
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+      const pt = toPt(e);
+      if (calibMode === 'pick1') {
+        setCalibPts([pt]);
+        setCalibMode('pick2');
+      } else {
+        setCalibPts(prev => [...prev, pt]);
+        setCalibMode('dialog');
+        setActivePanel('scale');
+      }
+      return;
+    }
+
     const t = toolRef.current;
 
     // Middle mouse = pan
@@ -610,6 +664,18 @@ export function VisualWorkspace() {
 
   // ── Pointer move ──────────────────────────────────────────────────────────
   const onPointerMove = useCallback((e: React.PointerEvent) => {
+    // Feature 3: Track cursor in canvas coordinates always
+    {
+      const rect = containerRef.current?.getBoundingClientRect();
+      if (rect) {
+        const sx = e.clientX - rect.left, sy = e.clientY - rect.top;
+        setCursorPt({
+          x: Math.round((sx - panRef.current.x) / zoomRef.current),
+          y: Math.round((sy - panRef.current.y) / zoomRef.current),
+        });
+      }
+    }
+
     // Pan
     if (isPanning.current && panStart.current && panOrigin.current) {
       setPan({ x: panOrigin.current.x + e.clientX - panStart.current.x, y: panOrigin.current.y + e.clientY - panStart.current.y });
@@ -715,10 +781,12 @@ export function VisualWorkspace() {
       const pts = penPts.current;
       penPts.current = [];
       if (pts.length < 2) return;
+      const sw = t === 'highlighter' ? Math.max(ctxStrokeWidthRef.current, 8) : ctxStrokeWidthRef.current;
       const m: Markup = {
         id: genId(), type: t, number: counter, points: pts,
-        text: '', color: col, strokeWidth: t === 'highlighter' ? 14 : 2, fontSize: 14, opacity: 1,
-        priority: 'medium', status: 'open', layerId: 'l1',
+        text: '', color: col, strokeWidth: sw, fontSize: ctxFontSizeRef.current,
+        fontFamily: ctxFontFamilyRef.current, dashStyle: 'solid',
+        opacity: 1, priority: 'medium', status: 'open', layerId: 'l1',
         createdAt: new Date().toISOString(),
       };
       updateMarkups(activeBoardId, prev => [...prev, m]);
@@ -753,7 +821,11 @@ export function VisualWorkspace() {
     const m: Markup = {
       id: genId(), type: mtype, number: counter,
       points: [start, cur], text: defaultText, color: col,
-      strokeWidth: 2, fontSize: 14, opacity: 1, priority: 'medium', status: 'open', layerId: 'l1',
+      strokeWidth: ctxStrokeWidthRef.current,
+      fontSize: ctxFontSizeRef.current,
+      fontFamily: ctxFontFamilyRef.current,
+      dashStyle: ctxDashStyle,
+      opacity: 1, priority: 'medium', status: 'open', layerId: 'l1',
       createdAt: new Date().toISOString(),
     };
     updateMarkups(activeBoardId, prev => [...prev, m]);
@@ -781,6 +853,15 @@ export function VisualWorkspace() {
         setTool('select'); clearSelection(); setActivePanel(null);
         isDrawing.current = false; setPreview(null);
         if (editingId) commitEdit();
+        setCalibMode('idle');
+        setShowCmdBar(false);
+      }
+      // Feature 5: '/' opens command bar
+      if (e.key === '/' && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        setShowCmdBar(true);
+        setCmdInput('');
+        return;
       }
       if ((e.key === 'Delete' || e.key === 'Backspace') && selectedIds.length > 0 && !editingId) {
         const toDelete = new Set(selectedIds);
@@ -813,6 +894,26 @@ export function VisualWorkspace() {
     if (t === 'snap')   setSnapEnabled(v => !v);
   }, [setTool, undo, redo, fitView]);
 
+  // ── Feature 5: Command bar execution ─────────────────────────────────────
+  const executeCommand = useCallback((cmd: string) => {
+    const c = cmd.trim().toLowerCase();
+    const toolMap: Partial<Record<string, Tool>> = {
+      arrow: 'arrow', cloud: 'cloud', box: 'box', text: 'text', pen: 'pen',
+      select: 'select', pan: 'pan', callout: 'callout', highlighter: 'highlighter',
+      eraser: 'eraser', distance: 'distance', dimension: 'dimension',
+      angle: 'angle', area: 'area',
+    };
+    if (toolMap[c]) { activateTool(toolMap[c]!); }
+    else if (c === 'fit')       { fitView(); }
+    else if (c === 'grid')      { setShowGrid(v => !v); }
+    else if (c === 'snap')      { setSnapEnabled(v => !v); }
+    else if (c === 'undo')      { undo(); }
+    else if (c === 'redo')      { redo(); }
+    else if (c === 'calibrate') { setCalibMode('pick1'); setCalibPts([]); setActivePanel(null); }
+    setShowCmdBar(false);
+    setCmdInput('');
+  }, [activateTool, fitView, undo, redo]);
+
   // ── Render markup ─────────────────────────────────────────────────────────
   const renderMarkup = (m: Markup) => {
     const layer = layers.find(l => l.id === m.layerId);
@@ -835,8 +936,10 @@ export function VisualWorkspace() {
     const tp = { 'data-testid': `annotation-${m.number}`, 'data-tool-type': m.type };
     let shape: React.ReactNode = null;
 
+    const dashArray = m.dashStyle === 'dashed' ? `${6/zoom}` : m.dashStyle === 'dotted' ? `${2/zoom} ${3/zoom}` : undefined;
+
     if (m.type === 'box') {
-      shape = <rect {...tp} key={m.id} x={bx} y={by} width={bw} height={bh} fill="none" stroke={stroke} strokeWidth={sw} />;
+      shape = <rect {...tp} key={m.id} x={bx} y={by} width={bw} height={bh} fill="none" stroke={stroke} strokeWidth={sw} strokeDasharray={dashArray}/>;
 
     } else if (m.type === 'arrow') {
       const mid = `ah-${m.id}`, ms = 8 / zoom;
@@ -847,17 +950,17 @@ export function VisualWorkspace() {
               <polygon points={`0 0,${ms * 3} ${ms * 1.5},0 ${ms * 3}`} fill={stroke} />
             </marker>
           </defs>
-          <line x1={m.points[0].x} y1={m.points[0].y} x2={m.points[1].x} y2={m.points[1].y} stroke={stroke} strokeWidth={sw} markerEnd={`url(#${mid})`} />
+          <line x1={m.points[0].x} y1={m.points[0].y} x2={m.points[1].x} y2={m.points[1].y} stroke={stroke} strokeWidth={sw} strokeDasharray={dashArray} markerEnd={`url(#${mid})`} />
         </g>
       );
 
     } else if (m.type === 'cloud') {
-      shape = <path {...tp} key={m.id} d={cloudPath(bx, by, bw, bh)} fill="none" stroke={stroke} strokeWidth={sw} />;
+      shape = <path {...tp} key={m.id} d={cloudPath(bx, by, bw, bh)} fill="none" stroke={stroke} strokeWidth={sw} strokeDasharray={dashArray}/>;
 
     } else if (m.type === 'text') {
       shape = (
         <text {...tp} key={m.id} x={m.points[0].x} y={m.points[0].y}
-          fill={stroke} fontSize={m.fontSize / zoom} fontFamily="sans-serif" fontWeight="600"
+          fill={stroke} fontSize={m.fontSize / zoom} fontFamily={m.fontFamily ?? 'sans-serif'} fontWeight="600"
           dominantBaseline="hanging">
           {m.text}
         </text>
@@ -886,14 +989,18 @@ export function VisualWorkspace() {
       const nx = len > 0 ? -ddy / len * off : 0, ny = len > 0 ? ddx / len * off : 0;
       const mx = (p1.x + p2.x) / 2, my = (p1.y + p2.y) / 2;
       const ang = Math.atan2(ddy, ddx) * 180 / Math.PI;
+      const dimLabel = calibRatio !== null
+        ? `${(Math.round(len / calibRatio * 100) / 100)} ${calibUnit}`
+        : `${Math.round(len * 10) / 10}"`;
+      const dimDash = m.dashStyle === 'dashed' ? `${6/zoom}` : m.dashStyle === 'dotted' ? `${2/zoom} ${3/zoom}` : undefined;
       shape = (
         <g key={m.id} {...tp}>
-          <line x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y} stroke={stroke} strokeWidth={sw} />
+          <line x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y} stroke={stroke} strokeWidth={sw} strokeDasharray={dimDash}/>
           <line x1={p1.x - nx} y1={p1.y - ny} x2={p1.x + nx} y2={p1.y + ny} stroke={stroke} strokeWidth={sw} />
           <line x1={p2.x - nx} y1={p2.y - ny} x2={p2.x + nx} y2={p2.y + ny} stroke={stroke} strokeWidth={sw} />
           <text x={mx} y={my - off} fill={stroke} fontSize={9 / zoom} fontFamily="sans-serif" textAnchor="middle"
             transform={`rotate(${ang > 90 || ang < -90 ? ang + 180 : ang},${mx},${my - off})`}>
-            {`${Math.round(len * 10) / 10}"`}
+            {dimLabel}
           </text>
         </g>
       );
@@ -1133,11 +1240,100 @@ export function VisualWorkspace() {
         <Sep/>
         <TB tid="tool-more" onClick={()=>activateTool('more')} icon={<MoreHorizontal size={15}/>} label="More"/>
 
-        <span data-testid="status-message" data-active-tool={TOOL_NAMES[tool] ?? tool}
-          className="ml-auto shrink-0 pr-2 text-[10px] text-slate-400">
-          {TOOL_NAMES[tool]} · {Math.round(zoom * 100)}%
-          {editingId && ' · Editing — Enter to confirm, Esc to cancel'}
-        </span>
+        <div className="ml-auto shrink-0 pr-2 flex items-center gap-2 text-[10px] text-slate-400">
+          <span data-testid="status-message" data-active-tool={TOOL_NAMES[tool] ?? tool}>
+            {TOOL_NAMES[tool] ?? tool}
+            {editingId && ' · Editing'}
+            {(calibMode === 'pick1' || calibMode === 'pick2') && ' · Click 2 calibration points'}
+          </span>
+          <span className="text-slate-600">·</span>
+          {zoomInputActive ? (
+            <input
+              autoFocus
+              type="number"
+              value={zoomInputStr}
+              onChange={e => setZoomInputStr(e.target.value)}
+              onBlur={() => {
+                const v = parseFloat(zoomInputStr);
+                if (!isNaN(v) && v > 0) setZoom(Math.min(Math.max(v / 100, 0.05), 10));
+                setZoomInputActive(false);
+              }}
+              onKeyDown={e => {
+                if (e.key === 'Enter') {
+                  const v = parseFloat(zoomInputStr);
+                  if (!isNaN(v) && v > 0) setZoom(Math.min(Math.max(v / 100, 0.05), 10));
+                  setZoomInputActive(false);
+                }
+                if (e.key === 'Escape') setZoomInputActive(false);
+              }}
+              className="w-14 bg-slate-700 border border-blue-500 rounded px-1 text-white text-[10px] text-center focus:outline-none"
+            />
+          ) : (
+            <button
+              title="Click to set zoom %"
+              onClick={() => { setZoomInputStr(String(Math.round(zoom * 100))); setZoomInputActive(true); }}
+              className="bg-slate-700 hover:bg-slate-600 border border-slate-600 rounded px-1.5 py-0.5 text-white text-[10px] font-mono min-w-[42px]">
+              {Math.round(zoom * 100)}%
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* ── Context / properties toolbar ─────────────────────────────── */}
+      <div className="flex items-center gap-2 px-2 py-0.5 bg-slate-850 border-b border-slate-700/80 text-[10px] text-slate-400 shrink-0 min-h-[26px] overflow-x-auto" style={{background:'#0f172a'}}>
+        {/* Text / callout: font family + size */}
+        {(tool === 'text' || tool === 'callout') && (<>
+          <span className="text-slate-500 shrink-0">Font:</span>
+          <select value={ctxFontFamily} onChange={e => setCtxFontFamily(e.target.value)}
+            className="bg-slate-700 border border-slate-600 rounded px-1 py-0 text-slate-200 focus:outline-none text-[10px] h-5">
+            {['sans-serif','serif','monospace','Georgia','Arial','Courier New','Impact'].map(f => <option key={f} value={f}>{f}</option>)}
+          </select>
+          <span className="text-slate-500 shrink-0">Size:</span>
+          <select value={ctxFontSize} onChange={e => setCtxFontSize(Number(e.target.value))}
+            className="bg-slate-700 border border-slate-600 rounded px-1 py-0 text-slate-200 focus:outline-none text-[10px] h-5 w-16">
+            {[8,10,12,14,16,18,20,24,28,32,36,48].map(s => <option key={s} value={s}>{s}pt</option>)}
+          </select>
+        </>)}
+
+        {/* Drawing tools: stroke width + dash style */}
+        {['arrow','cloud','box','pen','highlighter','dimension','distance'].includes(tool) && (<>
+          <span className="text-slate-500 shrink-0">Stroke:</span>
+          <input type="range" min={1} max={16} step={0.5} value={ctxStrokeWidth}
+            onChange={e => setCtxStrokeWidth(Number(e.target.value))}
+            className="w-20 accent-blue-500 h-1.5 shrink-0"/>
+          <span className="font-mono text-slate-300 shrink-0">{ctxStrokeWidth}px</span>
+          <span className="text-slate-600 shrink-0">|</span>
+          {(['solid','dashed','dotted'] as const).map(ds => (
+            <button key={ds} onClick={() => setCtxDashStyle(ds)}
+              className={`px-1.5 py-0 rounded border text-[10px] capitalize shrink-0 ${ctxDashStyle===ds ? 'border-blue-500 bg-blue-600/20 text-blue-300' : 'border-slate-600 text-slate-400 hover:border-slate-500'}`}>
+              {ds}
+            </button>
+          ))}
+        </>)}
+
+        {/* Selected markup: quick color swatches */}
+        {selectedMarkup && tool === 'select' && (<>
+          <span className="text-slate-500 shrink-0">Color:</span>
+          {COLORS.slice(0,7).map(c => (
+            <button key={c} onClick={() => setBoardMarkups(prev => ({ ...prev, [activeBoardId]: (prev[activeBoardId]??[]).map(m => m.id===selectedId ? {...m, color: c} : m) }))}
+              className={`w-4 h-4 rounded-full border shrink-0 ${selectedMarkup.color===c ? 'border-white scale-110' : 'border-slate-600 hover:border-slate-400'}`}
+              style={{background:c}}/>
+          ))}
+          <input type="color" value={selectedMarkup.color}
+            onChange={e => setBoardMarkups(prev => ({ ...prev, [activeBoardId]: (prev[activeBoardId]??[]).map(m => m.id===selectedId ? {...m, color: e.target.value} : m) }))}
+            className="w-4 h-4 rounded cursor-pointer bg-transparent border-0 p-0 shrink-0" title="Custom color"/>
+          <span className="text-slate-600 shrink-0">|</span>
+          <span className="text-slate-500 shrink-0">Stroke:</span>
+          <input type="range" min={1} max={16} step={0.5} value={selectedMarkup.strokeWidth}
+            onChange={e => setBoardMarkups(prev => ({ ...prev, [activeBoardId]: (prev[activeBoardId]??[]).map(m => m.id===selectedId ? {...m, strokeWidth: Number(e.target.value)} : m) }))}
+            className="w-16 accent-blue-500 h-1.5 shrink-0"/>
+          <span className="font-mono text-slate-300 shrink-0">{selectedMarkup.strokeWidth}px</span>
+        </>)}
+
+        {/* Empty fallback */}
+        {!['text','callout','arrow','cloud','box','pen','highlighter','dimension','distance'].includes(tool) && !selectedMarkup && (
+          <span className="text-slate-700 italic">Select a tool or markup to see properties</span>
+        )}
       </div>
 
       {/* ── Main area ────────────────────────────────────────────────────── */}
@@ -1220,8 +1416,46 @@ export function VisualWorkspace() {
                 {markups.map(m => renderMarkup(m))}
                 {renderPreview()}
                 {renderHandles()}
+
+                {/* Feature 4: Calibration point visuals */}
+                {calibPts.length >= 1 && (
+                  <g>
+                    <circle cx={calibPts[0].x} cy={calibPts[0].y} r={7/zoom} fill="none" stroke="#f59e0b" strokeWidth={2/zoom}/>
+                    <circle cx={calibPts[0].x} cy={calibPts[0].y} r={2/zoom} fill="#f59e0b"/>
+                    {calibPts.length >= 2 && (<>
+                      <line x1={calibPts[0].x} y1={calibPts[0].y} x2={calibPts[1].x} y2={calibPts[1].y}
+                        stroke="#f59e0b" strokeWidth={1.5/zoom} strokeDasharray={`${5/zoom}`}/>
+                      <circle cx={calibPts[1].x} cy={calibPts[1].y} r={7/zoom} fill="none" stroke="#f59e0b" strokeWidth={2/zoom}/>
+                      <circle cx={calibPts[1].x} cy={calibPts[1].y} r={2/zoom} fill="#f59e0b"/>
+                    </>)}
+                  </g>
+                )}
               </g>
             </svg>
+
+            {/* Feature 4: Calibration mode banner */}
+            {(calibMode === 'pick1' || calibMode === 'pick2') && (
+              <div className="absolute top-2 left-1/2 -translate-x-1/2 z-20 pointer-events-none">
+                <div className="bg-amber-600 text-white text-xs px-4 py-2 rounded-full shadow-lg font-medium flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-white/70 animate-pulse inline-block"/>
+                  {calibMode === 'pick1' ? 'Click first calibration point' : 'Click second calibration point'}
+                </div>
+              </div>
+            )}
+
+            {/* Feature 3: Cursor coordinates status bar */}
+            <div className="absolute bottom-0 left-0 right-0 flex items-center gap-3 px-3 py-0.5 bg-slate-900/80 text-[10px] text-slate-400 pointer-events-none z-10 border-t border-slate-700/40 backdrop-blur-sm">
+              {cursorPt ? (<>
+                <span>X: <span className="font-mono text-slate-300">{cursorPt.x}</span></span>
+                <span>Y: <span className="font-mono text-slate-300">{cursorPt.y}</span></span>
+              </>) : <span className="text-slate-600">Move cursor over canvas</span>}
+              <span className="text-slate-700">·</span>
+              <span>{markups.length} markup{markups.length !== 1 ? 's' : ''}</span>
+              <span className="ml-auto font-mono">{Math.round(zoom * 100)}%</span>
+              {calibRatio !== null && (
+                <span className="text-green-400 text-[9px]">● Calibrated ({calibUnit})</span>
+              )}
+            </div>
 
             {!bgImage && (
               <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
@@ -1235,6 +1469,37 @@ export function VisualWorkspace() {
 
             {/* In-place text editor overlay */}
             {renderTextEditor()}
+
+            {/* Feature 5: Command bar */}
+            {showCmdBar && (
+              <div className="absolute bottom-10 left-1/2 -translate-x-1/2 z-30 w-80">
+                <div className="bg-slate-900 border border-blue-500/70 rounded-xl shadow-2xl overflow-hidden">
+                  <div className="flex items-center gap-2 px-3 py-2">
+                    <span className="text-blue-400 font-mono text-sm shrink-0">/</span>
+                    <input
+                      autoFocus
+                      value={cmdInput}
+                      onChange={e => setCmdInput(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') { e.preventDefault(); executeCommand(cmdInput); }
+                        if (e.key === 'Escape') { setShowCmdBar(false); setCmdInput(''); }
+                      }}
+                      placeholder="arrow, box, pen, fit, grid, undo…"
+                      className="flex-1 bg-transparent text-sm text-white focus:outline-none placeholder-slate-600"
+                    />
+                    <button onClick={() => { setShowCmdBar(false); setCmdInput(''); }} className="text-slate-500 hover:text-white shrink-0"><X size={13}/></button>
+                  </div>
+                  <div className="px-3 py-1.5 border-t border-slate-800 flex gap-1 flex-wrap">
+                    {['arrow','cloud','box','text','pen','fit','grid','snap','undo','redo','calibrate','select','pan'].map(cmd => (
+                      <button key={cmd} onClick={() => executeCommand(cmd)}
+                        className="px-2 py-0.5 rounded text-[10px] bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white border border-slate-700 transition-colors">
+                        {cmd}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
 
             <input ref={fileInputRef} type="file" accept="image/*,application/pdf" className="hidden"
               onChange={e => e.target.files?.[0] && handleBgFile(e.target.files[0])}/>
@@ -1635,19 +1900,98 @@ export function VisualWorkspace() {
 
               {activePanel === 'scale' && (
                 <div className="space-y-4">
-                  <p className="text-xs text-slate-400">Set drawing scale and workspace display options.</p>
-                  <div>
-                    <label className="block text-xs text-slate-400 mb-1">Drawing Scale</label>
-                    <select className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1.5 text-sm text-slate-200 focus:outline-none">
-                      {["1/8\" = 1'-0\"","1/4\" = 1'-0\"","1/2\" = 1'-0\"","3/4\" = 1'-0\"","1\" = 1'-0\""].map(s=><option key={s}>{s}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-xs text-slate-400 mb-1">Grid spacing</label>
-                    <input type="number" defaultValue={50} className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1.5 text-sm text-slate-200 focus:outline-none"/>
-                  </div>
-                  <button onClick={() => { setScaleSet(true); setActivePanel(null); }}
-                    className="w-full py-2 rounded bg-blue-600 hover:bg-blue-500 text-white text-xs">Apply settings</button>
+                  {/* Calibration dialog — enter real-world distance after picking 2 points */}
+                  {calibMode === 'dialog' && calibPts.length === 2 && (() => {
+                    const px = Math.sqrt(
+                      Math.pow(calibPts[1].x - calibPts[0].x, 2) +
+                      Math.pow(calibPts[1].y - calibPts[0].y, 2)
+                    );
+                    return (
+                      <div className="p-3 bg-amber-900/25 border border-amber-700/50 rounded-lg space-y-3">
+                        <p className="text-sm font-semibold text-amber-200">Enter real-world distance</p>
+                        <p className="text-[11px] text-slate-400">Measured distance on screen: <span className="font-mono text-slate-300">{Math.round(px)}px</span></p>
+                        <div className="flex gap-2">
+                          <input type="number" min="0.001" step="any"
+                            value={calibDistInput} onChange={e => setCalibDistInput(e.target.value)}
+                            placeholder="e.g. 20"
+                            className="flex-1 bg-slate-600 border border-slate-500 rounded px-2 py-1.5 text-sm text-slate-200 focus:outline-none focus:border-blue-500"/>
+                          <select value={calibUnit} onChange={e => setCalibUnit(e.target.value as 'ft'|'in'|'m')}
+                            className="bg-slate-600 border border-slate-500 rounded px-2 py-1.5 text-sm text-slate-200 focus:outline-none">
+                            <option value="ft">ft</option>
+                            <option value="in">in</option>
+                            <option value="m">m</option>
+                          </select>
+                        </div>
+                        <button onClick={() => {
+                          const d = parseFloat(calibDistInput);
+                          if (!isNaN(d) && d > 0) {
+                            setCalibRatio(px / d);
+                            setCalibMode('idle');
+                            setScaleSet(true);
+                            setActivePanel(null);
+                          }
+                        }} className="w-full py-2 rounded bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium">
+                          Apply Calibration
+                        </button>
+                        <button onClick={() => { setCalibMode('idle'); setCalibPts([]); }}
+                          className="w-full py-1 rounded bg-slate-600 hover:bg-slate-500 text-slate-300 text-xs">Cancel</button>
+                      </div>
+                    );
+                  })()}
+
+                  {calibMode !== 'dialog' && (<>
+                    <p className="text-xs text-slate-400">Set drawing scale or calibrate using two known points.</p>
+
+                    {/* Preset scales */}
+                    <div>
+                      <label className="block text-xs text-slate-400 mb-2 font-medium uppercase tracking-wide">Quick Preset Scales</label>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        {([
+                          { label: "1/8\" = 1'",  ratio: 96 * 8,  unit: 'ft' as const },
+                          { label: "1/4\" = 1'",  ratio: 96 * 4,  unit: 'ft' as const },
+                          { label: "1/2\" = 1'",  ratio: 96 * 2,  unit: 'ft' as const },
+                          { label: "3/4\" = 1'",  ratio: 96 / 0.75, unit: 'ft' as const },
+                          { label: "1\" = 1'",    ratio: 96,      unit: 'ft' as const },
+                          { label: "1\" = 10'",   ratio: 96 / 10, unit: 'ft' as const },
+                        ]).map(preset => (
+                          <button key={preset.label}
+                            onClick={() => { setCalibRatio(preset.ratio); setCalibUnit(preset.unit); setScaleSet(true); setActivePanel(null); }}
+                            className={`py-1.5 px-2 rounded border text-xs transition-colors text-left ${calibRatio === preset.ratio && calibUnit === preset.unit ? 'border-blue-500 bg-blue-600/20 text-blue-300' : 'border-slate-600 text-slate-300 hover:border-slate-500'}`}>
+                            {preset.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Manual calibration */}
+                    <div className="border-t border-slate-700 pt-3">
+                      <label className="block text-xs text-slate-400 mb-1 font-medium uppercase tracking-wide">Manual Calibration</label>
+                      <p className="text-[11px] text-slate-500 mb-2">Click two known points on the drawing, then enter the real distance.</p>
+                      <button onClick={() => { setCalibMode('pick1'); setCalibPts([]); setActivePanel(null); }}
+                        className="w-full py-2 rounded bg-amber-600 hover:bg-amber-500 text-white text-xs font-medium">
+                        ✦ Start — Click 2 Points on Drawing
+                      </button>
+                    </div>
+
+                    {calibRatio !== null && (
+                      <div className="border-t border-slate-700 pt-3 space-y-2">
+                        <p className="text-xs text-green-400">● Calibrated: 1 {calibUnit} = {Math.round(calibRatio)} px</p>
+                        <button onClick={() => { setCalibRatio(null); setCalibPts([]); setScaleSet(false); }}
+                          className="w-full py-1 rounded bg-slate-700 hover:bg-slate-600 text-slate-300 text-xs">
+                          Clear calibration
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Grid spacing */}
+                    <div className="border-t border-slate-700 pt-3">
+                      <label className="block text-xs text-slate-400 mb-1">Grid spacing (px)</label>
+                      <input type="number" defaultValue={50}
+                        className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1.5 text-sm text-slate-200 focus:outline-none"/>
+                    </div>
+                    <button onClick={() => { setScaleSet(true); setActivePanel(null); }}
+                      className="w-full py-2 rounded bg-blue-600 hover:bg-blue-500 text-white text-xs">Apply Settings</button>
+                  </>)}
                 </div>
               )}
 
