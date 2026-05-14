@@ -33,7 +33,9 @@ interface ProjectSummary {
 const readAllProjects = (): StoredProject[] => {
   try {
     const raw = window.localStorage.getItem('struccalc.projects.v3');
-    return raw ? (JSON.parse(raw) as StoredProject[]) : [];
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
   } catch { return []; }
 };
 
@@ -51,7 +53,8 @@ const getProjectSummary = (): ProjectSummary => {
       return { label: 'No project selected', projectNumber: '', client: '', location: '', mode: 'none', colorIndex: 0, activeId: '' };
     }
 
-    const projects = JSON.parse(rawProjects) as StoredProject[];
+    const parsed = JSON.parse(rawProjects);
+    const projects: StoredProject[] = Array.isArray(parsed) ? parsed : [];
     const p = projects.find((project) => project.id === activeProjectId);
     if (!p) return { label: 'No project selected', projectNumber: '', client: '', location: '', mode: 'none', colorIndex: 0, activeId: '' };
 

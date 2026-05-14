@@ -540,10 +540,12 @@ export function VisualWorkspace() {
     try {
       const saved = localStorage.getItem(MARKUP_KEY);
       if (saved) {
-        const raw = JSON.parse(saved) as Record<string, Record<string, unknown>[]>;
+        const raw = JSON.parse(saved) as Record<string, unknown> | null;
+        if (!raw || typeof raw !== 'object') return;
         const normalized: Record<string, Markup[]> = {};
         for (const [boardId, list] of Object.entries(raw)) {
-          normalized[boardId] = list.map(normalizeMarkup);
+          if (!Array.isArray(list)) continue;
+          normalized[boardId] = list.filter(item => item && typeof item === 'object').map(item => normalizeMarkup(item as Record<string, unknown>));
         }
         setBoardMarkups(normalized);
         hist.current = { snaps: [normalized], idx: 0 };
@@ -566,7 +568,19 @@ export function VisualWorkspace() {
   useEffect(() => {
     try {
       const saved = localStorage.getItem(GRAPH_KEY);
-      if (saved) setBoardGraphs(JSON.parse(saved));
+      if (!saved) return;
+      const parsed = JSON.parse(saved) as Record<string, unknown> | null;
+      if (!parsed || typeof parsed !== 'object') return;
+      const cleaned: Record<string, RelationshipGraph> = {};
+      for (const [boardId, g] of Object.entries(parsed)) {
+        if (!g || typeof g !== 'object') continue;
+        const graph = g as Partial<RelationshipGraph>;
+        cleaned[boardId] = {
+          nodes: Array.isArray(graph.nodes) ? graph.nodes : [],
+          edges: Array.isArray(graph.edges) ? graph.edges : [],
+        };
+      }
+      setBoardGraphs(cleaned);
     } catch { /* ignore */ }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [GRAPH_KEY]);
@@ -2688,7 +2702,10 @@ export function VisualWorkspace() {
           </div>{/* end schedule flex-1 */}
           <div className="w-72 shrink-0 border-l border-slate-700">
             <RelationshipMap
-              graph={boardGraphs[activeBoardId] ?? { nodes: [], edges: [] }}
+              graph={{
+                nodes: Array.isArray(boardGraphs[activeBoardId]?.nodes) ? boardGraphs[activeBoardId].nodes : [],
+                edges: Array.isArray(boardGraphs[activeBoardId]?.edges) ? boardGraphs[activeBoardId].edges : [],
+              }}
               onChange={g => setBoardGraphs(prev => ({ ...prev, [activeBoardId]: g }))}
               boardNames={Object.fromEntries(boardTree.filter(b => b.parentId !== null).map(b => [b.id, b.name]))}
               activeBoardId={activeBoardId}

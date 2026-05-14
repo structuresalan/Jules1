@@ -27,7 +27,9 @@ const getActiveProjectId = () => window.localStorage.getItem('struccalc.activePr
 const readVisits = (): SiteVisit[] => {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as SiteVisit[]) : [];
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
   } catch { return []; }
 };
 
