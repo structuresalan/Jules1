@@ -1036,11 +1036,6 @@ export function VisualWorkspace() {
 
     // Panel-open tools
     if (t === 'note')   { setActivePanel('note');   setTool('select'); return; }
-    if (t === 'photo')  { setActivePanel('photo');  return; }
-    if (t === 'file')   { setActivePanel('file');   return; }
-    if (t === 'link')   { setActivePanel('link');   return; }
-    if (t === 'color')  { setActivePanel('color');  return; }
-    if (t === 'scale')  { setActivePanel('scale');  return; }
     // 'stamps' panel only opens from the toolbar button, not from canvas clicks
 
     // Drawing tools
@@ -1424,15 +1419,16 @@ export function VisualWorkspace() {
 
   // ── Tool activation ───────────────────────────────────────────────────────
   const activateTool = useCallback((t: Tool) => {
-    setTool(t);
-    if (!['color','photo','file','note','link','scale','stamps'].includes(t)) setActivePanel(null);
-    if (t === 'color')  setActivePanel('color');
-    if (t === 'photo')  setActivePanel('photo');
-    if (t === 'file')   setActivePanel('file');
-    if (t === 'note')   setActivePanel('note');
-    if (t === 'link')   setActivePanel('link');
-    if (t === 'scale')  setActivePanel('scale');
+    // Panel-only tools: open the panel without changing the active drawing tool
+    if (t === 'color')  { setActivePanel('color');  return; }
+    if (t === 'photo')  { setActivePanel('photo');  return; }
+    if (t === 'file')   { setActivePanel('file');   return; }
+    if (t === 'link')   { setActivePanel('link');   return; }
+    if (t === 'scale')  { setActivePanel('scale');  return; }
     if (t === 'stamps') { setActivePanel(prev => prev === 'stamps' ? null : 'stamps'); return; }
+    setTool(t);
+    setActivePanel(null);
+    if (t === 'note')   setActivePanel('note');
     if (t === 'undo')   { undo(); setTool('select'); }
     if (t === 'redo')   { redo(); setTool('select'); }
     if (t === 'fit')    { fitView(); setTool('select'); }
