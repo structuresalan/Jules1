@@ -20,7 +20,7 @@ import { Observations } from './pages/Observations';
 import { SiteVisits } from './pages/SiteVisits';
 import { InboxPage } from './pages/Inbox';
 import { applyWebsiteStyleSettings, getWebsiteStyleSettings } from './utils/websiteStyle';
-import { Camera, Inbox, BookOpen, SlidersHorizontal } from 'lucide-react';
+import { Camera, BookOpen, SlidersHorizontal } from 'lucide-react';
 import './styles/websiteTheme.css';
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
