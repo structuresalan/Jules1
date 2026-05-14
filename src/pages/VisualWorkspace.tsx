@@ -10,7 +10,7 @@ import {
   Eye, EyeOff, Trash2, Upload,
   Filter, RefreshCw, ChevronLeft,
   Tag, Stamp, Hash, Minimize2, Search, Download,
-  Home, Frame, Wind, Database,
+  Home, Frame, Wind, Database, Settings,
 } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 import { getActiveProjectId } from '../utils/projectDocuments';
@@ -386,6 +386,7 @@ export function VisualWorkspace() {
   // Feature 5: Command bar
   const [showCmdBar, setShowCmdBar] = useState(false);
   const [cmdInput,   setCmdInput]   = useState('');
+  const [showShortcutOverlay, setShowShortcutOverlay] = useState(false);
 
   // Feature 7: Fill color (ellipse / area)
   const [fillColor, setFillColor]   = useState<string>('transparent');
@@ -1364,6 +1365,7 @@ export function VisualWorkspace() {
         setCmdInput('');
         return;
       }
+      if (e.key === '?' && !editingId) { setShowShortcutOverlay(v => !v); return; }
       if ((e.key === 'Delete' || e.key === 'Backspace') && selectedIds.length > 0 && !editingId) {
         const toDelete = new Set(selectedIds);
         updateMarkups(activeBoardId, prev => prev.filter(m => !toDelete.has(m.id)));
@@ -1887,9 +1889,34 @@ export function VisualWorkspace() {
   return (
     <div ref={workspaceRef} className="flex flex-col h-full bg-slate-900 text-slate-200 overflow-hidden select-none">
 
-      {/* ── Header tabs ──────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between px-4 bg-slate-950 border-b border-slate-800 shrink-0 h-9">
-        <div className="flex">
+      {/* ── Header ───────────────────────────────────────────────────────── */}
+      <div className="flex items-center bg-slate-950 border-b border-slate-800 shrink-0 h-9 px-2 gap-3">
+        {/* Logo + breadcrumb */}
+        <div className="flex items-center gap-2 shrink-0">
+          <NavLink to="/" className="flex items-center gap-1.5 text-slate-300 hover:text-white transition-colors">
+            <svg width="20" height="20" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
+              <rect width="120" height="120" rx="16" fill="#0e1117"/>
+              <g stroke="#6b7c9c" strokeWidth="4.5" strokeLinecap="round" fill="none">
+                <line x1="40" y1="32" x2="110" y2="32"/><line x1="40" y1="32" x2="40" y2="80"/>
+                <line x1="110" y1="32" x2="110" y2="80"/><line x1="25" y1="44" x2="40" y2="32"/>
+                <line x1="95" y1="44" x2="110" y2="32"/>
+              </g>
+              <g stroke="#ffffff" strokeWidth="5.5" strokeLinecap="round" fill="none">
+                <line x1="25" y1="44" x2="95" y2="44"/><line x1="25" y1="44" x2="25" y2="92"/>
+                <line x1="95" y1="44" x2="95" y2="92"/>
+              </g>
+            </svg>
+          </NavLink>
+          <span className="text-slate-700 text-xs">/</span>
+          <NavLink to="/" className="text-[11px] text-slate-400 hover:text-white transition-colors font-mono tracking-wide">Projects</NavLink>
+          <span className="text-slate-700 text-xs">/</span>
+          <span className="text-[11px] text-slate-300 font-mono tracking-wide truncate max-w-[160px]">Riverside Office</span>
+          <span className="text-slate-700 text-xs">/</span>
+          <span className="text-[11px] text-slate-500 font-mono tracking-wide">Workspace</span>
+        </div>
+
+        {/* Tabs — centered */}
+        <div className="flex flex-1 justify-center">
           {(['Workspace','Review','Report','Export'] as const).map(tab => (
             <button key={tab} aria-label={tab}
               onClick={() => {
@@ -1908,14 +1935,27 @@ export function VisualWorkspace() {
               }`}>{tab}</button>
           ))}
         </div>
-        <div className="flex items-center gap-2">
-          {/* Feature 18: Compare / overlay */}
+
+        {/* Right controls */}
+        <div className="flex items-center gap-2 shrink-0">
+          {/* Save status */}
+          <span className="text-[10px] font-mono text-green-500/80 flex items-center gap-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block"/>
+            Saved
+          </span>
+          {/* Compare */}
           <button onClick={() => setActivePanel(prev => prev === 'compare' ? null : 'compare')}
             title="Compare overlay"
             className={`text-[10px] px-2 py-0.5 rounded border transition-colors ${activePanel === 'compare' ? 'border-blue-500 bg-blue-600/20 text-blue-300' : 'border-slate-700 text-slate-400 hover:text-white'}`}>
             {compareImage && showCompare ? '◧ On' : '◧ Off'}
           </button>
-          {/* Feature 17: Fullscreen */}
+          {/* Shortcut hint */}
+          <button onClick={() => setShowShortcutOverlay(v => !v)}
+            title="Keyboard shortcuts (?)"
+            className="text-[10px] font-mono w-5 h-5 flex items-center justify-center rounded border border-slate-700 text-slate-400 hover:text-white hover:border-slate-500 transition-colors">
+            ?
+          </button>
+          {/* Fullscreen */}
           <button onClick={() => {
             if (isFullscreen) document.exitFullscreen();
             else workspaceRef.current?.requestFullscreen();
@@ -1923,7 +1963,6 @@ export function VisualWorkspace() {
             className="text-slate-400 hover:text-white p-1 rounded hover:bg-slate-700">
             {isFullscreen ? <Minimize2 size={13}/> : <Maximize2 size={13}/>}
           </button>
-          <span className="text-xs text-slate-500">Project: 1234 – Riverside Office Building</span>
         </div>
       </div>
 
@@ -2130,6 +2169,37 @@ export function VisualWorkspace() {
       {/* ── Main area ────────────────────────────────────────────────────── */}
       <div className="flex flex-1 overflow-hidden">
 
+        {/* ── Module rail ── app-level navigation ───────────────────────── */}
+        <div className="w-10 shrink-0 flex flex-col bg-slate-950 border-r border-slate-800">
+          <div className="flex-1 flex flex-col items-center py-2 gap-1">
+            {[
+              { to: '/dashboard', icon: <Home size={15}/>,    label: 'Dashboard',       shortcut: 'D' },
+              { to: '/steel',     icon: <Frame size={15}/>,   label: 'Steel Design',    shortcut: 'S' },
+              { to: '/concrete',  icon: <Layers size={15}/>,  label: 'Concrete Design', shortcut: 'C' },
+              { to: '/loads',     icon: <Wind size={15}/>,    label: 'Loads',           shortcut: 'L' },
+              { to: '/documents', icon: <FileText size={15}/>,label: 'Documents',       shortcut: null },
+              { to: '/variables', icon: <Database size={15}/>,label: 'Variables',       shortcut: null },
+            ].map(item => (
+              <NavLink key={item.to} to={item.to}
+                title={item.shortcut ? `${item.label} (${item.shortcut})` : item.label}
+                className={({ isActive }) =>
+                  `w-8 h-8 flex items-center justify-center rounded transition-colors ${isActive ? 'bg-blue-600/30 text-blue-300' : 'text-slate-500 hover:bg-slate-800 hover:text-slate-200'}`
+                }>
+                {item.icon}
+              </NavLink>
+            ))}
+          </div>
+          <div className="shrink-0 flex flex-col items-center pb-2 gap-1 border-t border-slate-800 pt-2">
+            <NavLink to="/settings"
+              title="Settings"
+              className={({ isActive }) =>
+                `w-8 h-8 flex items-center justify-center rounded transition-colors ${isActive ? 'bg-blue-600/30 text-blue-300' : 'text-slate-500 hover:bg-slate-800 hover:text-slate-200'}`
+              }>
+              <Settings size={15}/>
+            </NavLink>
+          </div>
+        </div>
+
         {/* ── Left panel ─────────────────────────────────────────────────── */}
         <div className="w-52 shrink-0 flex flex-col bg-slate-800 border-r border-slate-700 overflow-hidden">
           <div className="flex-1 overflow-y-auto">
@@ -2241,26 +2311,6 @@ export function VisualWorkspace() {
             </div>
           )}
 
-          {/* ── Page navigation ── */}
-          <div className="shrink-0 border-t border-slate-700 px-2 py-2">
-            <div className="text-[9px] font-bold uppercase tracking-wider text-slate-500 px-1 mb-1">Navigate</div>
-            <div className="space-y-0.5">
-              {[
-                { to: '/dashboard', icon: <Home size={13}/>, label: 'Dashboard' },
-                { to: '/steel',     icon: <Frame size={13}/>, label: 'Steel Design' },
-                { to: '/concrete',  icon: <Layers size={13}/>, label: 'Concrete Design' },
-                { to: '/loads',     icon: <Wind size={13}/>, label: 'Loads' },
-                { to: '/documents', icon: <FileText size={13}/>, label: 'Documents' },
-                { to: '/variables', icon: <Database size={13}/>, label: 'Variables' },
-              ].map(item => (
-                <NavLink key={item.to} to={item.to}
-                  className="flex items-center gap-2 px-2 py-1 rounded text-xs text-slate-400 hover:bg-slate-700 hover:text-white transition-colors">
-                  {item.icon}
-                  {item.label}
-                </NavLink>
-              ))}
-            </div>
-          </div>
         </div>
 
         {/* ── Canvas + schedule ───────────────────────────────────────────── */}
@@ -2354,12 +2404,12 @@ export function VisualWorkspace() {
             {/* In-place text editor overlay */}
             {renderTextEditor()}
 
-            {/* Feature 5: Command bar */}
+            {/* ⌘K command palette */}
             {showCmdBar && (
-              <div className="absolute bottom-10 left-1/2 -translate-x-1/2 z-30 w-80">
-                <div className="bg-slate-900 border border-blue-500/70 rounded-xl shadow-2xl overflow-hidden">
-                  <div className="flex items-center gap-2 px-3 py-2">
-                    <span className="text-blue-400 font-mono text-sm shrink-0">/</span>
+              <div className="absolute inset-0 z-50 flex items-start justify-center pt-20 pointer-events-none">
+                <div className="pointer-events-auto w-[480px] bg-slate-900 border border-slate-600 rounded-xl shadow-2xl overflow-hidden">
+                  <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-700">
+                    <Search size={15} className="text-slate-400 shrink-0"/>
                     <input
                       autoFocus
                       value={cmdInput}
@@ -2368,19 +2418,77 @@ export function VisualWorkspace() {
                         if (e.key === 'Enter') { e.preventDefault(); executeCommand(cmdInput); }
                         if (e.key === 'Escape') { setShowCmdBar(false); setCmdInput(''); }
                       }}
-                      placeholder="arrow, box, pen, fit, grid, undo…"
+                      placeholder="Search tools, commands… (Esc to close)"
                       className="flex-1 bg-transparent text-sm text-white focus:outline-none placeholder-slate-600"
                     />
-                    <button onClick={() => { setShowCmdBar(false); setCmdInput(''); }} className="text-slate-500 hover:text-white shrink-0"><X size={13}/></button>
+                    <kbd className="text-[10px] font-mono bg-slate-800 border border-slate-700 rounded px-1.5 py-0.5 text-slate-400">Esc</kbd>
                   </div>
-                  <div className="px-3 py-1.5 border-t border-slate-800 flex gap-1 flex-wrap">
-                    {['arrow','cloud','box','text','pen','fit','grid','snap','undo','redo','calibrate','select','pan'].map(cmd => (
-                      <button key={cmd} onClick={() => executeCommand(cmd)}
-                        className="px-2 py-0.5 rounded text-[10px] bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white border border-slate-700 transition-colors">
-                        {cmd}
-                      </button>
+                  <div className="px-3 py-2 border-b border-slate-800">
+                    <div className="text-[9px] font-bold uppercase tracking-wider text-slate-600 mb-1.5">Tools</div>
+                    <div className="flex gap-1 flex-wrap">
+                      {['select','arrow','cloud','box','text','pen','highlighter','polyline','ellipse','callout','dimension','distance','area','count','note','photo','file'].map(cmd => (
+                        <button key={cmd} onClick={() => executeCommand(cmd)}
+                          className="px-2 py-0.5 rounded text-[10px] bg-slate-800 hover:bg-blue-600/20 hover:text-blue-300 text-slate-400 border border-slate-700 transition-colors">
+                          {cmd}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="px-3 py-2">
+                    <div className="text-[9px] font-bold uppercase tracking-wider text-slate-600 mb-1.5">Actions</div>
+                    <div className="flex gap-1 flex-wrap">
+                      {['fit','grid','snap','undo','redo','calibrate','pan','zoom'].map(cmd => (
+                        <button key={cmd} onClick={() => executeCommand(cmd)}
+                          className="px-2 py-0.5 rounded text-[10px] bg-slate-800 hover:bg-blue-600/20 hover:text-blue-300 text-slate-400 border border-slate-700 transition-colors">
+                          {cmd}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ? shortcut overlay */}
+            {showShortcutOverlay && (
+              <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+                onClick={() => setShowShortcutOverlay(false)}>
+                <div className="bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-6 w-[560px] max-h-[80vh] overflow-y-auto"
+                  onClick={e => e.stopPropagation()}>
+                  <div className="flex items-center justify-between mb-4">
+                    <span className="text-sm font-semibold text-slate-200">Keyboard Shortcuts</span>
+                    <button onClick={() => setShowShortcutOverlay(false)} className="text-slate-500 hover:text-white"><X size={14}/></button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-x-8 gap-y-1">
+                    {[
+                      ['V', 'Select tool'],
+                      ['H', 'Pan tool'],
+                      ['Z', 'Zoom tool'],
+                      ['A', 'Arrow markup'],
+                      ['C', 'Cloud markup'],
+                      ['T', 'Text markup'],
+                      ['B', 'Box markup'],
+                      ['E', 'Ellipse markup'],
+                      ['P', 'Pen / freehand'],
+                      ['D', 'Dimension'],
+                      ['N', 'Note'],
+                      ['⌘Z / Ctrl+Z', 'Undo'],
+                      ['⌘⇧Z / Ctrl+Y', 'Redo'],
+                      ['Delete / Backspace', 'Delete selected'],
+                      ['Escape', 'Deselect / cancel'],
+                      ['⌘K', 'Command palette'],
+                      ['?', 'This shortcut list'],
+                      ['Space + drag', 'Pan canvas'],
+                      ['Scroll wheel', 'Zoom in/out'],
+                      ['F', 'Fit to view'],
+                    ].map(([key, desc]) => (
+                      <div key={key} className="flex items-center justify-between py-1.5 border-b border-slate-800">
+                        <span className="text-xs text-slate-400">{desc}</span>
+                        <kbd className="text-[10px] font-mono bg-slate-800 border border-slate-700 rounded px-1.5 py-0.5 text-slate-300 ml-2 shrink-0">{key}</kbd>
+                      </div>
                     ))}
                   </div>
+                  <p className="mt-3 text-[10px] text-slate-600 font-mono text-center">Press ? or click outside to close</p>
                 </div>
               </div>
             )}
