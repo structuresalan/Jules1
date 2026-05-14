@@ -5,7 +5,7 @@ import { BrandMark } from '../components/BrandMark';
 import { useAuth } from '../hooks/useAuth';
 
 type ProjectStatus = 'Active' | 'On Hold' | 'Closed' | 'Archived';
-type ProjectCalculationType = 'Mixed' | 'Steel' | 'Concrete' | 'Loads';
+type ProjectType = 'New Construction' | 'Renovation' | 'Inspection' | 'Mixed';
 
 interface ProjectRecord {
   id: string;
@@ -15,7 +15,7 @@ interface ProjectRecord {
   location: string;
   description: string;
   status: ProjectStatus;
-  calculationType: ProjectCalculationType;
+  projectType: ProjectType;
   createdAt: string;
   updatedAt: string;
   predictedEndDate?: string;
@@ -76,7 +76,7 @@ export const ProjectHome: React.FC = () => {
   const [client, setClient] = useState('');
   const [location, setLocation] = useState('');
   const [description, setDescription] = useState('');
-  const [calculationType, setCalculationType] = useState<ProjectCalculationType>('Mixed');
+  const [projectType, setProjectType] = useState<ProjectType>('New Construction');
   const [predictedEndDate, setPredictedEndDate] = useState('');
   const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
   const [editProjectNumber, setEditProjectNumber] = useState('');
@@ -87,7 +87,7 @@ export const ProjectHome: React.FC = () => {
     const query = searchText.trim().toLowerCase();
     if (!query) return projects;
     return projects.filter((p) =>
-      [p.name, p.projectNumber, p.client, p.location, p.status, p.calculationType]
+      [p.name, p.projectNumber, p.client, p.location, p.status, p.projectType]
         .join(' ').toLowerCase().includes(query),
     );
   }, [projects, searchText]);
@@ -120,7 +120,7 @@ export const ProjectHome: React.FC = () => {
       location: location.trim(),
       description: description.trim(),
       status: 'Active',
-      calculationType,
+      projectType,
       createdAt: now,
       updatedAt: now,
       predictedEndDate: predictedEndDate || '',
@@ -272,10 +272,10 @@ export const ProjectHome: React.FC = () => {
                     className={inputCls} />
                 </div>
                 <div>
-                  <label className={labelCls}>Calculation Focus</label>
-                  <select value={calculationType} onChange={(e) => setCalculationType(e.target.value as ProjectCalculationType)}
+                  <label className={labelCls}>Project Type</label>
+                  <select value={projectType} onChange={(e) => setProjectType(e.target.value as ProjectType)}
                     className="w-full bg-slate-700 border border-slate-600 rounded px-2.5 py-2 text-sm text-slate-200 focus:outline-none focus:border-blue-500 cursor-pointer">
-                    <option>Mixed</option><option>Steel</option><option>Concrete</option><option>Loads</option>
+                    <option>New Construction</option><option>Renovation</option><option>Inspection</option><option>Mixed</option>
                   </select>
                 </div>
                 <div className="md:col-span-2">
@@ -351,7 +351,7 @@ export const ProjectHome: React.FC = () => {
                         </td>
                         <td className="px-3 py-2.5 text-slate-400">{project.client || '—'}</td>
                         <td className="px-3 py-2.5 text-slate-400">{project.location || '—'}</td>
-                        <td className="px-3 py-2.5 text-slate-400">{project.calculationType}</td>
+                        <td className="px-3 py-2.5 text-slate-400">{project.projectType || '—'}</td>
                         <td className="px-3 py-2.5">
                           {editingProjectId === project.id ? (
                             <select value={editStatus} onChange={(e) => setEditStatus(e.target.value as ProjectStatus)}
