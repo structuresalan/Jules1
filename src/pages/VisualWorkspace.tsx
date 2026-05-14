@@ -375,7 +375,9 @@ export function VisualWorkspace() {
   const [cursorPt, setCursorPt] = useState<Pt | null>(null);
 
   // Feature 4: Calibration
-  const [calibMode,      setCalibMode]      = useState<'idle'|'pick1'|'pick2'|'dialog'>('idle');
+  const [calibMode,      setCalibModeState] = useState<'idle'|'pick1'|'pick2'|'dialog'>('idle');
+  const calibModeRef = useRef<'idle'|'pick1'|'pick2'|'dialog'>('idle');
+  const setCalibMode = useCallback((m: 'idle'|'pick1'|'pick2'|'dialog') => { calibModeRef.current = m; setCalibModeState(m); }, []);
   const [calibPts,       setCalibPts]       = useState<Pt[]>([]);
   const [calibRatio,     setCalibRatio]     = useState<number | null>(null);
   const [calibUnit,      setCalibUnit]      = useState<'ft'|'in'|'m'>('ft');
@@ -939,11 +941,11 @@ export function VisualWorkspace() {
     if (editingId) { commitEdit(); return; }
 
     // Feature 4: Calibration point picking
-    if (calibMode === 'pick1' || calibMode === 'pick2') {
+    if (calibModeRef.current === 'pick1' || calibModeRef.current === 'pick2') {
       if (e.button !== 0) return;
       (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
       const pt = toPt(e);
-      if (calibMode === 'pick1') {
+      if (calibModeRef.current === 'pick1') {
         setCalibPts([pt]);
         setCalibMode('pick2');
       } else {
