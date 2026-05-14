@@ -1,5 +1,21 @@
 /* Login page — blueprint pane animations & pseudo-elements */
 
+/* Force white backgrounds on login page inputs (override global dark theme) */
+.login-form-pane input,
+.login-form-pane select,
+.login-form-pane textarea {
+  background-color: #fff !important;
+  color: #11131a !important;
+  color-scheme: light;
+}
+.login-form-pane input:-webkit-autofill,
+.login-form-pane input:-webkit-autofill:hover,
+.login-form-pane input:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 1000px #fff inset !important;
+  -webkit-text-fill-color: #11131a !important;
+  caret-color: #11131a;
+}
+
 .login-blueprint {
   position: relative;
   background: #0e1117;

@@ -72,7 +72,8 @@ export const Login: React.FC = () => {
   const controlClass =
     'relative flex items-center border border-[#e3e6ec] bg-white rounded-[6px] transition-[border-color,box-shadow] focus-within:border-[#2563eb] focus-within:shadow-[0_0_0_3px_rgba(37,99,235,.12)]';
   const inputClass =
-    'flex-1 min-w-0 border-none outline-none bg-transparent px-3 py-[10px] text-[13.5px] text-[#11131a] placeholder-[#9aa1ad] font-[IBM_Plex_Sans,system-ui,sans-serif]';
+    'flex-1 min-w-0 border-none outline-none px-3 py-[10px] text-[13.5px] text-[#11131a] placeholder-[#9aa1ad] font-[IBM_Plex_Sans,system-ui,sans-serif]';
+  const inputStyle: React.CSSProperties = { background: '#fff', colorScheme: 'light' };
 
   return (
     <div style={{ fontFamily: "'IBM Plex Sans', system-ui, sans-serif", height: '100vh', display: 'flex', flexDirection: 'column', background: '#fff' }}>
@@ -282,7 +283,7 @@ export const Login: React.FC = () => {
                         First name <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, color: '#9aa1ad', letterSpacing: '.06em', fontWeight: 400 }}>REQ</span>
                       </label>
                       <div className={controlClass}>
-                        <input type="text" value={firstName} onChange={e => setFirstName(e.target.value)} className={inputClass} placeholder="Avery" autoComplete="given-name" required />
+                        <input type="text" value={firstName} onChange={e => setFirstName(e.target.value)} className={inputClass} style={inputStyle} placeholder="Avery" autoComplete="given-name" required />
                       </div>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -290,7 +291,7 @@ export const Login: React.FC = () => {
                         Last name <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, color: '#9aa1ad', letterSpacing: '.06em', fontWeight: 400 }}>REQ</span>
                       </label>
                       <div className={controlClass}>
-                        <input type="text" value={lastName} onChange={e => setLastName(e.target.value)} className={inputClass} placeholder="Morgan" autoComplete="family-name" required />
+                        <input type="text" value={lastName} onChange={e => setLastName(e.target.value)} className={inputClass} style={inputStyle} placeholder="Morgan" autoComplete="family-name" required />
                       </div>
                     </div>
                   </div>
@@ -305,14 +306,14 @@ export const Login: React.FC = () => {
                           <path d="M3 21h18M5 21V7l7-4 7 4v14M9 9h.01M13 9h.01M9 13h.01M13 13h.01M9 17h.01M13 17h.01"/>
                         </svg>
                       </span>
-                      <input type="text" value={company} onChange={e => setCompany(e.target.value)} className={inputClass} placeholder="Riverside Engineering, PC" />
+                      <input type="text" value={company} onChange={e => setCompany(e.target.value)} className={inputClass} style={inputStyle} placeholder="Riverside Engineering, PC" />
                     </div>
                   </div>
 
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 14 }}>
                     <label style={{ fontSize: 12, color: '#11131a', fontWeight: 500 }}>Discipline</label>
                     <div className={controlClass}>
-                      <select value={discipline} onChange={e => setDiscipline(e.target.value)} className={`login-select ${inputClass}`} style={{ flex: 1 }}>
+                      <select value={discipline} onChange={e => setDiscipline(e.target.value)} className={`login-select ${inputClass}`} style={{ ...inputStyle, flex: 1 }}>
                         <option>Structural</option>
                         <option>Architectural</option>
                         <option>MEP</option>
@@ -337,7 +338,7 @@ export const Login: React.FC = () => {
                       <path d="M3 7l9 6 9-6"/>
                     </svg>
                   </span>
-                  <input type="email" value={email} onChange={e => setEmail(e.target.value)} className={inputClass} placeholder="you@firm.com" autoComplete="email" required />
+                  <input type="email" value={email} onChange={e => setEmail(e.target.value)} className={inputClass} style={inputStyle} placeholder="you@firm.com" autoComplete="email" required />
                 </div>
               </div>
 
@@ -358,6 +359,7 @@ export const Login: React.FC = () => {
                     value={password}
                     onChange={e => setPassword(e.target.value)}
                     className={inputClass}
+                    style={inputStyle}
                     placeholder="••••••••"
                     autoComplete={authMode === 'create' ? 'new-password' : 'current-password'}
                     minLength={6}
@@ -398,7 +400,7 @@ export const Login: React.FC = () => {
                         <path d="M8 11V7a4 4 0 0 1 8 0v4"/>
                       </svg>
                     </span>
-                    <input type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} className={inputClass} placeholder="••••••••" autoComplete="new-password" minLength={6} required />
+                    <input type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} className={inputClass} style={inputStyle} placeholder="••••••••" autoComplete="new-password" minLength={6} required />
                   </div>
                 </div>
               )}
@@ -410,7 +412,7 @@ export const Login: React.FC = () => {
                     Invite Code <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, color: '#9aa1ad', letterSpacing: '.06em', fontWeight: 400 }}>REQ</span>
                   </label>
                   <div className={controlClass}>
-                    <input type="text" value={inviteCode} onChange={e => setInviteCode(e.target.value)} className={inputClass} placeholder="Enter invite code" autoComplete="off" required />
+                    <input type="text" value={inviteCode} onChange={e => setInviteCode(e.target.value)} className={inputClass} style={inputStyle} placeholder="Enter invite code" autoComplete="off" required />
                   </div>
                 </div>
               )}
