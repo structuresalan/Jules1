@@ -3,7 +3,7 @@ import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { Home, Frame, Layers, Wind, Database, Settings, LogOut, Menu, FolderOpen, FileText, ArrowLeft, Network } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { DisclaimerModal } from '../components/DisclaimerModal';
-import simplifyStructLogo from '../assets/simplifystruct-logo.png';
+import { BrandMark } from '../components/BrandMark';
 
 interface ProjectSummary {
   label: string;
@@ -134,11 +134,7 @@ export const MainLayout: React.FC = () => {
       >
         {/* Logo area */}
         <div className="px-4 py-4 border-b border-slate-700">
-          <img
-            src={simplifyStructLogo}
-            alt="SimplifyStruct logo"
-            className="h-8 rounded bg-white/90 object-contain px-1"
-          />
+          <BrandMark variant="wordmark" size={28} />
 
           {/* Projects Home back link */}
           <NavLink

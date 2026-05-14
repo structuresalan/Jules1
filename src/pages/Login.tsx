@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
+import { BrandMark } from '../components/BrandMark';
 import './Login.css';
 
 type AuthMode = 'signin' | 'create';
@@ -117,15 +118,8 @@ export const Login: React.FC = () => {
         {/* ── LEFT: blueprint pane ── */}
         <aside className="login-blueprint" style={{ minHeight: 0 }}>
           {/* brand */}
-          <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 12, zIndex: 2 }}>
-            <div style={{ width: 32, height: 32, display: 'grid', placeItems: 'center', background: '#2563eb', borderRadius: 6, boxShadow: '0 0 0 1px rgba(255,255,255,.06), 0 8px 24px -10px rgba(37,99,235,.6)' }}>
-              <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
-                <path d="M3 6.5L10 3l7 3.5L10 10 3 6.5z" stroke="white" strokeWidth="1.4" strokeLinejoin="round"/>
-                <path d="M3 10L10 13.5 17 10" stroke="white" strokeWidth="1.4" strokeLinejoin="round" opacity=".7"/>
-                <path d="M3 13.5L10 17 17 13.5" stroke="white" strokeWidth="1.4" strokeLinejoin="round" opacity=".45"/>
-              </svg>
-            </div>
-            <div style={{ fontWeight: 600, fontSize: 17, letterSpacing: '-.01em', color: '#eef2f9' }}>SimplifyStruct</div>
+          <div style={{ position: 'relative', zIndex: 2 }}>
+            <BrandMark variant="wordmark" size={34} />
           </div>
 
           {/* drawing canvas */}

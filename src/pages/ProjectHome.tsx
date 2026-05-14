@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Calculator, Clock3, FileText, FolderOpen, LogOut, Pencil, Plus, Save, Search, Trash2, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import simplifyStructLogo from '../assets/simplifystruct-logo.png';
+import { BrandMark } from '../components/BrandMark';
 import { useAuth } from '../hooks/useAuth';
 
 type ProjectStatus = 'Active' | 'On Hold' | 'Closed' | 'Archived';
@@ -176,7 +176,7 @@ export const ProjectHome: React.FC = () => {
       {/* ── Topbar ── */}
       <div className="flex items-center justify-between px-4 bg-slate-950 border-b border-slate-800 shrink-0 h-11">
         <div className="flex items-center gap-3">
-          <img src={simplifyStructLogo} alt="SimplifyStruct" className="h-7 rounded bg-white/90 object-contain px-1" />
+          <BrandMark variant="wordmark" size={26} />
           <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Projects</span>
         </div>
         <div className="flex items-center gap-2">
