@@ -18,6 +18,7 @@ import { VisualWorkspace } from './pages/VisualWorkspace';
 import { ComingSoon } from './pages/ComingSoon';
 import { Observations } from './pages/Observations';
 import { SiteVisits } from './pages/SiteVisits';
+import { InboxPage } from './pages/Inbox';
 import { applyWebsiteStyleSettings, getWebsiteStyleSettings } from './utils/websiteStyle';
 import { Camera, Inbox, BookOpen, SlidersHorizontal } from 'lucide-react';
 import './styles/websiteTheme.css';
@@ -52,7 +53,7 @@ const AppContent = () => {
         <Route path="observations" element={<Observations />} />
         <Route path="site-visits" element={<SiteVisits />} />
         <Route path="photos" element={<ComingSoon icon={Camera} title="Photos" description="Organize and annotate photos from site visits, linked to observations." />} />
-        <Route path="inbox" element={<ComingSoon icon={Inbox} title="Inbox" description="Notifications, comments, and items requiring your attention across all projects." />} />
+        <Route path="inbox" element={<InboxPage />} />
         <Route path="library" element={<ComingSoon icon={BookOpen} title="Library" description="Reusable calculation templates, standard details, and reference documents." />} />
         <Route path="project-settings" element={<ComingSoon icon={SlidersHorizontal} title="Project Settings" description="Manage project details, team members, and preferences." />} />
       </Route>

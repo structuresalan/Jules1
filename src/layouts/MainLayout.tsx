@@ -147,6 +147,29 @@ export const MainLayout: React.FC = () => {
     ? allProjects.filter(p => p.name.toLowerCase().includes(switcherSearch.toLowerCase()))
     : allProjects;
 
+  const recentProjects = React.useMemo(() => {
+    try {
+      const rawVisits = window.localStorage.getItem('struccalc.sitevisits.v1');
+      const rawObs = window.localStorage.getItem('struccalc.observations.v1');
+      const visits: Array<{ projectId: string; updatedAt: string }> = Array.isArray(JSON.parse(rawVisits || '[]')) ? JSON.parse(rawVisits || '[]') : [];
+      const obs: Array<{ projectId: string; updatedAt: string }> = Array.isArray(JSON.parse(rawObs || '[]')) ? JSON.parse(rawObs || '[]') : [];
+      const lastActivity: Record<string, number> = {};
+      [...visits, ...obs].forEach(item => {
+        const t = new Date(item.updatedAt).getTime();
+        if (!lastActivity[item.projectId] || t > lastActivity[item.projectId]) {
+          lastActivity[item.projectId] = t;
+        }
+      });
+      allProjects.forEach(p => {
+        if (!lastActivity[p.id]) lastActivity[p.id] = 0;
+      });
+      return [...allProjects]
+        .sort((a, b) => (lastActivity[b.id] || 0) - (lastActivity[a.id] || 0))
+        .filter(p => p.id !== projectSummary.activeId)
+        .slice(0, 4);
+    } catch { return []; }
+  }, [allProjects, projectSummary.activeId]);
+
   return (
     <div
       className="flex h-screen bg-slate-900 text-slate-200 font-sans overflow-hidden"
@@ -304,6 +327,27 @@ export const MainLayout: React.FC = () => {
                 Open a project
               </NavLink>
             </div>
+          )}
+
+          {/* Recent projects — quick jump to recently-touched projects */}
+          {recentProjects.length > 0 && (
+            <>
+              <div className="px-2 pt-3 pb-1 text-[9px] font-bold uppercase tracking-widest text-slate-600 font-mono">Recent</div>
+              {recentProjects.map(p => {
+                const pColorIdx = p.colorIndex !== undefined ? p.colorIndex : stableIndexForId(p.id);
+                const pColor = colorForProject(pColorIdx);
+                return (
+                  <button
+                    key={p.id}
+                    onClick={() => switchToProject(p.id)}
+                    className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-slate-500 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
+                  >
+                    <div className="w-2 h-2 rounded-full shrink-0" style={{ background: pColor.hex }} />
+                    <span className="truncate text-left">{p.name}</span>
+                  </button>
+                );
+              })}
+            </>
           )}
 
           {/* PROJECT nav */}

@@ -3,6 +3,7 @@ import { Calculator, Clock3, FileText, FolderOpen, LogOut, Pencil, Plus, Save, S
 import { useNavigate } from 'react-router-dom';
 import { BrandMark } from '../components/BrandMark';
 import { useAuth } from '../hooks/useAuth';
+import { colorForProject, stableIndexForId } from '../lib/projectColors';
 
 type ProjectStatus = 'Active' | 'On Hold' | 'Closed' | 'Archived';
 type ProjectType = 'New Construction' | 'Renovation' | 'Inspection' | 'Mixed';
@@ -249,11 +250,19 @@ export const ProjectHome: React.FC = () => {
                           {projects.length === 0 ? 'No saved projects yet. Create a new project to get started.' : 'No projects match your search.'}
                         </td>
                       </tr>
-                    ) : filteredProjects.map((project) => (
+                    ) : filteredProjects.map((project) => {
+                      const colorIdx = project.colorIndex !== undefined ? project.colorIndex : stableIndexForId(project.id);
+                      const chipColor = colorForProject(colorIdx).hex;
+                      return (
                       <tr key={project.id} className="border-b border-slate-700/50 hover:bg-slate-700/30 transition-colors">
-                        <td className="px-3 py-2.5">
-                          <div className="font-medium text-slate-200">{project.name}</div>
-                          {project.description && <div className="mt-0.5 max-w-xs truncate text-slate-500">{project.description}</div>}
+                        <td className="py-2.5 pl-0 pr-3">
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-[3px] self-stretch min-h-[28px] rounded-full shrink-0" style={{ background: chipColor }} />
+                            <div>
+                              <div className="font-medium text-slate-200">{project.name}</div>
+                              {project.description && <div className="mt-0.5 max-w-xs truncate text-slate-500">{project.description}</div>}
+                            </div>
+                          </div>
                         </td>
                         <td className="px-3 py-2.5">
                           {editingProjectId === project.id ? (
@@ -327,7 +336,7 @@ export const ProjectHome: React.FC = () => {
                           </div>
                         </td>
                       </tr>
-                    ))}
+                    );})}
                   </tbody>
                 </table>
               </div>
