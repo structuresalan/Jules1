@@ -135,18 +135,6 @@ export const MainLayout: React.FC = () => {
     navigate('/dashboard');
   };
 
-  if (isProjectHome) return <Outlet />;
-
-  const colorVars = projectSummary.mode === 'project'
-    ? projectColorVars(colorForProject(projectSummary.colorIndex))
-    : {};
-
-  const chipInitial = projectSummary.mode === 'project' ? initialFor(projectSummary.label) : '?';
-
-  const switcherFiltered = switcherSearch.trim()
-    ? allProjects.filter(p => p.name.toLowerCase().includes(switcherSearch.toLowerCase()))
-    : allProjects;
-
   const recentProjects = React.useMemo(() => {
     try {
       const rawVisits = window.localStorage.getItem('struccalc.sitevisits.v1');
@@ -169,6 +157,18 @@ export const MainLayout: React.FC = () => {
         .slice(0, 4);
     } catch { return []; }
   }, [allProjects, projectSummary.activeId]);
+
+  if (isProjectHome) return <Outlet />;
+
+  const colorVars = projectSummary.mode === 'project'
+    ? projectColorVars(colorForProject(projectSummary.colorIndex))
+    : {};
+
+  const chipInitial = projectSummary.mode === 'project' ? initialFor(projectSummary.label) : '?';
+
+  const switcherFiltered = switcherSearch.trim()
+    ? allProjects.filter(p => p.name.toLowerCase().includes(switcherSearch.toLowerCase()))
+    : allProjects;
 
   return (
     <div
