@@ -23,6 +23,19 @@ const getProjectName = (): string => {
   }
 };
 
+const getProjectStats = (projectId: string) => {
+  try {
+    const obs = JSON.parse(window.localStorage.getItem('struccalc.observations.v1') || '[]') as Array<{ projectId: string; status: string; severity: string }>;
+    const visits = JSON.parse(window.localStorage.getItem('struccalc.sitevisits.v1') || '[]') as Array<{ projectId: string }>;
+    const projectObs = obs.filter(o => o.projectId === projectId);
+    return {
+      openObs: projectObs.filter(o => o.status !== 'Closed').length,
+      highSeverity: projectObs.filter(o => o.severity === 'High' && o.status !== 'Closed').length,
+      visits: visits.filter(v => v.projectId === projectId).length,
+    };
+  } catch { return { openObs: 0, highSeverity: 0, visits: 0 }; }
+};
+
 const getLastVisited = (): string => {
   try {
     const raw = window.localStorage.getItem('struccalc.lastVisited.v1');
@@ -38,19 +51,21 @@ const getLastVisited = (): string => {
 };
 
 export const Dashboard: React.FC = () => {
+  const projectId = window.localStorage.getItem('struccalc.activeProject.v3') || '';
   const lastSheet = getLastSheet();
   const projectName = getProjectName();
   const lastVisited = getLastVisited();
+  const projectStats = getProjectStats(projectId);
 
   React.useEffect(() => {
     window.localStorage.setItem('struccalc.lastVisited.v1', String(Date.now()));
   }, []);
 
   const stats = [
-    { label: 'Open obs.', value: '0', delta: 'None logged yet', icon: <ClipboardList size={15} />, danger: false },
-    { label: 'High severity', value: '0', delta: 'All clear', icon: <AlertTriangle size={15} />, danger: false },
+    { label: 'Open obs.', value: String(projectStats.openObs), delta: projectStats.openObs === 0 ? 'None logged yet' : `${projectStats.openObs} active`, icon: <ClipboardList size={15} />, danger: false },
+    { label: 'High severity', value: String(projectStats.highSeverity), delta: projectStats.highSeverity === 0 ? 'All clear' : 'Requires attention', icon: <AlertTriangle size={15} />, danger: projectStats.highSeverity > 0 },
     { label: 'Photos', value: '0', delta: 'None uploaded', icon: <Camera size={15} />, danger: false },
-    { label: 'Site visits', value: '0', delta: 'None scheduled', icon: <MapPin size={15} />, danger: false },
+    { label: 'Site visits', value: String(projectStats.visits), delta: projectStats.visits === 0 ? 'None scheduled' : `${projectStats.visits} logged`, icon: <MapPin size={15} />, danger: false },
   ];
 
   return (

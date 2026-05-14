@@ -15,8 +15,10 @@ import { ProjectHome } from './pages/ProjectHome';
 import { SettingsPage } from './pages/SettingsPage';
 import { VisualWorkspace } from './pages/VisualWorkspace';
 import { ComingSoon } from './pages/ComingSoon';
+import { Observations } from './pages/Observations';
+import { SiteVisits } from './pages/SiteVisits';
 import { applyWebsiteStyleSettings, getWebsiteStyleSettings } from './utils/websiteStyle';
-import { ClipboardList, MapPin, Camera, Inbox, BookOpen, SlidersHorizontal } from 'lucide-react';
+import { Camera, Inbox, BookOpen, SlidersHorizontal } from 'lucide-react';
 import './styles/websiteTheme.css';
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
@@ -46,8 +48,8 @@ const AppContent = () => {
         <Route path="visual-workspace" element={<VisualWorkspace />} />
         <Route path="variables" element={<Variables />} />
         <Route path="settings" element={<SettingsPage />} />
-        <Route path="observations" element={<ComingSoon icon={ClipboardList} title="Observations" description="Log and track structural observations, deficiencies, and findings from site visits." />} />
-        <Route path="site-visits" element={<ComingSoon icon={MapPin} title="Site Visits" description="Schedule and document site visits with checklists, photos, and reports." />} />
+        <Route path="observations" element={<Observations />} />
+        <Route path="site-visits" element={<SiteVisits />} />
         <Route path="photos" element={<ComingSoon icon={Camera} title="Photos" description="Organize and annotate photos from site visits, linked to observations." />} />
         <Route path="inbox" element={<ComingSoon icon={Inbox} title="Inbox" description="Notifications, comments, and items requiring your attention across all projects." />} />
         <Route path="library" element={<ComingSoon icon={BookOpen} title="Library" description="Reusable calculation templates, standard details, and reference documents." />} />
