@@ -932,7 +932,9 @@ export function VisualWorkspace() {
     const t = toolRef.current;
     if ((t === 'polyline' || t === 'area') && isDrawing.current) {
       e.preventDefault();
-      setPolylineMenu({ x: e.clientX, y: e.clientY });
+      const rect = containerRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      setPolylineMenu({ x: e.clientX - rect.left, y: e.clientY - rect.top });
     }
   }, []);
 
@@ -2453,7 +2455,8 @@ export function VisualWorkspace() {
 
             {/* Polyline / area right-click menu */}
             {polylineMenu && (
-              <div className="fixed z-50" style={{ left: polylineMenu.x, top: polylineMenu.y }}
+              <div className="absolute z-50" style={{ left: polylineMenu.x, top: polylineMenu.y }}
+                onPointerDown={e => e.stopPropagation()}
                 onContextMenu={e => e.preventDefault()}>
                 <div className="bg-slate-800 border border-slate-600 rounded shadow-xl overflow-hidden min-w-[130px]">
                   <button onClick={finishPolylineOrArea}
