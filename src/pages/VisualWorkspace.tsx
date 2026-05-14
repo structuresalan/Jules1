@@ -10,9 +10,9 @@ import {
   Eye, EyeOff, Trash2, Upload,
   Filter, RefreshCw, ChevronLeft,
   Tag, Stamp, Hash, Minimize2, Search, Download,
-  Home, Frame, Wind, Database, Settings,
+  Home, Frame, Wind, Database, Settings, ArrowLeft,
 } from 'lucide-react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useNavigate } from 'react-router-dom';
 import { getActiveProjectId } from '../utils/projectDocuments';
 import type { RelationshipGraph } from '../components/RelationshipMap';
 import { RelationshipMap } from '../components/RelationshipMap';
@@ -316,6 +316,7 @@ const SEED_GRAPH: RelationshipGraph = {
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export function VisualWorkspace() {
+  const navigate = useNavigate();
   const containerRef  = useRef<HTMLDivElement>(null);
   const fileInputRef  = useRef<HTMLInputElement>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
@@ -1908,29 +1909,15 @@ export function VisualWorkspace() {
 
       {/* ── Header ───────────────────────────────────────────────────────── */}
       <div className="flex items-center bg-slate-950 border-b border-slate-800 shrink-0 h-9 px-2 gap-3">
-        {/* Logo + breadcrumb */}
-        <div className="flex items-center gap-2 shrink-0">
-          <NavLink to="/" className="flex items-center gap-1.5 text-slate-300 hover:text-white transition-colors">
-            <svg width="20" height="20" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
-              <rect width="120" height="120" rx="16" fill="#0e1117"/>
-              <g stroke="#6b7c9c" strokeWidth="4.5" strokeLinecap="round" fill="none">
-                <line x1="40" y1="32" x2="110" y2="32"/><line x1="40" y1="32" x2="40" y2="80"/>
-                <line x1="110" y1="32" x2="110" y2="80"/><line x1="25" y1="44" x2="40" y2="32"/>
-                <line x1="95" y1="44" x2="110" y2="32"/>
-              </g>
-              <g stroke="#ffffff" strokeWidth="5.5" strokeLinecap="round" fill="none">
-                <line x1="25" y1="44" x2="95" y2="44"/><line x1="25" y1="44" x2="25" y2="92"/>
-                <line x1="95" y1="44" x2="95" y2="92"/>
-              </g>
-            </svg>
-          </NavLink>
-          <span className="text-slate-700 text-xs">/</span>
-          <NavLink to="/" className="text-[11px] text-slate-400 hover:text-white transition-colors font-mono tracking-wide">Projects</NavLink>
-          <span className="text-slate-700 text-xs">/</span>
-          <span className="text-[11px] text-slate-300 font-mono tracking-wide truncate max-w-[160px]">Riverside Office</span>
-          <span className="text-slate-700 text-xs">/</span>
-          <span className="text-[11px] text-slate-500 font-mono tracking-wide">Workspace</span>
-        </div>
+        {/* Back button */}
+        <button
+          onClick={() => navigate('/dashboard')}
+          className="flex items-center gap-1.5 px-2 py-1 rounded text-slate-400 hover:text-white hover:bg-slate-800 transition-colors shrink-0"
+          title="Back to project"
+        >
+          <ArrowLeft size={14} />
+          <span className="text-xs font-medium">Back</span>
+        </button>
 
         {/* Tabs — centered */}
         <div className="flex flex-1 justify-center">
