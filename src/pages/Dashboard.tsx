@@ -16,7 +16,8 @@ const getProjectName = (): string => {
     const rawProjects = window.localStorage.getItem('struccalc.projects.v3');
     const activeId = window.localStorage.getItem('struccalc.activeProject.v3');
     if (!rawProjects || !activeId) return 'No project selected';
-    const projects = JSON.parse(rawProjects) as Array<{ id: string; name: string }>;
+    const parsed = JSON.parse(rawProjects);
+    const projects: Array<{ id: string; name: string }> = Array.isArray(parsed) ? parsed : [];
     return projects.find(p => p.id === activeId)?.name || 'No project selected';
   } catch {
     return 'No project selected';
@@ -25,8 +26,10 @@ const getProjectName = (): string => {
 
 const getProjectStats = (projectId: string) => {
   try {
-    const obs = JSON.parse(window.localStorage.getItem('struccalc.observations.v1') || '[]') as Array<{ projectId: string; status: string; severity: string }>;
-    const visits = JSON.parse(window.localStorage.getItem('struccalc.sitevisits.v1') || '[]') as Array<{ projectId: string }>;
+    const rawObs = JSON.parse(window.localStorage.getItem('struccalc.observations.v1') || '[]');
+    const rawVisits = JSON.parse(window.localStorage.getItem('struccalc.sitevisits.v1') || '[]');
+    const obs: Array<{ projectId: string; status: string; severity: string }> = Array.isArray(rawObs) ? rawObs : [];
+    const visits: Array<{ projectId: string }> = Array.isArray(rawVisits) ? rawVisits : [];
     const projectObs = obs.filter(o => o.projectId === projectId);
     return {
       openObs: projectObs.filter(o => o.status !== 'Closed').length,
