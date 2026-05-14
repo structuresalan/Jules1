@@ -1,9 +1,20 @@
 import React, { useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
-import simplifyStructLogo from '../assets/simplifystruct-logo.png';
+import './Login.css';
 
 type AuthMode = 'signin' | 'create';
+
+const strengthLabels = ['—', 'WEAK', 'FAIR', 'GOOD', 'STRONG'];
+
+function getStrength(pw: string): number {
+  let s = 0;
+  if (pw.length >= 8) s++;
+  if (/[A-Z]/.test(pw) && /[a-z]/.test(pw)) s++;
+  if (/\d/.test(pw)) s++;
+  if (/[^A-Za-z0-9]/.test(pw)) s++;
+  return s;
+}
 
 export const Login: React.FC = () => {
   const { user, login, createAccount, authConfigured } = useAuth();
@@ -13,15 +24,20 @@ export const Login: React.FC = () => {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [inviteCode, setInviteCode] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [company, setCompany] = useState('');
+  const [discipline, setDiscipline] = useState('Structural');
+  const [showPassword, setShowPassword] = useState(false);
+  const [keepSignedIn, setKeepSignedIn] = useState(true);
   const [errorMessage, setErrorMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const pwStrength = getStrength(password);
 
-  if (user) {
-    return <Navigate to="/" replace />;
-  }
+  if (user) return <Navigate to="/" replace />;
 
-  const handleSubmit = async (event: React.FormEvent) => {
-    event.preventDefault();
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
     setErrorMessage('');
 
     if (authMode === 'create' && password !== confirmPassword) {
@@ -30,14 +46,12 @@ export const Login: React.FC = () => {
     }
 
     setIsSubmitting(true);
-
     try {
       if (authMode === 'create') {
         await createAccount(email, password, inviteCode);
       } else {
         await login(email, password);
       }
-
       navigate('/', { replace: true });
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Unable to continue.');
@@ -52,143 +66,415 @@ export const Login: React.FC = () => {
     setPassword('');
     setConfirmPassword('');
     setInviteCode('');
+    setShowPassword(false);
   };
 
+  const controlClass =
+    'relative flex items-center border border-[#e3e6ec] bg-white rounded-[6px] transition-[border-color,box-shadow] focus-within:border-[#2563eb] focus-within:shadow-[0_0_0_3px_rgba(37,99,235,.12)]';
   const inputClass =
-    'w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2.5 text-sm text-slate-200 focus:outline-none focus:border-blue-500 placeholder-slate-600';
+    'flex-1 min-w-0 border-none outline-none bg-transparent px-3 py-[10px] text-[13.5px] text-[#11131a] placeholder-[#9aa1ad] font-[IBM_Plex_Sans,system-ui,sans-serif]';
 
   return (
-    <div className="min-h-screen bg-slate-950 flex items-center justify-center px-4">
-      <div className="w-full max-w-md">
-        {/* Logo */}
-        <div className="flex justify-center mb-8">
-          <img
-            src={simplifyStructLogo}
-            alt="SimplifyStruct logo"
-            className="h-12 rounded-lg bg-white/90 object-contain px-2 py-1"
-          />
+    <div style={{ fontFamily: "'IBM Plex Sans', system-ui, sans-serif", height: '100vh', display: 'flex', flexDirection: 'column', background: '#fff' }}>
+      {/* top status bar */}
+      <div className="login-topbar">
+        <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#16a34a', marginRight: 8, flexShrink: 0, boxShadow: '0 0 0 3px rgba(22,163,74,.15)', display: 'inline-block' }} />
+        <span>SECURE&nbsp;CONNECTION</span>
+        <span style={{ margin: '0 14px', color: '#3a3f4b' }}>│</span>
+        <span>VER&nbsp;<b style={{ fontWeight: 500, color: '#cdd3dd' }}>2.4.1</b></span>
+        <span style={{ margin: '0 14px', color: '#3a3f4b' }}>│</span>
+        <span>REGION&nbsp;<b style={{ fontWeight: 500, color: '#cdd3dd' }}>US-EAST</b></span>
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 18, color: '#9aa1ad' }}>
+          <span>UPTIME&nbsp;<b style={{ fontWeight: 500, color: '#cdd3dd' }}>99.98%</b></span>
+          <span>STATUS&nbsp;<b style={{ fontWeight: 500, color: '#4ade80' }}>OPERATIONAL</b></span>
         </div>
+      </div>
 
-        {/* Card */}
-        <div className="bg-slate-900 border border-slate-700 rounded-2xl p-8 shadow-2xl">
-          {/* Tabs */}
-          <div className="flex border-b border-slate-700 mb-6">
-            <button
-              type="button"
-              onClick={() => switchMode('signin')}
-              className={`flex-1 pb-3 text-sm font-semibold transition-colors ${
-                authMode === 'signin'
-                  ? 'text-white border-b-2 border-blue-500'
-                  : 'text-slate-500 hover:text-slate-300'
-              }`}
-            >
-              Sign In
-            </button>
-            <button
-              type="button"
-              onClick={() => switchMode('create')}
-              className={`flex-1 pb-3 text-sm font-semibold transition-colors ${
-                authMode === 'create'
-                  ? 'text-white border-b-2 border-blue-500'
-                  : 'text-slate-500 hover:text-slate-300'
-              }`}
-            >
-              Create Account
-            </button>
+      {/* main shell */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1.05fr .95fr', flex: 1, minHeight: 0, overflow: 'hidden' }}>
+
+        {/* ── LEFT: blueprint pane ── */}
+        <aside className="login-blueprint" style={{ minHeight: 0 }}>
+          {/* brand */}
+          <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 12, zIndex: 2 }}>
+            <div style={{ width: 32, height: 32, display: 'grid', placeItems: 'center', background: '#2563eb', borderRadius: 6, boxShadow: '0 0 0 1px rgba(255,255,255,.06), 0 8px 24px -10px rgba(37,99,235,.6)' }}>
+              <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
+                <path d="M3 6.5L10 3l7 3.5L10 10 3 6.5z" stroke="white" strokeWidth="1.4" strokeLinejoin="round"/>
+                <path d="M3 10L10 13.5 17 10" stroke="white" strokeWidth="1.4" strokeLinejoin="round" opacity=".7"/>
+                <path d="M3 13.5L10 17 17 13.5" stroke="white" strokeWidth="1.4" strokeLinejoin="round" opacity=".45"/>
+              </svg>
+            </div>
+            <div style={{ fontWeight: 600, fontSize: 17, letterSpacing: '-.01em', color: '#eef2f9' }}>SimplifyStruct</div>
           </div>
 
-          {!authConfigured && (
-            <div className="mb-4 text-xs text-amber-300 bg-amber-900/20 border border-amber-700/50 rounded-lg px-3 py-2">
-              Firebase is not configured yet. Add the Firebase environment variables in Vercel, then redeploy.
-            </div>
-          )}
+          {/* drawing canvas */}
+          <div style={{ position: 'relative', zIndex: 2, flex: 1, marginTop: 42, marginBottom: 18, minHeight: 0 }}>
+            <svg viewBox="0 0 720 420" preserveAspectRatio="xMidYMid meet" aria-hidden="true" style={{ width: '100%', height: '100%', display: 'block', overflow: 'visible' }}>
+              <g fontFamily="IBM Plex Mono, monospace" fontSize="11" fill="#6c7a99">
+                <text x="20" y="92">A</text>
+                <text x="20" y="182">B</text>
+                <text x="20" y="272">C</text>
+                <text x="20" y="362">D</text>
+                <text x="100" y="32">1</text>
+                <text x="220" y="32">2</text>
+                <text x="340" y="32">3</text>
+                <text x="460" y="32">4</text>
+                <text x="580" y="32">5</text>
+                <text x="680" y="32">6</text>
+              </g>
+              <g fill="none" stroke="#3a4763" strokeWidth="1">
+                <circle cx="100" cy="50" r="10"/><circle cx="220" cy="50" r="10"/>
+                <circle cx="340" cy="50" r="10"/><circle cx="460" cy="50" r="10"/>
+                <circle cx="580" cy="50" r="10"/><circle cx="680" cy="50" r="10"/>
+              </g>
+              <g stroke="#2a3247" strokeWidth="1" strokeDasharray="3 4">
+                <line x1="100" y1="60" x2="100" y2="380"/>
+                <line x1="220" y1="60" x2="220" y2="380"/>
+                <line x1="340" y1="60" x2="340" y2="380"/>
+                <line x1="460" y1="60" x2="460" y2="380"/>
+                <line x1="580" y1="60" x2="580" y2="380"/>
+                <line x1="680" y1="60" x2="680" y2="380"/>
+              </g>
+              <g stroke="#9bb5e8" strokeWidth="1.6" strokeLinecap="round">
+                <line className="draw-line"    x1="100" y1="90"  x2="680" y2="90"/>
+                <line className="draw-line d2" x1="100" y1="180" x2="680" y2="180"/>
+                <line className="draw-line d3" x1="100" y1="270" x2="680" y2="270"/>
+                <line className="draw-line d4" x1="100" y1="360" x2="680" y2="360"/>
+              </g>
+              <g fill="#9bb5e8" opacity=".95">
+                {[90,180,270,360].map(y => [100,220,340,460,580,680].map(x => (
+                  <rect key={`${x}-${y}`} x={x-4} y={y-4} width="8" height="8"/>
+                )))}
+              </g>
+              <g stroke="#6f8bbf" strokeWidth="1" strokeDasharray="2 3">
+                <line x1="340" y1="180" x2="460" y2="270"/>
+                <line x1="460" y1="180" x2="340" y2="270"/>
+              </g>
+              <g fontFamily="IBM Plex Mono, monospace" fontSize="9" fill="#6c7a99">
+                <text x="155" y="84">B10 (W16x26)</text>
+                <text x="395" y="84">B4 (W16x26)</text>
+                <text x="155" y="174">B7 (W16x26)</text>
+                <text x="535" y="174">B18 (W16x26)</text>
+                <text x="395" y="354">B22 (W16x26)</text>
+              </g>
+              <g stroke="#3a4763" strokeWidth="1">
+                <line x1="100" y1="395" x2="680" y2="395"/>
+                <line x1="100" y1="390" x2="100" y2="400"/>
+                <line x1="680" y1="390" x2="680" y2="400"/>
+              </g>
+              <text x="370" y="411" textAnchor="middle" fontFamily="IBM Plex Mono, monospace" fontSize="10" fill="#6c7a99">180&#39;-0&#34;</text>
+              <ellipse cx="600" cy="90"  rx="30" ry="10" fill="none" stroke="#ef4444" strokeWidth="1.3" strokeDasharray="3 3"/>
+              <ellipse cx="460" cy="180" rx="30" ry="10" fill="none" stroke="#3b82f6" strokeWidth="1.3" strokeDasharray="3 3"/>
+              <ellipse cx="520" cy="360" rx="34" ry="10" fill="none" stroke="#22c55e" strokeWidth="1.3" strokeDasharray="3 3"/>
+            </svg>
 
-          {errorMessage && (
-            <div className="mb-4 text-xs text-red-400 bg-red-900/20 border border-red-800/50 rounded-lg px-3 py-2">
-              {errorMessage}
-            </div>
-          )}
+            <div className="login-pin red"   style={{ top: '18%', left: '78%' }}>1</div>
+            <div className="login-anno red"  style={{ top: '14%', left: '84%' }}>Corrosion at seat<br/>connection · field verify</div>
+            <div className="login-pin blue"  style={{ top: '42%', left: '60%' }}>2</div>
+            <div className="login-anno blue" style={{ top: '48%', left: '64%' }}>Paint peeling, rust scale<br/>check bottom flange</div>
+            <div className="login-pin green" style={{ top: '80%', left: '67%' }}>3</div>
+            <div className="login-anno green"style={{ top: '84%', left: '71%' }}>Section loss at midspan<br/>verify remaining thickness</div>
+          </div>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-xs text-slate-400 mb-1 uppercase tracking-wide">Email</label>
-              <input
-                type="email"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                className={inputClass}
-                placeholder="you@example.com"
-                autoComplete="email"
-                required
-              />
+          {/* tagline */}
+          <div style={{ position: 'relative', zIndex: 2, marginBottom: 14, maxWidth: 520 }}>
+            <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, letterSpacing: '.18em', textTransform: 'uppercase', color: '#5d6c8c', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ width: 24, height: 1, background: '#3a4763', display: 'inline-block', flexShrink: 0 }}/>
+              Field-to-office, in sync
+            </div>
+            <h1 style={{ fontFamily: "'IBM Plex Sans', sans-serif", fontWeight: 500, color: '#e8eef9', fontSize: 30, lineHeight: 1.18, letterSpacing: '-.015em', margin: '0 0 12px' }}>
+              Inspections, markups, and reports —<br/>
+              <span style={{ color: '#9bb5e8', borderBottom: '1px dashed #4f6692', paddingBottom: 1 }}>on one structural canvas.</span>
+            </h1>
+            <p style={{ margin: 0, color: '#8a96b3', fontSize: 13.5, lineHeight: 1.55, maxWidth: 440 }}>
+              Pin findings to gridlines. Link photos to beams. Push reports without leaving the drawing.
+            </p>
+          </div>
+
+          {/* title block */}
+          <div style={{ position: 'relative', zIndex: 2, border: '1px solid #2a3247', background: 'rgba(20,24,33,.6)', backdropFilter: 'blur(2px)', display: 'grid', gridTemplateColumns: '1.4fr 1fr 1fr', fontFamily: "'IBM Plex Mono', monospace", fontSize: 10.5, letterSpacing: '.04em', color: '#aab8d4' }}>
+            {[
+              { label: 'Project', value: '1234 — Riverside Office' },
+              { label: 'Sheet',   value: 'S-2.3 · Level 2 Plan' },
+              { label: 'Scale',   value: '1/8" = 1\'-0"' },
+            ].map((cell, i) => (
+              <div key={i} style={{ padding: '10px 14px', borderRight: i < 2 ? '1px solid #2a3247' : 'none' }}>
+                <div style={{ textTransform: 'uppercase', color: '#6c7a99', fontSize: 9.5, marginBottom: 4, letterSpacing: '.12em' }}>{cell.label}</div>
+                <div style={{ color: '#dbe2f1', fontWeight: 500 }}>{cell.value}</div>
+              </div>
+            ))}
+          </div>
+        </aside>
+
+        {/* ── RIGHT: form pane ── */}
+        <section className="login-form-pane">
+          <div style={{ width: '100%', maxWidth: 430, margin: 'auto', position: 'relative' }}>
+
+            {/* sheet mark */}
+            <div style={{ position: 'absolute', top: -12, right: -12, fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, letterSpacing: '.14em', color: '#9aa1ad', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ width: 8, height: 8, border: '1px solid #d6dae3', display: 'inline-block' }}/>
+              SHEET&nbsp;A-001 / AUTH
             </div>
 
-            <div>
-              <label className="block text-xs text-slate-400 mb-1 uppercase tracking-wide">Password</label>
-              <input
-                type="password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                className={inputClass}
-                placeholder="Password"
-                autoComplete={authMode === 'create' ? 'new-password' : 'current-password'}
-                minLength={6}
-                required
-              />
+            {/* heading */}
+            <div className="login-stagger" style={{ marginBottom: 26 }}>
+              <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, letterSpacing: '.16em', textTransform: 'uppercase', color: '#6b7280', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span>SimplifyStruct</span>
+                <span style={{ background: '#f7f8fa', border: '1px solid #e3e6ec', padding: '2px 7px', borderRadius: 3, fontSize: 10, color: '#11131a', letterSpacing: '.1em' }}>v2.4</span>
+              </div>
+              <h2 style={{ margin: '0 0 6px', fontSize: 26, fontWeight: 600, letterSpacing: '-.02em', lineHeight: 1.2, color: '#11131a' }}>
+                {authMode === 'signin' ? 'Welcome back.' : 'Create your account.'}
+              </h2>
+              <p style={{ margin: 0, color: '#6b7280', fontSize: 13.5 }}>
+                {authMode === 'signin' ? (
+                  <>Sign in to continue your work. New here?{' '}
+                    <a href="#" onClick={e => { e.preventDefault(); switchMode('create'); }} style={{ color: '#2563eb', fontWeight: 500, textDecoration: 'none' }}>Create an account →</a>
+                  </>
+                ) : (
+                  <>Set up your workspace. Already a user?{' '}
+                    <a href="#" onClick={e => { e.preventDefault(); switchMode('signin'); }} style={{ color: '#2563eb', fontWeight: 500, textDecoration: 'none' }}>Sign in →</a>
+                  </>
+                )}
+              </p>
             </div>
 
-            {authMode === 'create' && (
-              <>
-                <div>
-                  <label className="block text-xs text-slate-400 mb-1 uppercase tracking-wide">Confirm Password</label>
+            {/* tabs */}
+            <div style={{ display: 'flex', background: '#f7f8fa', border: '1px solid #e3e6ec', borderRadius: 7, padding: 3, marginBottom: 22 }}>
+              {(['signin', 'create'] as AuthMode[]).map(m => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => switchMode(m)}
+                  style={{
+                    flex: 1, textAlign: 'center', padding: '8px 10px', fontSize: 13, fontWeight: 500,
+                    color: authMode === m ? '#11131a' : '#6b7280',
+                    cursor: 'pointer', border: 'none', borderRadius: 5,
+                    fontFamily: 'inherit', transition: 'color .2s ease',
+                    background: authMode === m ? '#fff' : 'transparent',
+                    boxShadow: authMode === m ? '0 1px 0 rgba(17,19,26,.05), 0 1px 2px rgba(17,19,26,.06)' : 'none',
+                  }}
+                >
+                  {m === 'signin' ? 'Sign in' : 'Register'}
+                </button>
+              ))}
+            </div>
+
+            {!authConfigured && (
+              <div style={{ marginBottom: 16, fontSize: 12, color: '#d97706', background: 'rgba(253,230,138,.15)', border: '1px solid rgba(217,119,6,.3)', borderRadius: 6, padding: '8px 12px' }}>
+                Firebase is not configured yet. Add the Firebase environment variables in Vercel, then redeploy.
+              </div>
+            )}
+
+            {errorMessage && (
+              <div style={{ marginBottom: 16, fontSize: 12, color: '#ef4444', background: 'rgba(254,202,202,.15)', border: '1px solid rgba(239,68,68,.3)', borderRadius: 6, padding: '8px 12px' }}>
+                {errorMessage}
+              </div>
+            )}
+
+            <form onSubmit={handleSubmit}>
+
+              {/* register-only fields */}
+              {authMode === 'create' && (
+                <div className="login-stagger">
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      <label style={{ fontSize: 12, color: '#11131a', fontWeight: 500, display: 'flex', justifyContent: 'space-between' }}>
+                        First name <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, color: '#9aa1ad', letterSpacing: '.06em', fontWeight: 400 }}>REQ</span>
+                      </label>
+                      <div className={controlClass}>
+                        <input type="text" value={firstName} onChange={e => setFirstName(e.target.value)} className={inputClass} placeholder="Avery" autoComplete="given-name" required />
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      <label style={{ fontSize: 12, color: '#11131a', fontWeight: 500, display: 'flex', justifyContent: 'space-between' }}>
+                        Last name <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, color: '#9aa1ad', letterSpacing: '.06em', fontWeight: 400 }}>REQ</span>
+                      </label>
+                      <div className={controlClass}>
+                        <input type="text" value={lastName} onChange={e => setLastName(e.target.value)} className={inputClass} placeholder="Morgan" autoComplete="family-name" required />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 14 }}>
+                    <label style={{ fontSize: 12, color: '#11131a', fontWeight: 500, display: 'flex', justifyContent: 'space-between' }}>
+                      Company <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, color: '#9aa1ad', letterSpacing: '.06em', fontWeight: 400 }}>OPT</span>
+                    </label>
+                    <div className={controlClass}>
+                      <span style={{ padding: '0 0 0 12px', color: '#9aa1ad', display: 'flex', alignItems: 'center' }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M3 21h18M5 21V7l7-4 7 4v14M9 9h.01M13 9h.01M9 13h.01M13 13h.01M9 17h.01M13 17h.01"/>
+                        </svg>
+                      </span>
+                      <input type="text" value={company} onChange={e => setCompany(e.target.value)} className={inputClass} placeholder="Riverside Engineering, PC" />
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 14 }}>
+                    <label style={{ fontSize: 12, color: '#11131a', fontWeight: 500 }}>Discipline</label>
+                    <div className={controlClass}>
+                      <select value={discipline} onChange={e => setDiscipline(e.target.value)} className={`login-select ${inputClass}`} style={{ flex: 1 }}>
+                        <option>Structural</option>
+                        <option>Architectural</option>
+                        <option>MEP</option>
+                        <option>Civil / Site</option>
+                        <option>General Contractor</option>
+                        <option>Inspector</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* email */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 14 }}>
+                <label style={{ fontSize: 12, color: '#11131a', fontWeight: 500, display: 'flex', justifyContent: 'space-between' }}>
+                  Email <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, color: '#9aa1ad', letterSpacing: '.06em', fontWeight: 400 }}>REQ</span>
+                </label>
+                <div className={controlClass}>
+                  <span style={{ padding: '0 0 0 12px', color: '#9aa1ad', display: 'flex', alignItems: 'center' }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="3" y="5" width="18" height="14" rx="2"/>
+                      <path d="M3 7l9 6 9-6"/>
+                    </svg>
+                  </span>
+                  <input type="email" value={email} onChange={e => setEmail(e.target.value)} className={inputClass} placeholder="you@firm.com" autoComplete="email" required />
+                </div>
+              </div>
+
+              {/* password */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 14 }}>
+                <label style={{ fontSize: 12, color: '#11131a', fontWeight: 500, display: 'flex', justifyContent: 'space-between' }}>
+                  Password <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, color: '#9aa1ad', letterSpacing: '.06em', fontWeight: 400 }}>8+ CHARS</span>
+                </label>
+                <div className={controlClass}>
+                  <span style={{ padding: '0 0 0 12px', color: '#9aa1ad', display: 'flex', alignItems: 'center' }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="4" y="11" width="16" height="10" rx="2"/>
+                      <path d="M8 11V7a4 4 0 0 1 8 0v4"/>
+                    </svg>
+                  </span>
                   <input
-                    type="password"
-                    value={confirmPassword}
-                    onChange={(event) => setConfirmPassword(event.target.value)}
+                    type={showPassword ? 'text' : 'password'}
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
                     className={inputClass}
-                    placeholder="Confirm password"
-                    autoComplete="new-password"
+                    placeholder="••••••••"
+                    autoComplete={authMode === 'create' ? 'new-password' : 'current-password'}
                     minLength={6}
                     required
                   />
+                  <span style={{ display: 'flex', alignItems: 'center', paddingRight: 8 }}>
+                    <button type="button" onClick={() => setShowPassword(v => !v)} aria-label="Show password"
+                      style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 6, color: '#6b7280', borderRadius: 4, display: 'flex', alignItems: 'center' }}>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                        {showPassword
+                          ? <><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></>
+                          : <><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></>
+                        }
+                      </svg>
+                    </button>
+                  </span>
                 </div>
+                {authMode === 'create' && (
+                  <>
+                    <div className={`strength-s${pwStrength}`} style={{ display: 'flex', gap: 4, marginTop: 4 }}>
+                      <i className="strength-bar"/><i className="strength-bar"/><i className="strength-bar"/><i className="strength-bar"/>
+                    </div>
+                    <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, color: '#9aa1ad', letterSpacing: '.08em', textTransform: 'uppercase', marginTop: 4 }}>
+                      STRENGTH · {strengthLabels[pwStrength]}
+                    </div>
+                  </>
+                )}
+              </div>
 
-                <div>
-                  <label className="block text-xs text-slate-400 mb-1 uppercase tracking-wide">Invite Code</label>
-                  <input
-                    type="text"
-                    value={inviteCode}
-                    onChange={(event) => setInviteCode(event.target.value)}
-                    className={inputClass}
-                    placeholder="Enter invite code"
-                    autoComplete="off"
-                    required
-                  />
+              {/* confirm password (register) */}
+              {authMode === 'create' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 14 }}>
+                  <label style={{ fontSize: 12, color: '#11131a', fontWeight: 500 }}>Confirm Password</label>
+                  <div className={controlClass}>
+                    <span style={{ padding: '0 0 0 12px', color: '#9aa1ad', display: 'flex', alignItems: 'center' }}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="4" y="11" width="16" height="10" rx="2"/>
+                        <path d="M8 11V7a4 4 0 0 1 8 0v4"/>
+                      </svg>
+                    </span>
+                    <input type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} className={inputClass} placeholder="••••••••" autoComplete="new-password" minLength={6} required />
+                  </div>
                 </div>
-              </>
-            )}
+              )}
 
-            <button
-              type="submit"
-              disabled={!authConfigured || isSubmitting}
-              className="w-full bg-blue-600 hover:bg-blue-500 text-white rounded-lg py-2.5 text-sm font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isSubmitting
-                ? authMode === 'create'
-                  ? 'Creating account...'
-                  : 'Signing in...'
-                : authMode === 'create'
-                  ? 'Create Account'
-                  : 'Sign In'}
-            </button>
-          </form>
-        </div>
+              {/* invite code (register) */}
+              {authMode === 'create' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 14 }}>
+                  <label style={{ fontSize: 12, color: '#11131a', fontWeight: 500, display: 'flex', justifyContent: 'space-between' }}>
+                    Invite Code <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, color: '#9aa1ad', letterSpacing: '.06em', fontWeight: 400 }}>REQ</span>
+                  </label>
+                  <div className={controlClass}>
+                    <input type="text" value={inviteCode} onChange={e => setInviteCode(e.target.value)} className={inputClass} placeholder="Enter invite code" autoComplete="off" required />
+                  </div>
+                </div>
+              )}
 
-        {/* Footer disclaimer */}
-        <p className="mt-6 text-center text-[10px] text-slate-600">
-          NOT FOR CONSTRUCTION. Engineer of Record must verify all calculations.
-          By using this tool, you accept the Terms of Use and liability disclaimer.
-        </p>
+              {/* meta row */}
+              {authMode === 'signin' && (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
+                  <label className="login-check" style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: '#11131a', cursor: 'pointer', userSelect: 'none' }}>
+                    <input type="checkbox" checked={keepSignedIn} onChange={e => setKeepSignedIn(e.target.checked)} />
+                    Keep me signed in
+                  </label>
+                  <a href="#" style={{ fontSize: 12.5, color: '#2563eb', textDecoration: 'none', fontWeight: 500 }}>Forgot password?</a>
+                </div>
+              )}
+              {authMode === 'create' && (
+                <div style={{ display: 'flex', alignItems: 'center', marginBottom: 18 }}>
+                  <label className="login-check" style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: '#11131a', cursor: 'pointer', userSelect: 'none' }}>
+                    <input type="checkbox" required />
+                    I agree to the <a href="#" style={{ marginLeft: 4, color: '#2563eb', textDecoration: 'none' }}>Terms &amp; Privacy</a>
+                  </label>
+                </div>
+              )}
+
+              {/* submit */}
+              <button
+                type="submit"
+                disabled={!authConfigured || isSubmitting}
+                className="login-submit"
+                style={{
+                  width: '100%', background: isSubmitting ? '#374151' : '#11131a', color: '#fff',
+                  border: '1px solid #11131a', padding: '12px 14px', borderRadius: 7,
+                  font: 'inherit', fontWeight: 500, fontSize: 13.5,
+                  cursor: isSubmitting ? 'not-allowed' : 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                  transition: 'background .15s ease, transform .05s ease',
+                  opacity: !authConfigured ? 0.5 : 1,
+                }}
+              >
+                <span>
+                  {isSubmitting
+                    ? (authMode === 'create' ? 'Creating account…' : 'Authenticating…')
+                    : (authMode === 'create' ? 'Create account' : 'Sign in to SimplifyStruct')}
+                </span>
+                {!isSubmitting && (
+                  <svg className="login-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M5 12h14M13 6l6 6-6 6"/>
+                  </svg>
+                )}
+              </button>
+            </form>
+
+            {/* footer */}
+            <div style={{ marginTop: 28, display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontFamily: "'IBM Plex Mono', monospace", fontSize: 10.5, color: '#9aa1ad', letterSpacing: '.1em', textTransform: 'uppercase' }}>
+              <span>© 2026 SIMPLIFYSTRUCT</span>
+              <span style={{ display: 'flex', gap: 6 }}>
+                <a href="#" style={{ color: '#9aa1ad' }}>Privacy</a>
+                {' · '}
+                <a href="#" style={{ color: '#9aa1ad' }}>Terms</a>
+                {' · '}
+                <a href="#" style={{ color: '#9aa1ad' }}>Status</a>
+              </span>
+            </div>
+          </div>
+        </section>
       </div>
     </div>
   );

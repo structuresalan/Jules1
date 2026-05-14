@@ -1,0 +1,184 @@
+/* Login page — blueprint pane animations & pseudo-elements */
+
+.login-blueprint {
+  position: relative;
+  background: #0e1117;
+  color: #aab8d4;
+  overflow: hidden;
+  border-right: 1px solid #000;
+  display: flex;
+  flex-direction: column;
+  padding: 34px 44px 28px;
+}
+.login-blueprint::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(120,160,220,.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(120,160,220,.07) 1px, transparent 1px),
+    linear-gradient(rgba(120,160,220,.16) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(120,160,220,.16) 1px, transparent 1px);
+  background-size: 24px 24px, 24px 24px, 120px 120px, 120px 120px;
+  pointer-events: none;
+}
+.login-blueprint::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(120% 90% at 50% 35%, transparent 40%, rgba(0,0,0,.55) 100%);
+  pointer-events: none;
+}
+
+.login-form-pane {
+  position: relative;
+  background: #fff;
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  padding: 40px 56px;
+  overflow-y: auto;
+}
+.login-form-pane::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(#eef0f4 1px, transparent 1px),
+    linear-gradient(90deg, #eef0f4 1px, transparent 1px);
+  background-size: 80px 80px;
+  opacity: .6;
+  pointer-events: none;
+  mask-image: radial-gradient(60% 60% at 80% 20%, #000 0%, transparent 70%);
+}
+
+/* draw animation */
+.draw-line {
+  stroke-dasharray: 600;
+  stroke-dashoffset: 600;
+  animation: loginDraw 1.6s ease-out .15s forwards;
+}
+.draw-line.d2 { animation-delay: .3s }
+.draw-line.d3 { animation-delay: .45s }
+.draw-line.d4 { animation-delay: .6s }
+
+@keyframes loginDraw {
+  to { stroke-dashoffset: 0 }
+}
+
+/* fadeUp */
+@keyframes loginFadeUp {
+  from { opacity: 0; transform: translateY(6px) }
+  to   { opacity: 1; transform: translateY(0) }
+}
+
+/* pop */
+@keyframes loginPop {
+  0%   { opacity: 0; transform: scale(.4) }
+  100% { opacity: 1; transform: scale(1) }
+}
+
+.login-anno {
+  position: absolute;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  padding: 6px 8px;
+  border-radius: 4px;
+  line-height: 1.25;
+  max-width: 180px;
+  background: rgba(14,17,23,.85);
+  backdrop-filter: blur(2px);
+  z-index: 3;
+  opacity: 0;
+  animation: loginFadeUp .8s ease both;
+}
+.login-anno.red   { color: #fca5a5; border: 1px solid rgba(239,68,68,.55);  animation-delay: .6s }
+.login-anno.blue  { color: #93c5fd; border: 1px solid rgba(59,130,246,.55);  animation-delay: .85s }
+.login-anno.green { color: #86efac; border: 1px solid rgba(34,197,94,.55);   animation-delay: 1.1s }
+
+.login-pin {
+  position: absolute;
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  display: grid; place-items: center;
+  font-family: 'IBM Plex Sans', sans-serif;
+  font-weight: 600; font-size: 11px; color: #fff;
+  border: 2px solid #0e1117;
+  box-shadow: 0 0 0 1px rgba(255,255,255,.08), 0 4px 14px -4px rgba(0,0,0,.6);
+  z-index: 4;
+  opacity: 0;
+  animation: loginPop .5s cubic-bezier(.34,1.56,.64,1) both;
+}
+.login-pin.red   { background: #dc2626; animation-delay: .55s }
+.login-pin.blue  { background: #2563eb; animation-delay: .8s }
+.login-pin.green { background: #16a34a; animation-delay: 1.05s }
+
+/* stagger */
+.login-stagger > * { opacity: 0; animation: loginFadeUp .5s ease both }
+.login-stagger > *:nth-child(1) { animation-delay: .05s }
+.login-stagger > *:nth-child(2) { animation-delay: .12s }
+.login-stagger > *:nth-child(3) { animation-delay: .19s }
+.login-stagger > *:nth-child(4) { animation-delay: .26s }
+.login-stagger > *:nth-child(5) { animation-delay: .33s }
+
+/* custom checkbox */
+.login-check input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 15px; height: 15px;
+  border: 1px solid #d6dae3;
+  border-radius: 3px;
+  background: #fff;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+.login-check input[type="checkbox"]:checked {
+  background: #2563eb;
+  border-color: #2563eb;
+}
+.login-check input[type="checkbox"]:checked::after {
+  content: "";
+  width: 7px; height: 7px;
+  background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'><path fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' d='M2 5l2 2 4-4'/></svg>") center/contain no-repeat;
+}
+
+/* strength bar */
+.strength-bar { flex: 1; height: 3px; background: #eef0f4; border-radius: 2px; transition: background .25s ease; }
+.strength-s1 .strength-bar:nth-child(-n+1) { background: #dc2626 }
+.strength-s2 .strength-bar:nth-child(-n+2) { background: #f59e0b }
+.strength-s3 .strength-bar:nth-child(-n+3) { background: #0ea5e9 }
+.strength-s4 .strength-bar:nth-child(-n+4) { background: #16a34a }
+
+/* submit arrow hover */
+.login-submit:hover .login-arrow { transform: translateX(2px) }
+.login-arrow { transition: transform .2s ease }
+
+/* select arrow */
+.login-select {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path fill='none' stroke='%236b7280' stroke-width='1.5' d='M1 1l4 4 4-4'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 34px !important;
+  cursor: pointer;
+}
+
+/* topbar */
+.login-topbar {
+  height: 34px;
+  background: #11131a;
+  color: #cdd3dd;
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  letter-spacing: .04em;
+  border-bottom: 1px solid #000;
+  flex-shrink: 0;
+}
