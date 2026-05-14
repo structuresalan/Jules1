@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
-import { Home, Frame, Layers, Wind, Database, Settings, LogOut, Menu, FolderOpen, FileText, ArrowLeft, Network } from 'lucide-react';
+import { Home, Frame, Layers, Wind, Database, Settings, LogOut, Menu, FolderOpen, FileText, ArrowLeft, Network, ChevronDown, ChevronRight, Camera, ClipboardList, MapPin, User, CreditCard, Users } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { DisclaimerModal } from '../components/DisclaimerModal';
 import { BrandMark } from '../components/BrandMark';
@@ -88,6 +88,15 @@ export const MainLayout: React.FC = () => {
 
   const isProjectHome = location.pathname === '/';
   const isVisualWorkspace = location.pathname === '/visual-workspace';
+  const [toolsExpanded, setToolsExpanded] = React.useState(true);
+
+  const toolsPaths = ['/steel', '/concrete', '/loads', '/variables'];
+  const isToolsActive = toolsPaths.some(p => location.pathname.startsWith(p));
+  const isCalcPage = ['/steel', '/concrete', '/loads'].some(p => location.pathname.startsWith(p));
+
+  React.useEffect(() => {
+    if (isToolsActive) setToolsExpanded(true);
+  }, [isToolsActive]);
 
   const handleLogout = async () => {
     try {
@@ -102,14 +111,23 @@ export const MainLayout: React.FC = () => {
     return <Outlet />;
   }
 
-  const navItems = [
-    { to: '/dashboard', icon: <Home size={18} />, label: 'Dashboard', end: true },
+  const topNavItems = [
+    { to: '/visual-workspace', icon: <Network size={18} />, label: 'Workspace' },
+    { to: '/dashboard', icon: <Home size={18} />, label: 'Overview', end: true },
+    { to: '/documents', icon: <FileText size={18} />, label: 'Reports' },
+  ];
+
+  const toolNavItems = [
     { to: '/steel', icon: <Frame size={18} />, label: 'Steel Design' },
     { to: '/concrete', icon: <Layers size={18} />, label: 'Concrete Design' },
     { to: '/loads', icon: <Wind size={18} />, label: 'Loads' },
-    { to: '/documents', icon: <FileText size={18} />, label: 'Documents' },
-    { to: '/visual-workspace', icon: <Network size={18} />, label: 'Visual Workspace' },
     { to: '/variables', icon: <Database size={18} />, label: 'Variables' },
+  ];
+
+  const stubNavItems = [
+    { icon: <MapPin size={18} />, label: 'Site Visits' },
+    { icon: <ClipboardList size={18} />, label: 'Observations' },
+    { icon: <Camera size={18} />, label: 'Photos' },
   ];
 
   return (
@@ -165,11 +183,8 @@ export const MainLayout: React.FC = () => {
 
         {/* Nav */}
         <nav className="flex-1 overflow-y-auto py-2">
-          <div className="px-4 pt-4 pb-1 text-[9px] font-bold uppercase tracking-wider text-slate-600">
-            Design Workspace
-          </div>
-          <div className="space-y-0.5 px-2">
-            {navItems.map((item) => (
+          <div className="space-y-0.5 px-2 pt-2">
+            {topNavItems.map((item) => (
               <NavLink
                 key={item.to}
                 to={item.to}
@@ -188,25 +203,73 @@ export const MainLayout: React.FC = () => {
             ))}
           </div>
 
-          <div className="mt-4 border-t border-slate-700 pt-2">
-            <div className="px-4 pt-2 pb-1 text-[9px] font-bold uppercase tracking-wider text-slate-600">
-              System
-            </div>
-            <div className="px-2">
-              <NavLink
-                to="/settings"
-                className={({ isActive }) =>
-                  `flex items-center gap-2.5 px-4 py-2 text-sm transition-colors rounded ${
-                    isActive
-                      ? 'bg-blue-600/20 text-blue-300 border-l-2 border-l-blue-500'
-                      : 'text-slate-400 hover:bg-slate-800 hover:text-white'
-                  }`
-                }
+          {/* Collapsible Tools group */}
+          <div className="mt-3 px-2">
+            <button
+              onClick={() => setToolsExpanded(v => !v)}
+              className={`w-full flex items-center justify-between px-4 py-2 text-sm rounded transition-colors ${
+                isToolsActive ? 'text-blue-300' : 'text-slate-400 hover:text-white hover:bg-slate-800'
+              }`}
+            >
+              <span className="flex items-center gap-2.5">
+                <Frame size={18} />
+                Tools
+              </span>
+              {toolsExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+            </button>
+            {toolsExpanded && (
+              <div className="ml-4 mt-0.5 space-y-0.5 border-l border-slate-700 pl-2">
+                {toolNavItems.map((item) => (
+                  <NavLink
+                    key={item.to}
+                    to={item.to}
+                    className={({ isActive }) =>
+                      `flex items-center gap-2.5 px-3 py-1.5 text-sm transition-colors rounded ${
+                        isActive
+                          ? 'bg-blue-600/20 text-blue-300 border-l-2 border-l-blue-500'
+                          : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+                      }`
+                    }
+                  >
+                    {item.icon}
+                    {item.label}
+                  </NavLink>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Stub items */}
+          <div className="mt-3 space-y-0.5 px-2">
+            {stubNavItems.map((item) => (
+              <div
+                key={item.label}
+                className="flex items-center justify-between gap-2.5 px-4 py-2 text-sm text-slate-600 rounded cursor-not-allowed select-none"
+                title="Coming soon"
               >
-                <Settings size={18} />
-                Settings
-              </NavLink>
-            </div>
+                <span className="flex items-center gap-2.5">
+                  {item.icon}
+                  {item.label}
+                </span>
+                <span className="text-[9px] font-bold uppercase tracking-wider text-slate-700">Soon</span>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-4 border-t border-slate-700 pt-2 px-2">
+            <NavLink
+              to="/settings"
+              className={({ isActive }) =>
+                `flex items-center gap-2.5 px-4 py-2 text-sm transition-colors rounded ${
+                  isActive
+                    ? 'bg-blue-600/20 text-blue-300 border-l-2 border-l-blue-500'
+                    : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+                }`
+              }
+            >
+              <Settings size={18} />
+              Settings
+            </NavLink>
           </div>
         </nav>
 
@@ -237,6 +300,14 @@ export const MainLayout: React.FC = () => {
               <FolderOpen size={14} />
               Switch Project
             </NavLink>
+          </div>
+        )}
+
+        {/* Calc scoping notice */}
+        {isCalcPage && (
+          <div className="px-6 py-2 bg-amber-950/30 border-b border-amber-900/40 shrink-0 flex items-center gap-2">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-amber-600">Project-scoped</span>
+            <span className="text-xs text-amber-700">Calculations are saved to the current project.</span>
           </div>
         )}
 

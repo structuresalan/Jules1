@@ -1,5 +1,5 @@
 import React from 'react';
-import { Monitor, Palette, Sparkles, SlidersHorizontal } from 'lucide-react';
+import { Monitor, Palette, Sparkles, SlidersHorizontal, User, Users, CreditCard } from 'lucide-react';
 import { type WebsiteAccent, type WebsiteDensity, type WebsiteStyle, useWebsiteStyleSettings } from '../utils/websiteStyle';
 
 const styleOptions: Array<{
@@ -35,8 +35,18 @@ const densityOptions: Array<{ value: WebsiteDensity; title: string }> = [
   { value: 'compact', title: 'Compact' },
 ];
 
+type SettingsTab = 'appearance' | 'account' | 'team' | 'billing';
+
 export const SettingsPage: React.FC = () => {
   const { settings, updateSettings } = useWebsiteStyleSettings();
+  const [activeTab, setActiveTab] = React.useState<SettingsTab>('appearance');
+
+  const tabs: Array<{ id: SettingsTab; label: string; icon: React.ReactNode }> = [
+    { id: 'appearance', label: 'Appearance', icon: <Palette size={15} /> },
+    { id: 'account', label: 'Account', icon: <User size={15} /> },
+    { id: 'team', label: 'Team', icon: <Users size={15} /> },
+    { id: 'billing', label: 'Billing', icon: <CreditCard size={15} /> },
+  ];
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -50,13 +60,55 @@ export const SettingsPage: React.FC = () => {
               Settings
             </h1>
             <p className="mt-2 text-slate-400">
-              Customize the SimplifyStruct website style and workspace feel.
+              Manage your account, team, and workspace preferences.
             </p>
           </div>
         </div>
       </div>
 
-      <section className="bg-slate-800 border border-slate-700 rounded-xl p-6">
+      {/* Tab bar */}
+      <div className="flex gap-1 border-b border-slate-700 pb-0">
+        {tabs.map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px ${
+              activeTab === tab.id
+                ? 'border-blue-500 text-blue-300'
+                : 'border-transparent text-slate-400 hover:text-white hover:border-slate-500'
+            }`}
+          >
+            {tab.icon}
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === 'account' && (
+        <div className="bg-slate-800 border border-slate-700 rounded-xl p-8 flex flex-col items-center justify-center gap-3 min-h-48 text-center">
+          <User size={28} className="text-slate-600" />
+          <div className="text-slate-400 font-medium">Account settings coming soon</div>
+          <div className="text-sm text-slate-600 max-w-xs">Manage your profile, email, and password here in an upcoming release.</div>
+        </div>
+      )}
+
+      {activeTab === 'team' && (
+        <div className="bg-slate-800 border border-slate-700 rounded-xl p-8 flex flex-col items-center justify-center gap-3 min-h-48 text-center">
+          <Users size={28} className="text-slate-600" />
+          <div className="text-slate-400 font-medium">Team management coming soon</div>
+          <div className="text-sm text-slate-600 max-w-xs">Invite collaborators, manage roles, and share projects with your team.</div>
+        </div>
+      )}
+
+      {activeTab === 'billing' && (
+        <div className="bg-slate-800 border border-slate-700 rounded-xl p-8 flex flex-col items-center justify-center gap-3 min-h-48 text-center">
+          <CreditCard size={28} className="text-slate-600" />
+          <div className="text-slate-400 font-medium">Billing coming soon</div>
+          <div className="text-sm text-slate-600 max-w-xs">Subscription plans, invoices, and payment methods will appear here.</div>
+        </div>
+      )}
+
+      {activeTab === 'appearance' && <><section className="bg-slate-800 border border-slate-700 rounded-xl p-6">
         <div className="mb-5 flex items-center gap-3">
           <Sparkles className="text-blue-400" size={22} />
           <div>
@@ -169,7 +221,7 @@ export const SettingsPage: React.FC = () => {
             </div>
           </div>
         </div>
-      </section>
+      </section></>}
     </div>
   );
 };
