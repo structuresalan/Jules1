@@ -96,7 +96,7 @@ export const Login: React.FC = () => {
   const fieldS: React.CSSProperties = { display: 'flex', flexDirection: 'column', marginBottom: 14 };
 
   return (
-    <div style={{ fontFamily: "'IBM Plex Sans', system-ui, sans-serif", height: '100vh', display: 'flex', flexDirection: 'column', background: '#fff' }}>
+    <div id="login-page" style={{ fontFamily: "'IBM Plex Sans', system-ui, sans-serif", height: '100vh', display: 'flex', flexDirection: 'column', background: '#fff' }}>
       {/* top status bar */}
       <div className="login-topbar">
         <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#16a34a', marginRight: 8, flexShrink: 0, boxShadow: '0 0 0 3px rgba(22,163,74,.15)', display: 'inline-block' }} />

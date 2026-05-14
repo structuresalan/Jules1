@@ -1,17 +1,27 @@
 /* Login page — blueprint pane animations & pseudo-elements */
 
-/* Force white backgrounds on login page inputs (override global dark theme) */
-.login-form-pane input,
-.login-form-pane select,
-.login-form-pane textarea {
-  background-color: #fff !important;
+/*
+  Override websiteTheme.css dark input rules.
+  ID selector (#login-page) has higher specificity than the
+  attribute selectors in websiteTheme.css, so this wins.
+*/
+#login-page input,
+#login-page select,
+#login-page textarea {
+  background: #ffffff !important;
+  background-color: #ffffff !important;
   color: #11131a !important;
-  color-scheme: light;
+  color-scheme: light !important;
+  border-color: #d6dae3 !important;
 }
-.login-form-pane input:-webkit-autofill,
-.login-form-pane input:-webkit-autofill:hover,
-.login-form-pane input:-webkit-autofill:focus {
-  -webkit-box-shadow: 0 0 0 1000px #fff inset !important;
+#login-page input::placeholder,
+#login-page textarea::placeholder {
+  color: #9aa1ad !important;
+}
+#login-page input:-webkit-autofill,
+#login-page input:-webkit-autofill:hover,
+#login-page input:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 1000px #ffffff inset !important;
   -webkit-text-fill-color: #11131a !important;
   caret-color: #11131a;
 }
