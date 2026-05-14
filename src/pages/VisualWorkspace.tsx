@@ -357,6 +357,7 @@ export function VisualWorkspace() {
   const [showInspector,setShowInspector]= useState(true);
   const [activePanel,  setActivePanel]  = useState<ActivePanel>(null);
   const [scaleSet,     setScaleSet]     = useState(false);
+  const [polylineMenu, setPolylineMenu] = useState<{x: number; y: number} | null>(null);
 
   // Feature 1: Zoom editable input
   const [zoomInputStr,    setZoomInputStr]    = useState('');
@@ -866,63 +867,6 @@ export function VisualWorkspace() {
 
   const onDoubleClick = useCallback((e: React.MouseEvent) => {
     const t = toolRef.current;
-
-    // Feature 8: Finish polyline on double-click (pop the last pt added by the 2nd click of dblclick)
-    if (t === 'polyline' && isDrawing.current) {
-      const pts = polylinePtsRef.current.slice(0, -1); // remove duplicate from 2nd single-click
-      polylinePtsRef.current = [];
-      isDrawing.current = false;
-      setPreview(null);
-      if (pts.length >= 2) {
-        const m: Markup = {
-          id: genId(), type: 'polyline', number: counter,
-          points: pts, text: '', color: colorRef.current,
-          strokeWidth: ctxStrokeWidthRef.current, fontSize: ctxFontSizeRef.current,
-          fontFamily: ctxFontFamilyRef.current, dashStyle: ctxDashStyleRef.current,
-          opacity: 1, priority: 'medium', status: 'open', layerId: 'l1',
-          createdAt: new Date().toISOString(),
-        };
-        updateMarkups(activeBoardId, prev => [...prev, m]);
-        setCounter(c => c + 1); setSelectedId(m.id);
-      }
-      return;
-    }
-
-    // Feature 10: Finish area polygon on double-click
-    if (t === 'area' && isDrawing.current) {
-      const pts = areaPtsRef.current.slice(0, -1); // remove duplicate from 2nd single-click
-      areaPtsRef.current = [];
-      isDrawing.current = false;
-      setPreview(null);
-      if (pts.length >= 3) {
-        // Shoelace formula for area
-        let areaVal = 0;
-        for (let i = 0; i < pts.length; i++) {
-          const j = (i + 1) % pts.length;
-          areaVal += pts[i].x * pts[j].y;
-          areaVal -= pts[j].x * pts[i].y;
-        }
-        areaVal = Math.abs(areaVal) / 2;
-        const ratio = calibRatioRef.current;
-        const unit  = calibUnitRef.current;
-        const areaLabel = ratio !== null
-          ? `${(Math.round(areaVal / (ratio * ratio) * 100) / 100)} ${unit}²`
-          : `${Math.round(areaVal)} px²`;
-        const m: Markup = {
-          id: genId(), type: 'area', number: counter,
-          points: pts, text: areaLabel, color: colorRef.current,
-          strokeWidth: ctxStrokeWidthRef.current, fontSize: ctxFontSizeRef.current,
-          fontFamily: ctxFontFamilyRef.current, dashStyle: ctxDashStyleRef.current,
-          fillColor: fillColorRef.current !== 'transparent' ? fillColorRef.current : 'rgba(59,130,246,0.15)',
-          opacity: 1, priority: 'medium', status: 'open', layerId: 'l1',
-          createdAt: new Date().toISOString(),
-        };
-        updateMarkups(activeBoardId, prev => [...prev, m]);
-        setCounter(c => c + 1); setSelectedId(m.id);
-      }
-      return;
-    }
-
     if (t !== 'select') return;
     const pt = toPt(e);
     const hit = hitTest(pt, markups);
@@ -934,6 +878,63 @@ export function VisualWorkspace() {
       setSelectedId(hit.id);
     }
   }, [toPt, hitTest, markups, counter, activeBoardId, updateMarkups]);
+
+  // ── Polyline / area right-click complete & cancel ─────────────────────────
+  const finishPolylineOrArea = useCallback(() => {
+    setPolylineMenu(null);
+    const t = toolRef.current;
+    if (t === 'polyline') {
+      const pts = polylinePtsRef.current;
+      polylinePtsRef.current = []; isDrawing.current = false; setPreview(null);
+      if (pts.length >= 2) {
+        const m: Markup = { id: genId(), type: 'polyline', number: counter,
+          points: pts, text: '', color: colorRef.current,
+          strokeWidth: ctxStrokeWidthRef.current, fontSize: ctxFontSizeRef.current,
+          fontFamily: ctxFontFamilyRef.current, dashStyle: ctxDashStyleRef.current,
+          opacity: 1, priority: 'medium', status: 'open', layerId: 'l1',
+          createdAt: new Date().toISOString() };
+        updateMarkups(activeBoardId, prev => [...prev, m]);
+        setCounter(c => c + 1); setSelectedId(m.id);
+      }
+    } else if (t === 'area') {
+      const pts = areaPtsRef.current;
+      areaPtsRef.current = []; isDrawing.current = false; setPreview(null);
+      if (pts.length >= 3) {
+        let areaVal = 0;
+        for (let i = 0; i < pts.length; i++) {
+          const j = (i + 1) % pts.length;
+          areaVal += pts[i].x * pts[j].y - pts[j].x * pts[i].y;
+        }
+        areaVal = Math.abs(areaVal) / 2;
+        const ratio = calibRatioRef.current; const unit = calibUnitRef.current;
+        const areaLabel = ratio !== null
+          ? `${(Math.round(areaVal / (ratio * ratio) * 100) / 100)} ${unit}²`
+          : `${Math.round(areaVal)} px²`;
+        const m: Markup = { id: genId(), type: 'area', number: counter,
+          points: pts, text: areaLabel, color: colorRef.current,
+          strokeWidth: ctxStrokeWidthRef.current, fontSize: ctxFontSizeRef.current,
+          fontFamily: ctxFontFamilyRef.current, dashStyle: ctxDashStyleRef.current,
+          fillColor: fillColorRef.current !== 'transparent' ? fillColorRef.current : 'rgba(59,130,246,0.15)',
+          opacity: 1, priority: 'medium', status: 'open', layerId: 'l1',
+          createdAt: new Date().toISOString() };
+        updateMarkups(activeBoardId, prev => [...prev, m]);
+        setCounter(c => c + 1); setSelectedId(m.id);
+      }
+    }
+  }, [counter, activeBoardId, updateMarkups]);
+
+  const cancelPolylineOrArea = useCallback(() => {
+    polylinePtsRef.current = []; areaPtsRef.current = [];
+    isDrawing.current = false; setPreview(null); setPolylineMenu(null);
+  }, []);
+
+  const onContextMenu = useCallback((e: React.MouseEvent) => {
+    const t = toolRef.current;
+    if ((t === 'polyline' || t === 'area') && isDrawing.current) {
+      e.preventDefault();
+      setPolylineMenu({ x: e.clientX, y: e.clientY });
+    }
+  }, []);
 
   // ── Pointer down ─────────────────────────────────────────────────────────
   const onPointerDown = useCallback((e: React.PointerEvent) => {
@@ -1354,48 +1355,6 @@ export function VisualWorkspace() {
         if (editingId) commitEdit();
         setCalibMode('idle');
         setShowCmdBar(false);
-      }
-      if (e.key === 'Enter' && !editingId) {
-        const t = toolRef.current;
-        if (t === 'polyline' && isDrawing.current) {
-          const pts = polylinePtsRef.current;
-          polylinePtsRef.current = []; isDrawing.current = false; setPreview(null);
-          if (pts.length >= 2) {
-            const m: Markup = { id: genId(), type: 'polyline', number: counter,
-              points: pts, text: '', color: colorRef.current,
-              strokeWidth: ctxStrokeWidthRef.current, fontSize: ctxFontSizeRef.current,
-              fontFamily: ctxFontFamilyRef.current, dashStyle: ctxDashStyleRef.current,
-              opacity: 1, priority: 'medium', status: 'open', layerId: 'l1',
-              createdAt: new Date().toISOString() };
-            updateMarkups(activeBoardId, prev => [...prev, m]);
-            setCounter(c => c + 1); setSelectedId(m.id);
-          }
-        }
-        if (t === 'area' && isDrawing.current) {
-          const pts = areaPtsRef.current;
-          areaPtsRef.current = []; isDrawing.current = false; setPreview(null);
-          if (pts.length >= 3) {
-            let areaVal = 0;
-            for (let i = 0; i < pts.length; i++) {
-              const j = (i + 1) % pts.length;
-              areaVal += pts[i].x * pts[j].y - pts[j].x * pts[i].y;
-            }
-            areaVal = Math.abs(areaVal) / 2;
-            const ratio = calibRatioRef.current; const unit = calibUnitRef.current;
-            const areaLabel = ratio !== null
-              ? `${(Math.round(areaVal / (ratio * ratio) * 100) / 100)} ${unit}²`
-              : `${Math.round(areaVal)} px²`;
-            const m: Markup = { id: genId(), type: 'area', number: counter,
-              points: pts, text: areaLabel, color: colorRef.current,
-              strokeWidth: ctxStrokeWidthRef.current, fontSize: ctxFontSizeRef.current,
-              fontFamily: ctxFontFamilyRef.current, dashStyle: ctxDashStyleRef.current,
-              fillColor: fillColorRef.current !== 'transparent' ? fillColorRef.current : 'rgba(59,130,246,0.15)',
-              opacity: 1, priority: 'medium', status: 'open', layerId: 'l1',
-              createdAt: new Date().toISOString() };
-            updateMarkups(activeBoardId, prev => [...prev, m]);
-            setCounter(c => c + 1); setSelectedId(m.id);
-          }
-        }
       }
       // Feature 5: '/' opens command bar
       if (e.key === '/' && !e.ctrlKey && !e.metaKey) {
@@ -2370,11 +2329,12 @@ export function VisualWorkspace() {
           <div ref={containerRef} data-testid="plan-canvas"
             className="flex-1 overflow-hidden relative"
             style={{ cursor, background: '#1e293b', transform: 'translateZ(0)', isolation: 'isolate' }}
-            onPointerDown={onPointerDown}
+            onPointerDown={e => { if (polylineMenu) { setPolylineMenu(null); return; } onPointerDown(e); }}
             onPointerMove={onPointerMove}
             onPointerUp={onPointerUp}
             onPointerLeave={() => { isDrawing.current = false; isPanning.current = false; setPreview(null); }}
             onDoubleClick={onDoubleClick}
+            onContextMenu={onContextMenu}
             onWheel={onWheel}
             onDragOver={e => e.preventDefault()}
             onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) handleBgFile(f); }}
@@ -2436,7 +2396,7 @@ export function VisualWorkspace() {
               <div className="absolute top-2 left-1/2 -translate-x-1/2 z-20 pointer-events-none">
                 <div className="bg-slate-700 text-slate-200 text-xs px-4 py-2 rounded-full shadow-lg font-medium flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse inline-block"/>
-                  Click to add points · Double-click or Enter to finish · Esc to cancel
+                  Click to add points · Right-click to complete or cancel · Esc to cancel
                 </div>
               </div>
             )}
@@ -2487,6 +2447,24 @@ export function VisualWorkspace() {
 
             {/* In-place text editor overlay */}
             {renderTextEditor()}
+
+            {/* Polyline / area right-click menu */}
+            {polylineMenu && (
+              <div className="fixed z-50" style={{ left: polylineMenu.x, top: polylineMenu.y }}
+                onContextMenu={e => e.preventDefault()}>
+                <div className="bg-slate-800 border border-slate-600 rounded shadow-xl overflow-hidden min-w-[130px]">
+                  <button onClick={finishPolylineOrArea}
+                    className="flex items-center gap-2 w-full px-4 py-2 text-xs text-slate-200 hover:bg-slate-700 text-left">
+                    <span className="text-green-400 font-bold">✓</span> Complete
+                  </button>
+                  <div className="border-t border-slate-700"/>
+                  <button onClick={cancelPolylineOrArea}
+                    className="flex items-center gap-2 w-full px-4 py-2 text-xs text-slate-400 hover:bg-slate-700 text-left">
+                    <span className="text-slate-500">✕</span> Cancel
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* ⌘K command palette */}
             {showCmdBar && (
