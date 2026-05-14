@@ -1235,22 +1235,24 @@ export function VisualWorkspace() {
     const t = toolRef.current;
     if (t === 'select' && moveOrigin.current && selectedId) {
       const dx = pt.x - moveOrigin.current.x, dy = pt.y - moveOrigin.current.y;
-      if (moveAllPtsMap.current && Object.keys(moveAllPtsMap.current).length > 1) {
-        // Multi-move
+      // Capture ref values into locals — refs may be cleared by onPointerUp before
+      // the setState updater runs (React 18 batching), which would crash on .map.
+      const allMap = moveAllPtsMap.current;
+      const singlePts = moveMarkupPts.current;
+      if (allMap && Object.keys(allMap).length > 1) {
         setBoardMarkups(prev => ({
           ...prev,
           [activeBoardId]: (prev[activeBoardId] ?? []).map(m => {
-            const origPts = moveAllPtsMap.current![m.id];
-            return origPts ? { ...m, points: origPts.map(p => ({ x: p.x + dx, y: p.y + dy })) } : m;
+            const origPts = allMap[m.id];
+            return Array.isArray(origPts) ? { ...m, points: origPts.map(p => ({ x: p.x + dx, y: p.y + dy })) } : m;
           }),
         }));
-      } else if (moveMarkupPts.current) {
-        // Single move
+      } else if (Array.isArray(singlePts)) {
         setBoardMarkups(prev => ({
           ...prev,
           [activeBoardId]: (prev[activeBoardId] ?? []).map(m =>
             m.id === selectedId
-              ? { ...m, points: moveMarkupPts.current!.map(p => ({ x: p.x + dx, y: p.y + dy })) }
+              ? { ...m, points: singlePts.map(p => ({ x: p.x + dx, y: p.y + dy })) }
               : m
           ),
         }));
