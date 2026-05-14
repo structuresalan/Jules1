@@ -11,6 +11,7 @@ import { Loads } from './pages/Loads';
 import { Variables } from './pages/Variables';
 import { Documents } from './pages/Documents';
 import { VariablesProvider } from './context/VariablesContext';
+import { AppErrorBoundary } from './components/AppErrorBoundary';
 import { ProjectHome } from './pages/ProjectHome';
 import { SettingsPage } from './pages/SettingsPage';
 import { VisualWorkspace } from './pages/VisualWorkspace';
@@ -77,13 +78,15 @@ const AppContent = () => {
 };
 
 const App: React.FC = () => (
-  <BrowserRouter>
-    <AuthProvider>
-      <VariablesProvider>
-        <AppContent />
-      </VariablesProvider>
-    </AuthProvider>
-  </BrowserRouter>
+  <AppErrorBoundary>
+    <BrowserRouter>
+      <AuthProvider>
+        <VariablesProvider>
+          <AppContent />
+        </VariablesProvider>
+      </AuthProvider>
+    </BrowserRouter>
+  </AppErrorBoundary>
 );
 
 export default App;

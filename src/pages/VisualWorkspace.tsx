@@ -650,7 +650,9 @@ export function VisualWorkspace() {
 
   // ── Canvas point helpers ──────────────────────────────────────────────────
   const toPt = useCallback((e: React.PointerEvent | React.MouseEvent): Pt => {
-    const rect = containerRef.current!.getBoundingClientRect();
+    const el = containerRef.current;
+    if (!el) return { x: 0, y: 0 };
+    const rect = el.getBoundingClientRect();
     return snap(s2c(e.clientX - rect.left, e.clientY - rect.top, panRef.current, zoomRef.current));
   }, [snap]);
 
@@ -1002,7 +1004,9 @@ export function VisualWorkspace() {
       return;
     }
 
-    const rect = containerRef.current!.getBoundingClientRect();
+    const el = containerRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
     const sx   = e.clientX - rect.left, sy = e.clientY - rect.top;
 
     if (t === 'zoom')      { zoomAt(sx, sy, 1.4); return; }
@@ -1305,7 +1309,9 @@ export function VisualWorkspace() {
     if (Math.abs(cur.x - start.x) < 4 && Math.abs(cur.y - start.y) < 4) return;
 
     if (t === 'zoom-area') {
-      const rect   = containerRef.current!.getBoundingClientRect();
+      const el = containerRef.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
       const dx = Math.abs(cur.x - start.x), dy = Math.abs(cur.y - start.y);
       const cX = ((start.x + cur.x) / 2) * zoomRef.current + panRef.current.x;
       const cY = ((start.y + cur.y) / 2) * zoomRef.current + panRef.current.y;
@@ -1347,7 +1353,9 @@ export function VisualWorkspace() {
   // ── Wheel zoom ────────────────────────────────────────────────────────────
   const onWheel = useCallback((e: React.WheelEvent) => {
     e.preventDefault();
-    const rect = containerRef.current!.getBoundingClientRect();
+    const el = containerRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
     zoomAt(e.clientX - rect.left, e.clientY - rect.top, e.deltaY < 0 ? 1.12 : 1 / 1.12);
   }, [zoomAt]);
 
@@ -2954,10 +2962,10 @@ export function VisualWorkspace() {
                     <label className="block text-[10px] text-slate-500 mb-1 uppercase tracking-wide">Order</label>
                     <div className="flex gap-1">
                       <button title="Bring to Front"
-                        onClick={() => updateMarkups(activeBoardId, prev => { const rest = prev.filter(m => m.id !== selectedId); const sel = prev.find(m => m.id === selectedId)!; return [...rest, sel]; })}
+                        onClick={() => updateMarkups(activeBoardId, prev => { const sel = prev.find(m => m.id === selectedId); if (!sel) return prev; return [...prev.filter(m => m.id !== selectedId), sel]; })}
                         className="flex-1 py-1 rounded text-[10px] border border-slate-600 text-slate-400 hover:border-slate-500 hover:text-white">▲ Front</button>
                       <button title="Send to Back"
-                        onClick={() => updateMarkups(activeBoardId, prev => { const rest = prev.filter(m => m.id !== selectedId); const sel = prev.find(m => m.id === selectedId)!; return [sel, ...rest]; })}
+                        onClick={() => updateMarkups(activeBoardId, prev => { const sel = prev.find(m => m.id === selectedId); if (!sel) return prev; return [sel, ...prev.filter(m => m.id !== selectedId)]; })}
                         className="flex-1 py-1 rounded text-[10px] border border-slate-600 text-slate-400 hover:border-slate-500 hover:text-white">▼ Back</button>
                     </div>
                   </div>
