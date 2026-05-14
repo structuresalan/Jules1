@@ -1263,6 +1263,9 @@ export function VisualWorkspace() {
 
     const t = toolRef.current;
 
+    // Click-accumulating tools — pointer up does nothing, right-click finishes them
+    if (t === 'polyline' || t === 'area') return;
+
     // Commit move
     if (t === 'select' && moveOrigin.current) {
       pushHistory({ ...boardMarkups });
