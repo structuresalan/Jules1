@@ -1355,6 +1355,48 @@ export function VisualWorkspace() {
         setCalibMode('idle');
         setShowCmdBar(false);
       }
+      if (e.key === 'Enter' && !editingId) {
+        const t = toolRef.current;
+        if (t === 'polyline' && isDrawing.current) {
+          const pts = polylinePtsRef.current;
+          polylinePtsRef.current = []; isDrawing.current = false; setPreview(null);
+          if (pts.length >= 2) {
+            const m: Markup = { id: genId(), type: 'polyline', number: counter,
+              points: pts, text: '', color: colorRef.current,
+              strokeWidth: ctxStrokeWidthRef.current, fontSize: ctxFontSizeRef.current,
+              fontFamily: ctxFontFamilyRef.current, dashStyle: ctxDashStyleRef.current,
+              opacity: 1, priority: 'medium', status: 'open', layerId: 'l1',
+              createdAt: new Date().toISOString() };
+            updateMarkups(activeBoardId, prev => [...prev, m]);
+            setCounter(c => c + 1); setSelectedId(m.id);
+          }
+        }
+        if (t === 'area' && isDrawing.current) {
+          const pts = areaPtsRef.current;
+          areaPtsRef.current = []; isDrawing.current = false; setPreview(null);
+          if (pts.length >= 3) {
+            let areaVal = 0;
+            for (let i = 0; i < pts.length; i++) {
+              const j = (i + 1) % pts.length;
+              areaVal += pts[i].x * pts[j].y - pts[j].x * pts[i].y;
+            }
+            areaVal = Math.abs(areaVal) / 2;
+            const ratio = calibRatioRef.current; const unit = calibUnitRef.current;
+            const areaLabel = ratio !== null
+              ? `${(Math.round(areaVal / (ratio * ratio) * 100) / 100)} ${unit}²`
+              : `${Math.round(areaVal)} px²`;
+            const m: Markup = { id: genId(), type: 'area', number: counter,
+              points: pts, text: areaLabel, color: colorRef.current,
+              strokeWidth: ctxStrokeWidthRef.current, fontSize: ctxFontSizeRef.current,
+              fontFamily: ctxFontFamilyRef.current, dashStyle: ctxDashStyleRef.current,
+              fillColor: fillColorRef.current !== 'transparent' ? fillColorRef.current : 'rgba(59,130,246,0.15)',
+              opacity: 1, priority: 'medium', status: 'open', layerId: 'l1',
+              createdAt: new Date().toISOString() };
+            updateMarkups(activeBoardId, prev => [...prev, m]);
+            setCounter(c => c + 1); setSelectedId(m.id);
+          }
+        }
+      }
       // Feature 5: '/' opens command bar
       if (e.key === '/' && !e.ctrlKey && !e.metaKey) {
         e.preventDefault();
@@ -1536,10 +1578,21 @@ export function VisualWorkspace() {
       );
 
     } else if (m.type === 'callout') {
-      const cx = bx + bw / 2, cy = by + bh / 2;
+      const tip = m.points[0];
+      // Find nearest point on box edge for the leader line endpoint
+      const ex = Math.max(bx, Math.min(bx + bw, tip.x));
+      const ey = Math.max(by, Math.min(by + bh, tip.y));
+      const dx = ex - tip.x, dy = ey - tip.y;
+      const len = Math.sqrt(dx * dx + dy * dy) || 1;
+      const ux = dx / len, uy = dy / len;
+      const arrowSize = 10 / zoom;
+      const perpX = -uy, perpY = ux;
+      const baseX = tip.x + ux * arrowSize, baseY = tip.y + uy * arrowSize;
+      const arrowPts = `${tip.x},${tip.y} ${baseX + perpX * arrowSize * 0.45},${baseY + perpY * arrowSize * 0.45} ${baseX - perpX * arrowSize * 0.45},${baseY - perpY * arrowSize * 0.45}`;
       shape = (
         <g key={m.id} {...tp}>
-          <line x1={m.points[0].x} y1={m.points[0].y} x2={cx} y2={cy} stroke={stroke} strokeWidth={sw} />
+          <line x1={baseX} y1={baseY} x2={ex} y2={ey} stroke={stroke} strokeWidth={sw} />
+          <polygon points={arrowPts} fill={stroke} stroke="none" />
           <rect x={bx} y={by} width={bw} height={bh} rx={2 / zoom} fill="white" fillOpacity={0.92} stroke={stroke} strokeWidth={sw} />
           <text x={bx + 5 / zoom} y={by + bh / 2} fill="#1e293b" fontSize={m.fontSize / zoom} fontFamily="sans-serif" dominantBaseline="middle">{m.text}</text>
         </g>
@@ -1981,7 +2034,6 @@ export function VisualWorkspace() {
         <TB tid="tool-ellipse"   active={tool==='ellipse'}   onClick={()=>activateTool('ellipse')}   icon={<Circle size={15}/>}        label="Ellipse"/>
         <TB tid="tool-callout"   active={tool==='callout'}   onClick={()=>activateTool('callout')}   icon={<MessageSquare size={15}/>} label="Callout"/>
         <Sep/>
-        <TB tid="tool-dimension" active={tool==='dimension'} onClick={()=>activateTool('dimension')} icon={<Ruler size={15}/>}         label="Dimension"/>
         <TB tid="tool-distance"  active={tool==='distance'}  onClick={()=>activateTool('distance')}  icon={<Minus size={15}/>}         label="Distance"/>
         <TB tid="tool-angle"     active={tool==='angle'}     onClick={()=>activateTool('angle')}     icon={<TrendingUp size={15}/>}    label="Angle"/>
         <TB tid="tool-area"      active={tool==='area'}      onClick={()=>activateTool('area')}      icon={<Hexagon size={15}/>}       label="Area"/>
@@ -2368,6 +2420,38 @@ export function VisualWorkspace() {
                 <div className="bg-amber-600 text-white text-xs px-4 py-2 rounded-full shadow-lg font-medium flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full bg-white/70 animate-pulse inline-block"/>
                   {calibMode === 'pick1' ? 'Click first calibration point' : 'Click second calibration point'}
+                </div>
+              </div>
+            )}
+
+            {/* Drawing tool hint banner */}
+            {(tool === 'polyline' || tool === 'area') && !preview && calibMode === 'idle' && (
+              <div className="absolute top-2 left-1/2 -translate-x-1/2 z-20 pointer-events-none">
+                <div className="bg-slate-700 text-slate-200 text-xs px-4 py-2 rounded-full shadow-lg font-medium flex items-center gap-2">
+                  Click to place first point
+                </div>
+              </div>
+            )}
+            {(tool === 'polyline' || tool === 'area') && preview && (
+              <div className="absolute top-2 left-1/2 -translate-x-1/2 z-20 pointer-events-none">
+                <div className="bg-slate-700 text-slate-200 text-xs px-4 py-2 rounded-full shadow-lg font-medium flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse inline-block"/>
+                  Click to add points · Double-click or Enter to finish · Esc to cancel
+                </div>
+              </div>
+            )}
+            {tool === 'angle' && !preview && (
+              <div className="absolute top-2 left-1/2 -translate-x-1/2 z-20 pointer-events-none">
+                <div className="bg-slate-700 text-slate-200 text-xs px-4 py-2 rounded-full shadow-lg font-medium flex items-center gap-2">
+                  Click to set vertex point
+                </div>
+              </div>
+            )}
+            {tool === 'angle' && preview?.type === 'angle' && (
+              <div className="absolute top-2 left-1/2 -translate-x-1/2 z-20 pointer-events-none">
+                <div className="bg-slate-700 text-slate-200 text-xs px-4 py-2 rounded-full shadow-lg font-medium flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse inline-block"/>
+                  {(preview.pts?.length ?? 0) <= 1 ? 'Click first arm point' : 'Click second arm point · Esc to cancel'}
                 </div>
               </div>
             )}
