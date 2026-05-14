@@ -99,8 +99,9 @@ export const Dashboard: React.FC = () => {
       {lastSheet ? (
         <Link
           to="/visual-workspace"
-          className="flex items-center gap-4 p-4 bg-slate-800 border border-slate-700 rounded-xl hover:border-blue-500/40 transition-all group"
+          className="relative overflow-hidden flex items-center gap-4 p-4 bg-slate-800 border border-slate-700 rounded-xl hover:border-blue-500/40 transition-all group"
         >
+          <div className="absolute left-0 top-0 bottom-0 w-[3px]" style={{ background: 'var(--chip-color, #5B8DEF)' }} />
           <div className="w-16 h-12 bg-slate-900 border border-slate-700 rounded-lg flex items-center justify-center shrink-0">
             <Network size={20} className="text-blue-500 opacity-60" />
           </div>

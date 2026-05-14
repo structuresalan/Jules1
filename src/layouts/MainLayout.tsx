@@ -1,13 +1,24 @@
 import React from 'react';
-import { NavLink, Outlet, useLocation } from 'react-router-dom';
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   Home, Frame, Layers, Wind, Database, Settings, LogOut, Menu,
-  Network, FileText, ArrowLeft, ChevronRight, Camera, ClipboardList,
-  MapPin, FolderOpen, Inbox, BookOpen, SlidersHorizontal,
+  Network, FileText, ChevronRight, ChevronDown, ChevronUp, Camera,
+  ClipboardList, MapPin, FolderOpen, Inbox, BookOpen, SlidersHorizontal,
+  Search, Plus,
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { DisclaimerModal } from '../components/DisclaimerModal';
 import { BrandMark } from '../components/BrandMark';
+import { colorForProject, initialFor, projectColorVars, stableIndexForId } from '../lib/projectColors';
+
+interface StoredProject {
+  id: string;
+  name: string;
+  projectNumber?: string;
+  client?: string;
+  location?: string;
+  colorIndex?: number;
+}
 
 interface ProjectSummary {
   label: string;
@@ -15,7 +26,16 @@ interface ProjectSummary {
   client: string;
   location: string;
   mode: 'project' | 'quick' | 'none';
+  colorIndex: number;
+  activeId: string;
 }
+
+const readAllProjects = (): StoredProject[] => {
+  try {
+    const raw = window.localStorage.getItem('struccalc.projects.v3');
+    return raw ? (JSON.parse(raw) as StoredProject[]) : [];
+  } catch { return []; }
+};
 
 const getProjectSummary = (): ProjectSummary => {
   try {
@@ -24,18 +44,18 @@ const getProjectSummary = (): ProjectSummary => {
     const mode = window.localStorage.getItem('struccalc.sessionMode.v3');
 
     if (mode === 'quick') {
-      return { label: 'Quick Calculations', projectNumber: '', client: '', location: '', mode: 'quick' };
+      return { label: 'Quick Calculations', projectNumber: '', client: '', location: '', mode: 'quick', colorIndex: 0, activeId: '' };
     }
 
     if (!rawProjects || !activeProjectId) {
-      return { label: 'No project selected', projectNumber: '', client: '', location: '', mode: 'none' };
+      return { label: 'No project selected', projectNumber: '', client: '', location: '', mode: 'none', colorIndex: 0, activeId: '' };
     }
 
-    const projects = JSON.parse(rawProjects) as Array<{
-      id: string; name: string; projectNumber?: string; client?: string; location?: string;
-    }>;
+    const projects = JSON.parse(rawProjects) as StoredProject[];
     const p = projects.find((project) => project.id === activeProjectId);
-    if (!p) return { label: 'No project selected', projectNumber: '', client: '', location: '', mode: 'none' };
+    if (!p) return { label: 'No project selected', projectNumber: '', client: '', location: '', mode: 'none', colorIndex: 0, activeId: '' };
+
+    const colorIndex = p.colorIndex !== undefined ? p.colorIndex : stableIndexForId(p.id);
 
     return {
       label: p.name,
@@ -43,9 +63,11 @@ const getProjectSummary = (): ProjectSummary => {
       client: p.client || '',
       location: p.location || '',
       mode: 'project',
+      colorIndex,
+      activeId: activeProjectId,
     };
   } catch {
-    return { label: 'No project selected', projectNumber: '', client: '', location: '', mode: 'none' };
+    return { label: 'No project selected', projectNumber: '', client: '', location: '', mode: 'none', colorIndex: 0, activeId: '' };
   }
 };
 
@@ -59,13 +81,31 @@ const navLinkCls = ({ isActive }: { isActive: boolean }) =>
 export const MainLayout: React.FC = () => {
   const { user, logout, mockLogout } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(true);
   const [projectSummary, setProjectSummary] = React.useState(getProjectSummary);
   const [toolsExpanded, setToolsExpanded] = React.useState(false);
+  const [switcherOpen, setSwitcherOpen] = React.useState(false);
+  const [switcherSearch, setSwitcherSearch] = React.useState('');
+  const [allProjects, setAllProjects] = React.useState<StoredProject[]>(readAllProjects);
+  const switcherContainerRef = React.useRef<HTMLDivElement>(null);
 
   React.useEffect(() => {
     setProjectSummary(getProjectSummary());
+    setAllProjects(readAllProjects());
   }, [location.pathname]);
+
+  React.useEffect(() => {
+    if (!switcherOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (switcherContainerRef.current && !switcherContainerRef.current.contains(e.target as Node)) {
+        setSwitcherOpen(false);
+        setSwitcherSearch('');
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [switcherOpen]);
 
   const isProjectHome = location.pathname === '/';
   const isVisualWorkspace = location.pathname === '/visual-workspace';
@@ -83,10 +123,32 @@ export const MainLayout: React.FC = () => {
     try { await logout(); } catch { mockLogout(); }
   };
 
+  const switchToProject = (id: string) => {
+    window.localStorage.setItem('struccalc.activeProject.v3', id);
+    window.localStorage.setItem('struccalc.sessionMode.v3', 'project');
+    setSwitcherOpen(false);
+    setSwitcherSearch('');
+    setProjectSummary(getProjectSummary());
+    navigate('/dashboard');
+  };
+
   if (isProjectHome) return <Outlet />;
 
+  const colorVars = projectSummary.mode === 'project'
+    ? projectColorVars(colorForProject(projectSummary.colorIndex))
+    : {};
+
+  const chipInitial = projectSummary.mode === 'project' ? initialFor(projectSummary.label) : '?';
+
+  const switcherFiltered = switcherSearch.trim()
+    ? allProjects.filter(p => p.name.toLowerCase().includes(switcherSearch.toLowerCase()))
+    : allProjects;
+
   return (
-    <div className="flex h-screen bg-slate-900 text-slate-200 font-sans overflow-hidden">
+    <div
+      className="flex h-screen bg-slate-900 text-slate-200 font-sans overflow-hidden"
+      style={colorVars as React.CSSProperties}
+    >
       <DisclaimerModal />
 
       {/* Mobile hamburger */}
@@ -128,16 +190,101 @@ export const MainLayout: React.FC = () => {
             Library
           </NavLink>
 
-          {/* Current project card */}
+          {/* Color chip — project switcher */}
           {projectSummary.mode === 'project' && (
             <>
-              <div className="px-2 pt-4 pb-1 text-[9px] font-bold uppercase tracking-widest text-slate-600 font-mono">Current project</div>
-              <div className="mx-1 mb-1 bg-slate-800/60 border border-slate-700/60 rounded-lg px-3 py-2.5">
-                <div className="text-[9px] font-bold uppercase tracking-widest text-slate-600 font-mono mb-1">Project</div>
-                <div className="text-sm font-semibold text-slate-200 truncate">{projectSummary.label}</div>
-                {(projectSummary.projectNumber || projectSummary.location) && (
-                  <div className="text-[11px] text-slate-500 font-mono mt-0.5 truncate">
-                    {[projectSummary.projectNumber, projectSummary.location].filter(Boolean).join(' · ')}
+              <div className="px-2 pt-3 pb-1 text-[9px] font-bold uppercase tracking-widest text-slate-600 font-mono">Current project</div>
+              <div ref={switcherContainerRef} className="relative mx-1 mb-1">
+                <button
+                  onClick={() => setSwitcherOpen(v => !v)}
+                  className="w-full flex items-center gap-2 px-2 py-1.5 rounded-full transition-all"
+                  style={{
+                    background: switcherOpen
+                      ? 'var(--chip-bg-hover, rgba(100,116,139,0.18))'
+                      : 'var(--chip-bg, rgba(100,116,139,0.12))',
+                    border: '0.5px solid',
+                    borderColor: switcherOpen
+                      ? 'var(--chip-border-active, rgba(100,116,139,0.5))'
+                      : 'var(--chip-border, rgba(100,116,139,0.3))',
+                    boxShadow: switcherOpen
+                      ? '0 0 0 2px var(--chip-glow, rgba(100,116,139,0.12))'
+                      : 'none',
+                  }}
+                >
+                  <div
+                    className="w-[18px] h-[18px] rounded-full flex items-center justify-center text-[11px] font-bold text-white font-mono shrink-0"
+                    style={{ background: 'var(--chip-color, #64748b)' }}
+                  >
+                    {chipInitial}
+                  </div>
+                  <span className="flex-1 text-left text-xs font-medium text-slate-200 truncate">
+                    {projectSummary.label}
+                  </span>
+                  {switcherOpen
+                    ? <ChevronUp size={12} className="shrink-0" style={{ color: 'var(--chip-color, #64748b)' }} />
+                    : <ChevronDown size={12} className="shrink-0 text-slate-500" />}
+                </button>
+
+                {/* Switcher dropdown */}
+                {switcherOpen && (
+                  <div className="absolute top-full left-0 right-0 mt-1.5 bg-slate-800 border border-slate-600/60 rounded-xl shadow-2xl z-50 overflow-hidden">
+                    <div className="flex items-center gap-2 px-3 py-2.5 border-b border-slate-700">
+                      <Search size={11} className="text-slate-500 shrink-0" />
+                      <input
+                        autoFocus
+                        value={switcherSearch}
+                        onChange={e => setSwitcherSearch(e.target.value)}
+                        placeholder="Find project..."
+                        className="flex-1 bg-transparent border-none outline-none text-xs text-slate-200 placeholder-slate-600"
+                      />
+                    </div>
+                    <div className="max-h-48 overflow-y-auto py-1">
+                      {switcherFiltered.length === 0 ? (
+                        <div className="px-3 py-4 text-center text-xs text-slate-600">No projects found</div>
+                      ) : switcherFiltered.map(p => {
+                        const pColorIdx = p.colorIndex !== undefined ? p.colorIndex : stableIndexForId(p.id);
+                        const pColor = colorForProject(pColorIdx);
+                        const pInitial = initialFor(p.name);
+                        const isActive = p.id === projectSummary.activeId;
+                        return (
+                          <button
+                            key={p.id}
+                            onClick={() => switchToProject(p.id)}
+                            className={`w-full flex items-center gap-2.5 px-3 py-2 text-left transition-colors ${isActive ? 'bg-slate-700/50' : 'hover:bg-slate-700/40'}`}
+                          >
+                            <div
+                              className="w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold text-white font-mono shrink-0"
+                              style={{ background: pColor.hex }}
+                            >
+                              {pInitial}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="text-xs font-medium text-slate-200 truncate">{p.name}</div>
+                              {p.projectNumber && <div className="text-[10px] text-slate-500 font-mono">{p.projectNumber}</div>}
+                            </div>
+                            {isActive && (
+                              <span className="text-[10px] font-mono shrink-0" style={{ color: 'var(--chip-color)' }}>
+                                active
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <div className="border-t border-slate-700 py-1">
+                      <button
+                        onClick={() => { setSwitcherOpen(false); navigate('/'); }}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-blue-400 hover:bg-slate-700/40 transition-colors"
+                      >
+                        <Plus size={12} /> New project
+                      </button>
+                      <button
+                        onClick={() => { setSwitcherOpen(false); navigate('/'); }}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-xs text-slate-400 hover:bg-slate-700/40 transition-colors"
+                      >
+                        <FolderOpen size={12} /> Browse all projects
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
@@ -150,7 +297,7 @@ export const MainLayout: React.FC = () => {
                 to="/"
                 className="flex items-center gap-2 px-3 py-2 text-xs text-slate-500 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
               >
-                <ArrowLeft size={13} />
+                <FolderOpen size={13} />
                 Open a project
               </NavLink>
             </div>
@@ -252,6 +399,10 @@ export const MainLayout: React.FC = () => {
               {projectSummary.mode === 'project' && (
                 <>
                   <ChevronRight size={12} className="text-slate-700" />
+                  <div
+                    className="w-[7px] h-[7px] rounded-full shrink-0"
+                    style={{ background: 'var(--chip-color, #64748b)' }}
+                  />
                   <span className="text-slate-400">{projectSummary.label}</span>
                 </>
               )}

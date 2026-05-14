@@ -19,6 +19,7 @@ interface ProjectRecord {
   createdAt: string;
   updatedAt: string;
   predictedEndDate?: string;
+  colorIndex?: number;
 }
 
 const STORAGE_KEY = 'struccalc.projects.v3';
@@ -124,6 +125,7 @@ export const ProjectHome: React.FC = () => {
       createdAt: now,
       updatedAt: now,
       predictedEndDate: predictedEndDate || '',
+      colorIndex: projects.length,
     };
     storeProjects([project, ...projects]);
     window.localStorage.setItem(ACTIVE_PROJECT_KEY, project.id);
