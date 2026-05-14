@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
-import { Home, Frame, Layers, Wind, Database, Settings, LogOut, Menu, FolderOpen, FileText, ArrowLeft, Network, ChevronDown, ChevronRight, Camera, ClipboardList, MapPin, User, CreditCard, Users } from 'lucide-react';
+import { Home, Frame, Layers, Wind, Database, Settings, LogOut, Menu, FolderOpen, FileText, ArrowLeft, Network, ChevronDown, ChevronRight, Camera, ClipboardList, MapPin } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { DisclaimerModal } from '../components/DisclaimerModal';
 import { BrandMark } from '../components/BrandMark';
