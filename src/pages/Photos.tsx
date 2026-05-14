@@ -1,5 +1,8 @@
 import React, { useState, useMemo, useRef } from 'react';
-import { Camera, Plus, X, Trash2, Tag, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Camera, Plus, X, Trash2, Tag, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
+import { useCollection } from '../lib/useCollection';
+import { COLLECTIONS } from '../lib/db';
+import { uploadPhoto, deletePhotoFile } from '../lib/photoStorage';
 
 interface Photo {
   id: string;
@@ -11,29 +14,19 @@ interface Photo {
   createdAt: string;
 }
 
-const STORAGE_KEY = 'struccalc.photos.v1';
 const getActiveProjectId = () => window.localStorage.getItem('struccalc.activeProject.v3') || '';
-
-const readPhotos = (): Photo[] => {
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    const parsed = JSON.parse(raw || '[]');
-    return Array.isArray(parsed) ? parsed : [];
-  } catch { return []; }
-};
-
-const savePhotos = (photos: Photo[]) => {
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(photos));
-};
-
 const makeId = () => `photo_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
 
 export const Photos: React.FC = () => {
   const projectId = getActiveProjectId();
-  const [allPhotos, setAllPhotos] = useState<Photo[]>(readPhotos);
+  const { items: allPhotos, save, remove } = useCollection<Photo>(
+    COLLECTIONS.photos.col,
+    COLLECTIONS.photos.ls,
+  );
   const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editCaption, setEditCaption] = useState('');
+  const [uploading, setUploading] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const projectPhotos = useMemo(
@@ -41,42 +34,42 @@ export const Photos: React.FC = () => {
     [allPhotos, projectId]
   );
 
-  const store = (next: Photo[]) => { setAllPhotos(next); savePhotos(next); };
-
-  const handleFiles = (files: FileList | null) => {
+  const handleFiles = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
-    const toAdd: Photo[] = [];
-    let remaining = files.length;
-    Array.from(files).forEach(file => {
-      if (!file.type.startsWith('image/')) { remaining--; return; }
-      const reader = new FileReader();
-      reader.onload = e => {
-        const dataUrl = e.target?.result as string;
-        toAdd.push({
-          id: makeId(),
+    const images = Array.from(files).filter(f => f.type.startsWith('image/'));
+    if (images.length === 0) return;
+    setUploading(images.length);
+    for (const file of images) {
+      const id = makeId();
+      try {
+        const url = await uploadPhoto(file, id);
+        save({
+          id,
           projectId,
-          dataUrl,
+          dataUrl: url,
           name: file.name,
           caption: '',
           takenAt: new Date().toISOString().split('T')[0],
           createdAt: new Date().toISOString(),
         });
-        remaining--;
-        if (remaining === 0) {
-          store([...toAdd, ...allPhotos]);
-        }
-      };
-      reader.readAsDataURL(file);
-    });
+      } catch (err) {
+        console.error('Photo upload failed', err);
+      } finally {
+        setUploading(u => u - 1);
+      }
+    }
   };
 
-  const deletePhoto = (id: string) => {
+  const deletePhoto = (photo: Photo) => {
     if (lightboxIdx !== null) setLightboxIdx(null);
-    store(allPhotos.filter(p => p.id !== id));
+    void deletePhotoFile(photo.id, photo.dataUrl);
+    remove(photo.id);
   };
 
   const saveCaption = (id: string) => {
-    store(allPhotos.map(p => p.id !== id ? p : { ...p, caption: editCaption.trim() }));
+    const photo = allPhotos.find(p => p.id === id);
+    if (!photo) return;
+    save({ ...photo, caption: editCaption.trim() });
     setEditingId(null);
   };
 
@@ -104,9 +97,11 @@ export const Photos: React.FC = () => {
         </div>
         <button
           onClick={() => fileInputRef.current?.click()}
-          className="flex items-center gap-2 px-3 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-medium transition-colors"
+          disabled={uploading > 0}
+          className="flex items-center gap-2 px-3 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-lg text-sm font-medium transition-colors"
         >
-          <Plus size={16} /> Add photos
+          {uploading > 0 ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
+          {uploading > 0 ? `Uploading ${uploading}…` : 'Add photos'}
         </button>
         <input
           ref={fileInputRef}
@@ -114,7 +109,7 @@ export const Photos: React.FC = () => {
           accept="image/*"
           multiple
           className="hidden"
-          onChange={e => handleFiles(e.target.files)}
+          onChange={e => { void handleFiles(e.target.files); e.target.value = ''; }}
         />
       </div>
 
@@ -124,11 +119,11 @@ export const Photos: React.FC = () => {
           className="flex flex-col items-center justify-center py-20 bg-slate-800 border-2 border-dashed border-slate-700 rounded-xl text-center cursor-pointer hover:border-blue-500/40 transition-colors"
           onClick={() => fileInputRef.current?.click()}
           onDragOver={e => e.preventDefault()}
-          onDrop={e => { e.preventDefault(); handleFiles(e.dataTransfer.files); }}
+          onDrop={e => { e.preventDefault(); void handleFiles(e.dataTransfer.files); }}
         >
           <Camera size={28} className="text-slate-600 mb-3" />
           <div className="text-slate-400 font-medium">Drop photos here or click to upload</div>
-          <div className="text-slate-600 text-sm mt-1">Supports JPEG, PNG, HEIC, and other image formats</div>
+          <div className="text-slate-600 text-sm mt-1">Photos are auto-compressed and synced to your account</div>
         </div>
       ) : (
         <>
@@ -137,7 +132,7 @@ export const Photos: React.FC = () => {
             className="flex items-center justify-center gap-2 py-3 bg-slate-800/50 border border-dashed border-slate-700 rounded-xl cursor-pointer hover:border-blue-500/40 transition-colors text-slate-600 hover:text-slate-400 text-sm"
             onClick={() => fileInputRef.current?.click()}
             onDragOver={e => e.preventDefault()}
-            onDrop={e => { e.preventDefault(); handleFiles(e.dataTransfer.files); }}
+            onDrop={e => { e.preventDefault(); void handleFiles(e.dataTransfer.files); }}
           >
             <Plus size={14} /> Drop more photos here or click to add
           </div>
@@ -151,6 +146,7 @@ export const Photos: React.FC = () => {
                   alt={photo.caption || photo.name}
                   className="w-full h-full object-cover cursor-pointer"
                   onClick={() => setLightboxIdx(idx)}
+                  loading="lazy"
                 />
                 {/* Caption overlay */}
                 {photo.caption && (
@@ -168,7 +164,7 @@ export const Photos: React.FC = () => {
                     <Tag size={12} />
                   </button>
                   <button
-                    onClick={() => deletePhoto(photo.id)}
+                    onClick={() => deletePhoto(photo)}
                     className="w-7 h-7 rounded-lg bg-black/60 flex items-center justify-center text-red-400 hover:bg-red-900/60 transition-colors"
                     title="Delete"
                   >

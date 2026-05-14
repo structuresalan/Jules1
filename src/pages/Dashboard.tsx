@@ -2,6 +2,8 @@ import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { MapPin, ClipboardList, Network, Plus, ChevronRight, PlayCircle } from 'lucide-react';
 import { colorForProject, stableIndexForId } from '../lib/projectColors';
+import { useCollection } from '../lib/useCollection';
+import { COLLECTIONS } from '../lib/db';
 
 interface SiteVisit {
   id: string;
@@ -34,30 +36,6 @@ interface StoredProject {
   projectNumber?: string;
   colorIndex?: number;
 }
-
-const readVisits = (): SiteVisit[] => {
-  try {
-    const raw = window.localStorage.getItem('struccalc.sitevisits.v1');
-    const parsed = JSON.parse(raw || '[]');
-    return Array.isArray(parsed) ? parsed : [];
-  } catch { return []; }
-};
-
-const readObservations = (): Observation[] => {
-  try {
-    const raw = window.localStorage.getItem('struccalc.observations.v1');
-    const parsed = JSON.parse(raw || '[]');
-    return Array.isArray(parsed) ? parsed : [];
-  } catch { return []; }
-};
-
-const readProjects = (): StoredProject[] => {
-  try {
-    const raw = window.localStorage.getItem('struccalc.projects.v3');
-    const parsed = JSON.parse(raw || '[]');
-    return Array.isArray(parsed) ? parsed : [];
-  } catch { return []; }
-};
 
 const isoToday = () => new Date().toISOString().split('T')[0];
 
@@ -101,15 +79,24 @@ export const Dashboard: React.FC = () => {
   const { day, date, weekNum } = formatDayHeader();
   const weekDays = getWeekDays();
 
-  const allVisits = readVisits();
-  const allObs = readObservations();
-  const projects = readProjects();
+  const { items: allVisits, save: saveVisit } = useCollection<SiteVisit>(
+    COLLECTIONS.siteVisits.col,
+    COLLECTIONS.siteVisits.ls,
+  );
+  const { items: allObs } = useCollection<Observation>(
+    COLLECTIONS.observations.col,
+    COLLECTIONS.observations.ls,
+  );
+  const { items: projects } = useCollection<StoredProject>(
+    COLLECTIONS.projects.col,
+    COLLECTIONS.projects.ls,
+  );
 
   const projectMap = React.useMemo(() => {
     const m: Record<string, StoredProject> = {};
     projects.forEach(p => { m[p.id] = p; });
     return m;
-  }, []);
+  }, [projects]);
 
   const todayVisits = allVisits
     .filter(v => v.date === today && v.status !== 'Completed')
@@ -132,13 +119,10 @@ export const Dashboard: React.FC = () => {
       if (v.status !== 'Completed') m[v.date] = (m[v.date] || 0) + 1;
     });
     return m;
-  }, []);
+  }, [allVisits]);
 
   const startVisit = (visit: SiteVisit) => {
-    const visits = readVisits().map(v =>
-      v.id !== visit.id ? v : { ...v, status: 'In Progress', updatedAt: new Date().toISOString() }
-    );
-    window.localStorage.setItem('struccalc.sitevisits.v1', JSON.stringify(visits));
+    saveVisit({ ...visit, status: 'In Progress', updatedAt: new Date().toISOString() });
     window.localStorage.setItem('struccalc.activeProject.v3', visit.projectId);
     window.localStorage.setItem('struccalc.sessionMode.v3', 'project');
     navigate('/site-visits');

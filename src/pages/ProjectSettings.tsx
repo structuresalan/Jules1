@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Save, SlidersHorizontal } from 'lucide-react';
+import { dbWrite, COLLECTIONS } from '../lib/db';
 
 type ProjectStatus = 'Active' | 'On Hold' | 'Closed' | 'Archived';
 type ProjectType = 'New Construction' | 'Renovation' | 'Inspection' | 'Mixed';
@@ -33,14 +34,7 @@ const readProject = (): ProjectRecord | null => {
 };
 
 const saveProject = (updated: ProjectRecord) => {
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    const parsed = JSON.parse(raw || '[]');
-    const projects: ProjectRecord[] = Array.isArray(parsed) ? parsed : [];
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(
-      projects.map(p => p.id === updated.id ? updated : p)
-    ));
-  } catch { /* noop */ }
+  void dbWrite(COLLECTIONS.projects.col, COLLECTIONS.projects.ls, updated);
 };
 
 const inputCls = 'w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-blue-500 placeholder-slate-500';

@@ -1,5 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Plus, X, ClipboardList, ChevronDown, ChevronUp, Pencil, Trash2, Save } from 'lucide-react';
+import { useCollection } from '../lib/useCollection';
+import { COLLECTIONS } from '../lib/db';
 
 type Severity = 'Low' | 'Medium' | 'High';
 type ObsStatus = 'Open' | 'In Review' | 'Field Verify' | 'Closed';
@@ -16,22 +18,7 @@ interface Observation {
   updatedAt: string;
 }
 
-const STORAGE_KEY = 'struccalc.observations.v1';
-
 const getActiveProjectId = () => window.localStorage.getItem('struccalc.activeProject.v3') || '';
-
-const readObservations = (): Observation[] => {
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch { return []; }
-};
-
-const saveObservations = (obs: Observation[]) =>
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(obs));
-
 const makeId = () => `obs_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
 
 const severityColor: Record<Severity, string> = {
@@ -55,7 +42,10 @@ const labelCls = 'block text-[10px] font-bold uppercase tracking-wider text-slat
 
 export const Observations: React.FC = () => {
   const projectId = getActiveProjectId();
-  const [allObs, setAllObs] = useState<Observation[]>(readObservations);
+  const { items: allObs, save, remove } = useCollection<Observation>(
+    COLLECTIONS.observations.col,
+    COLLECTIONS.observations.ls,
+  );
   const [filterStatus, setFilterStatus] = useState<ObsStatus | 'All'>('All');
   const [showForm, setShowForm] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -84,8 +74,6 @@ export const Observations: React.FC = () => {
     return c;
   }, [projectObs]);
 
-  const store = (next: Observation[]) => { setAllObs(next); saveObservations(next); };
-
   const resetForm = () => { setTitle(''); setLocation(''); setSeverity('Medium'); setStatus('Open'); setNotes(''); };
 
   const openNewForm = () => { resetForm(); setEditingId(null); setShowForm(true); };
@@ -105,22 +93,22 @@ export const Observations: React.FC = () => {
     if (!title.trim()) return;
     const now = new Date().toISOString();
     if (editingId) {
-      store(allObs.map(o => o.id !== editingId ? o : { ...o, title: title.trim(), location: location.trim(), severity, status, notes: notes.trim(), updatedAt: now }));
+      const existing = allObs.find(o => o.id === editingId);
+      if (existing) save({ ...existing, title: title.trim(), location: location.trim(), severity, status, notes: notes.trim(), updatedAt: now });
     } else {
-      const obs: Observation = { id: makeId(), projectId, title: title.trim(), location: location.trim(), severity, status, notes: notes.trim(), createdAt: now, updatedAt: now };
-      store([obs, ...allObs]);
+      save({ id: makeId(), projectId, title: title.trim(), location: location.trim(), severity, status, notes: notes.trim(), createdAt: now, updatedAt: now });
     }
     setShowForm(false);
     resetForm();
     setEditingId(null);
   };
 
-  const deleteObs = (id: string) => store(allObs.filter(o => o.id !== id));
+  const deleteObs = (id: string) => remove(id);
 
   const cycleStatus = (obs: Observation) => {
     const idx = STATUSES.indexOf(obs.status);
     const next = STATUSES[(idx + 1) % STATUSES.length];
-    store(allObs.map(o => o.id !== obs.id ? o : { ...o, status: next, updatedAt: new Date().toISOString() }));
+    save({ ...obs, status: next, updatedAt: new Date().toISOString() });
   };
 
   if (!projectId) {

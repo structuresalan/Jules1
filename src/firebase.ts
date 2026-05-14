@@ -11,6 +11,7 @@ import {
   type Auth,
 } from "firebase/auth";
 import { getFirestore, type Firestore } from "firebase/firestore";
+import { getStorage, type FirebaseStorage } from "firebase/storage";
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -30,12 +31,14 @@ const isFirebaseConfigComplete =
 
 let auth: Auth | null = null;
 let db: Firestore | null = null;
+let storage: FirebaseStorage | null = null;
 
 try {
   if (isFirebaseConfigComplete) {
     const app: FirebaseApp = initializeApp(firebaseConfig);
     auth = getAuth(app);
     db = getFirestore(app);
+    storage = getStorage(app);
     console.log("Firebase initialized");
   } else {
     console.warn(
@@ -49,6 +52,7 @@ try {
 export {
   auth,
   db,
+  storage,
   browserLocalPersistence,
   createUserWithEmailAndPassword,
   setPersistence,

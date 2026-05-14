@@ -2,6 +2,8 @@ import React, { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Inbox as InboxIcon, ChevronRight } from 'lucide-react';
 import { colorForProject, stableIndexForId } from '../lib/projectColors';
+import { useCollection } from '../lib/useCollection';
+import { COLLECTIONS } from '../lib/db';
 
 type Severity = 'Low' | 'Medium' | 'High';
 type ObsStatus = 'Open' | 'In Review' | 'Field Verify' | 'Closed';
@@ -25,22 +27,6 @@ interface StoredProject {
   colorIndex?: number;
 }
 
-const readObservations = (): Observation[] => {
-  try {
-    const raw = window.localStorage.getItem('struccalc.observations.v1');
-    const parsed = JSON.parse(raw || '[]');
-    return Array.isArray(parsed) ? parsed : [];
-  } catch { return []; }
-};
-
-const readProjects = (): StoredProject[] => {
-  try {
-    const raw = window.localStorage.getItem('struccalc.projects.v3');
-    const parsed = JSON.parse(raw || '[]');
-    return Array.isArray(parsed) ? parsed : [];
-  } catch { return []; }
-};
-
 const ageLabel = (isoDate: string) => {
   const diff = Date.now() - new Date(isoDate).getTime();
   const h = Math.floor(diff / 3600000);
@@ -59,8 +45,14 @@ const filterLabels: Filter[] = ['All', 'High', 'Medium', 'Low'];
 export const InboxPage: React.FC = () => {
   const [filter, setFilter] = useState<Filter>('All');
 
-  const allObs = readObservations();
-  const projects = readProjects();
+  const { items: allObs } = useCollection<Observation>(
+    COLLECTIONS.observations.col,
+    COLLECTIONS.observations.ls,
+  );
+  const { items: projects } = useCollection<StoredProject>(
+    COLLECTIONS.projects.col,
+    COLLECTIONS.projects.ls,
+  );
 
   const projectMap = useMemo(() => {
     const m: Record<string, StoredProject> = {};

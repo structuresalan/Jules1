@@ -4,6 +4,8 @@ import { useNavigate } from 'react-router-dom';
 import { BrandMark } from '../components/BrandMark';
 import { useAuth } from '../hooks/useAuth';
 import { colorForProject, stableIndexForId } from '../lib/projectColors';
+import { useCollection } from '../lib/useCollection';
+import { COLLECTIONS } from '../lib/db';
 
 type ProjectStatus = 'Active' | 'On Hold' | 'Closed' | 'Archived';
 type ProjectType = 'New Construction' | 'Renovation' | 'Inspection' | 'Mixed';
@@ -23,26 +25,10 @@ interface ProjectRecord {
   colorIndex?: number;
 }
 
-const STORAGE_KEY = 'struccalc.projects.v3';
 const ACTIVE_PROJECT_KEY = 'struccalc.activeProject.v3';
 const SESSION_MODE_KEY = 'struccalc.sessionMode.v3';
 
 const makeProjectId = () => `project_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
-
-const readProjects = (): ProjectRecord[] => {
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw) as ProjectRecord[];
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-};
-
-const saveProjects = (projects: ProjectRecord[]) => {
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
-};
 
 const formatDateTime = (isoDate: string) => {
   if (!isoDate) return '-';
@@ -69,7 +55,10 @@ const statusBadgeClass = (status: ProjectStatus) => {
 export const ProjectHome: React.FC = () => {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
-  const [projects, setProjects] = useState<ProjectRecord[]>(readProjects);
+  const { items: projects, save: saveProject, remove: removeProject } = useCollection<ProjectRecord>(
+    COLLECTIONS.projects.col,
+    COLLECTIONS.projects.ls,
+  );
   const [showNewModal, setShowNewModal] = useState(false);
   const [searchText, setSearchText] = useState('');
 
@@ -94,18 +83,16 @@ export const ProjectHome: React.FC = () => {
     );
   }, [projects, searchText]);
 
-  const storeProjects = (next: ProjectRecord[]) => { setProjects(next); saveProjects(next); };
-
   const openProject = (project: ProjectRecord) => {
     const updated = { ...project, updatedAt: new Date().toISOString() };
-    storeProjects(projects.map((p) => (p.id === project.id ? updated : p)));
+    saveProject(updated);
     window.localStorage.setItem(ACTIVE_PROJECT_KEY, updated.id);
     window.localStorage.setItem(SESSION_MODE_KEY, 'project');
     navigate('/dashboard');
   };
 
   const deleteProject = (projectId: string) => {
-    storeProjects(projects.filter((p) => p.id !== projectId));
+    removeProject(projectId);
     if (window.localStorage.getItem(ACTIVE_PROJECT_KEY) === projectId)
       window.localStorage.removeItem(ACTIVE_PROJECT_KEY);
   };
@@ -128,7 +115,7 @@ export const ProjectHome: React.FC = () => {
       predictedEndDate: predictedEndDate || '',
       colorIndex: projects.length,
     };
-    storeProjects([project, ...projects]);
+    saveProject(project);
     window.localStorage.setItem(ACTIVE_PROJECT_KEY, project.id);
     window.localStorage.setItem(SESSION_MODE_KEY, 'project');
     setShowNewModal(false);
@@ -152,13 +139,16 @@ export const ProjectHome: React.FC = () => {
   };
 
   const saveProjectEdit = (projectId: string) => {
-    storeProjects(projects.map((p) => p.id !== projectId ? p : {
-      ...p,
-      projectNumber: editProjectNumber.trim() || p.projectNumber,
-      status: editStatus,
-      predictedEndDate: editStatus === 'Active' ? editPredictedEndDate : '',
-      updatedAt: new Date().toISOString(),
-    }));
+    const existing = projects.find(p => p.id === projectId);
+    if (existing) {
+      saveProject({
+        ...existing,
+        projectNumber: editProjectNumber.trim() || existing.projectNumber,
+        status: editStatus,
+        predictedEndDate: editStatus === 'Active' ? editPredictedEndDate : '',
+        updatedAt: new Date().toISOString(),
+      });
+    }
     cancelEditProject();
   };
 

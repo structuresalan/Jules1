@@ -1,5 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Plus, X, MapPin, Save, Trash2, ChevronDown, ChevronUp, CheckSquare, Square, PlayCircle } from 'lucide-react';
+import { useCollection } from '../lib/useCollection';
+import { COLLECTIONS } from '../lib/db';
 
 type VisitStatus = 'Planned' | 'In Progress' | 'Completed';
 
@@ -22,20 +24,7 @@ interface SiteVisit {
   updatedAt: string;
 }
 
-const STORAGE_KEY = 'struccalc.sitevisits.v1';
 const getActiveProjectId = () => window.localStorage.getItem('struccalc.activeProject.v3') || '';
-
-const readVisits = (): SiteVisit[] => {
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch { return []; }
-};
-
-const saveVisits = (v: SiteVisit[]) => window.localStorage.setItem(STORAGE_KEY, JSON.stringify(v));
-
 const makeId = () => `sv_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
 const makeItemId = () => `ci_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
 
@@ -52,7 +41,10 @@ const labelCls = 'block text-[10px] font-bold uppercase tracking-wider text-slat
 
 export const SiteVisits: React.FC = () => {
   const projectId = getActiveProjectId();
-  const [allVisits, setAllVisits] = useState<SiteVisit[]>(readVisits);
+  const { items: allVisits, save, remove } = useCollection<SiteVisit>(
+    COLLECTIONS.siteVisits.col,
+    COLLECTIONS.siteVisits.ls,
+  );
   const [showForm, setShowForm] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
@@ -74,8 +66,6 @@ export const SiteVisits: React.FC = () => {
     }),
     [allVisits, projectId]
   );
-
-  const store = (next: SiteVisit[]) => { setAllVisits(next); saveVisits(next); };
 
   const resetForm = () => {
     setTitle(''); setDate(todayIso()); setTime(''); setVisitStatus('Planned');
@@ -102,38 +92,37 @@ export const SiteVisits: React.FC = () => {
     if (!title.trim()) return;
     const now = new Date().toISOString();
     if (editingId) {
-      store(allVisits.map(v => v.id !== editingId ? v : {
-        ...v, title: title.trim(), date, time: time || undefined, status: visitStatus,
+      const existing = allVisits.find(v => v.id === editingId);
+      if (existing) save({
+        ...existing, title: title.trim(), date, time: time || undefined, status: visitStatus,
         notes: notes.trim(), checklist: checklistItems, updatedAt: now,
-      }));
+      });
     } else {
-      store([{ id: makeId(), projectId, title: title.trim(), date, time: time || undefined, status: visitStatus,
+      save({ id: makeId(), projectId, title: title.trim(), date, time: time || undefined, status: visitStatus,
         notes: notes.trim(), checklist: checklistItems, createdAt: now, updatedAt: now,
-      }, ...allVisits]);
+      });
     }
     setShowForm(false); resetForm(); setEditingId(null);
   };
 
-  const deleteVisit = (id: string) => store(allVisits.filter(v => v.id !== id));
+  const deleteVisit = (id: string) => remove(id);
 
   const toggleItem = (visitId: string, itemId: string) => {
-    store(allVisits.map(v => v.id !== visitId ? v : {
+    const v = allVisits.find(x => x.id === visitId);
+    if (!v) return;
+    save({
       ...v,
       checklist: v.checklist.map(c => c.id !== itemId ? c : { ...c, done: !c.done }),
       updatedAt: new Date().toISOString(),
-    }));
+    });
   };
 
   const startVisit = (v: SiteVisit) => {
-    store(allVisits.map(visit => visit.id !== v.id ? visit : {
-      ...visit, status: 'In Progress', updatedAt: new Date().toISOString(),
-    }));
+    save({ ...v, status: 'In Progress', updatedAt: new Date().toISOString() });
   };
 
   const completeVisit = (v: SiteVisit) => {
-    store(allVisits.map(visit => visit.id !== v.id ? visit : {
-      ...visit, status: 'Completed', updatedAt: new Date().toISOString(),
-    }));
+    save({ ...v, status: 'Completed', updatedAt: new Date().toISOString() });
   };
 
   const formatDate = (iso: string) => {

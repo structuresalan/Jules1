@@ -1,5 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { BookOpen, Plus, X, Trash2, Pencil, Save, Search, Tag } from 'lucide-react';
+import { useCollection } from '../lib/useCollection';
+import { COLLECTIONS } from '../lib/db';
 
 interface LibraryEntry {
   id: string;
@@ -10,25 +12,16 @@ interface LibraryEntry {
   updatedAt: string;
 }
 
-const STORAGE_KEY = 'struccalc.library.v1';
-
-const readEntries = (): LibraryEntry[] => {
-  try {
-    const parsed = JSON.parse(window.localStorage.getItem(STORAGE_KEY) || '[]');
-    return Array.isArray(parsed) ? parsed : [];
-  } catch { return []; }
-};
-
-const saveEntries = (entries: LibraryEntry[]) =>
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
-
 const makeId = () => `lib_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
 
 const inputCls = 'w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-blue-500 placeholder-slate-500';
 const labelCls = 'block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5';
 
 export const Library: React.FC = () => {
-  const [entries, setEntries] = useState<LibraryEntry[]>(readEntries);
+  const { items: entries, save, remove } = useCollection<LibraryEntry>(
+    COLLECTIONS.library.col,
+    COLLECTIONS.library.ls,
+  );
   const [search, setSearch] = useState('');
   const [activeTag, setActiveTag] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -39,8 +32,6 @@ export const Library: React.FC = () => {
   const [content, setContent] = useState('');
   const [tagInput, setTagInput] = useState('');
   const [tags, setTags] = useState<string[]>([]);
-
-  const store = (next: LibraryEntry[]) => { setEntries(next); saveEntries(next); };
 
   const allTags = useMemo(() => {
     const set = new Set<string>();
@@ -82,9 +73,10 @@ export const Library: React.FC = () => {
     if (!title.trim()) return;
     const now = new Date().toISOString();
     if (editingId) {
-      store(entries.map(en => en.id !== editingId ? en : { ...en, title: title.trim(), content: content.trim(), tags, updatedAt: now }));
+      const existing = entries.find(en => en.id === editingId);
+      if (existing) save({ ...existing, title: title.trim(), content: content.trim(), tags, updatedAt: now });
     } else {
-      store([{ id: makeId(), title: title.trim(), content: content.trim(), tags, createdAt: now, updatedAt: now }, ...entries]);
+      save({ id: makeId(), title: title.trim(), content: content.trim(), tags, createdAt: now, updatedAt: now });
     }
     setShowForm(false); resetForm(); setEditingId(null);
   };
@@ -195,7 +187,7 @@ export const Library: React.FC = () => {
                   <div className="text-sm font-medium text-slate-200 leading-snug">{e.title}</div>
                   <div className="flex gap-1 shrink-0">
                     <button onClick={ev => { ev.stopPropagation(); openEdit(e); }} className="p-1 text-slate-600 hover:text-slate-300 transition-colors"><Pencil size={12} /></button>
-                    <button onClick={ev => { ev.stopPropagation(); if (selectedId === e.id) setSelectedId(null); store(entries.filter(x => x.id !== e.id)); }} className="p-1 text-slate-600 hover:text-red-400 transition-colors"><Trash2 size={12} /></button>
+                    <button onClick={ev => { ev.stopPropagation(); if (selectedId === e.id) setSelectedId(null); remove(e.id); }} className="p-1 text-slate-600 hover:text-red-400 transition-colors"><Trash2 size={12} /></button>
                   </div>
                 </div>
                 {e.tags.length > 0 && (

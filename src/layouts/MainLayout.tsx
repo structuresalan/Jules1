@@ -10,6 +10,8 @@ import { useAuth } from '../hooks/useAuth';
 import { DisclaimerModal } from '../components/DisclaimerModal';
 import { BrandMark } from '../components/BrandMark';
 import { colorForProject, initialFor, projectColorVars, stableIndexForId } from '../lib/projectColors';
+import { useCollection } from '../lib/useCollection';
+import { COLLECTIONS } from '../lib/db';
 
 interface StoredProject {
   id: string;
@@ -29,15 +31,6 @@ interface ProjectSummary {
   colorIndex: number;
   activeId: string;
 }
-
-const readAllProjects = (): StoredProject[] => {
-  try {
-    const raw = window.localStorage.getItem('struccalc.projects.v3');
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch { return []; }
-};
 
 const getProjectSummary = (): ProjectSummary => {
   try {
@@ -90,13 +83,23 @@ export const MainLayout: React.FC = () => {
   const [toolsExpanded, setToolsExpanded] = React.useState(false);
   const [switcherOpen, setSwitcherOpen] = React.useState(false);
   const [switcherSearch, setSwitcherSearch] = React.useState('');
-  const [allProjects, setAllProjects] = React.useState<StoredProject[]>(readAllProjects);
+  const { items: allProjects } = useCollection<StoredProject>(
+    COLLECTIONS.projects.col,
+    COLLECTIONS.projects.ls,
+  );
+  const { items: allVisits } = useCollection<{ id: string; projectId: string; updatedAt: string }>(
+    COLLECTIONS.siteVisits.col,
+    COLLECTIONS.siteVisits.ls,
+  );
+  const { items: allObs } = useCollection<{ id: string; projectId: string; updatedAt: string }>(
+    COLLECTIONS.observations.col,
+    COLLECTIONS.observations.ls,
+  );
   const switcherContainerRef = React.useRef<HTMLDivElement>(null);
 
   React.useEffect(() => {
     setProjectSummary(getProjectSummary());
-    setAllProjects(readAllProjects());
-  }, [location.pathname]);
+  }, [location.pathname, allProjects]);
 
   React.useEffect(() => {
     if (!switcherOpen) return;
@@ -136,27 +139,21 @@ export const MainLayout: React.FC = () => {
   };
 
   const recentProjects = React.useMemo(() => {
-    try {
-      const rawVisits = window.localStorage.getItem('struccalc.sitevisits.v1');
-      const rawObs = window.localStorage.getItem('struccalc.observations.v1');
-      const visits: Array<{ projectId: string; updatedAt: string }> = Array.isArray(JSON.parse(rawVisits || '[]')) ? JSON.parse(rawVisits || '[]') : [];
-      const obs: Array<{ projectId: string; updatedAt: string }> = Array.isArray(JSON.parse(rawObs || '[]')) ? JSON.parse(rawObs || '[]') : [];
-      const lastActivity: Record<string, number> = {};
-      [...visits, ...obs].forEach(item => {
-        const t = new Date(item.updatedAt).getTime();
-        if (!lastActivity[item.projectId] || t > lastActivity[item.projectId]) {
-          lastActivity[item.projectId] = t;
-        }
-      });
-      allProjects.forEach(p => {
-        if (!lastActivity[p.id]) lastActivity[p.id] = 0;
-      });
-      return [...allProjects]
-        .sort((a, b) => (lastActivity[b.id] || 0) - (lastActivity[a.id] || 0))
-        .filter(p => p.id !== projectSummary.activeId)
-        .slice(0, 4);
-    } catch { return []; }
-  }, [allProjects, projectSummary.activeId]);
+    const lastActivity: Record<string, number> = {};
+    [...allVisits, ...allObs].forEach(item => {
+      const t = new Date(item.updatedAt).getTime();
+      if (!lastActivity[item.projectId] || t > lastActivity[item.projectId]) {
+        lastActivity[item.projectId] = t;
+      }
+    });
+    allProjects.forEach(p => {
+      if (!lastActivity[p.id]) lastActivity[p.id] = 0;
+    });
+    return [...allProjects]
+      .sort((a, b) => (lastActivity[b.id] || 0) - (lastActivity[a.id] || 0))
+      .filter(p => p.id !== projectSummary.activeId)
+      .slice(0, 4);
+  }, [allProjects, allVisits, allObs, projectSummary.activeId]);
 
   if (isProjectHome) return <Outlet />;
 
