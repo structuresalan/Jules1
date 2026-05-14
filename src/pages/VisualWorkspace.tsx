@@ -1869,10 +1869,12 @@ export function VisualWorkspace() {
   };
 
   // ── Cursor ────────────────────────────────────────────────────────────────
-  const cursor = isPanning.current ? 'grabbing' : ({
-    select: 'default', pan: 'grab', zoom: 'zoom-in', 'zoom-area': 'crosshair',
-    eraser: 'cell', text: 'crosshair',
-  } as Record<string, string>)[tool] ?? 'crosshair';
+  const cursor = isPanning.current ? 'grabbing'
+    : (calibMode === 'pick1' || calibMode === 'pick2') ? 'crosshair'
+    : ({
+      select: 'default', pan: 'grab', zoom: 'zoom-in', 'zoom-area': 'crosshair',
+      eraser: 'cell', text: 'crosshair',
+    } as Record<string, string>)[tool] ?? 'crosshair';
 
   const inspectorTitle = selectedMarkup
     ? `${selectedMarkup.type.charAt(0).toUpperCase() + selectedMarkup.type.slice(1)} N${selectedMarkup.number}`
