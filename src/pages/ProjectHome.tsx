@@ -69,7 +69,7 @@ export const ProjectHome: React.FC = () => {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   const [projects, setProjects] = useState<ProjectRecord[]>(readProjects);
-  const [selectedMode, setSelectedMode] = useState<'new' | 'existing'>('new');
+  const [showNewModal, setShowNewModal] = useState(false);
   const [searchText, setSearchText] = useState('');
 
   const [projectName, setProjectName] = useState('');
@@ -130,6 +130,9 @@ export const ProjectHome: React.FC = () => {
     storeProjects([project, ...projects]);
     window.localStorage.setItem(ACTIVE_PROJECT_KEY, project.id);
     window.localStorage.setItem(SESSION_MODE_KEY, 'project');
+    setShowNewModal(false);
+    setProjectName(''); setProjectNumber(''); setClient(''); setLocation('');
+    setDescription(''); setProjectType('New Construction'); setPredictedEndDate('');
     navigate('/dashboard');
   };
 
@@ -172,6 +175,12 @@ export const ProjectHome: React.FC = () => {
   const inputCls = 'w-full bg-slate-700 border border-slate-600 rounded px-2.5 py-2 text-sm text-slate-200 focus:outline-none focus:border-blue-500 placeholder-slate-500';
   const labelCls = 'block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1';
 
+  const closeModal = () => {
+    setShowNewModal(false);
+    setProjectName(''); setProjectNumber(''); setClient(''); setLocation('');
+    setDescription(''); setProjectType('New Construction'); setPredictedEndDate('');
+  };
+
   return (
     <div className="min-h-screen bg-slate-900 text-slate-200 font-sans flex flex-col select-none">
 
@@ -201,132 +210,35 @@ export const ProjectHome: React.FC = () => {
       <div className="flex-1 flex flex-col overflow-hidden">
         <div className="mx-auto w-full max-w-7xl px-6 py-6 flex flex-col gap-4 h-full">
 
-          {/* ── Mode selector cards ── */}
-          <div className="grid grid-cols-2 gap-3 shrink-0">
-            <button
-              onClick={() => setSelectedMode('new')}
-              className={`rounded border p-4 text-left transition-colors ${
-                selectedMode === 'new'
-                  ? 'border-blue-500 bg-blue-600/10'
-                  : 'border-slate-700 bg-slate-800 hover:border-slate-600 hover:bg-slate-750'
-              }`}
-            >
-              <div className={`mb-3 flex h-9 w-9 items-center justify-center rounded border ${
-                selectedMode === 'new' ? 'border-blue-600/40 bg-blue-600/20 text-blue-400' : 'border-slate-600 bg-slate-700 text-slate-400'
-              }`}>
-                <Plus size={18} />
+          {/* ── Projects table ── */}
+          <div className="bg-slate-800 border border-slate-700 rounded overflow-hidden flex flex-col flex-1 min-h-0">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-700 bg-slate-900/40 shrink-0">
+              <div className="flex items-center gap-2">
+                <FolderOpen size={13} className="text-slate-400" />
+                <span className="text-xs font-semibold text-slate-200">Projects</span>
+                <span className="text-[10px] text-slate-500">{filteredProjects.length} shown</span>
               </div>
-              <div className="text-sm font-semibold text-slate-200">New Project</div>
-              <div className="mt-1 text-xs text-slate-500">Create a saved project for this workspace.</div>
-            </button>
-
-            <button
-              onClick={() => setSelectedMode('existing')}
-              className={`rounded border p-4 text-left transition-colors ${
-                selectedMode === 'existing'
-                  ? 'border-blue-500 bg-blue-600/10'
-                  : 'border-slate-700 bg-slate-800 hover:border-slate-600'
-              }`}
-            >
-              <div className={`mb-3 flex h-9 w-9 items-center justify-center rounded border ${
-                selectedMode === 'existing' ? 'border-blue-600/40 bg-blue-600/20 text-blue-400' : 'border-slate-600 bg-slate-700 text-slate-400'
-              }`}>
-                <FolderOpen size={18} />
-              </div>
-              <div className="text-sm font-semibold text-slate-200">Existing Projects</div>
-              <div className="mt-1 text-xs text-slate-500">Open or manage saved projects.</div>
-            </button>
-          </div>
-
-          {/* ── New project form ── */}
-          {selectedMode === 'new' && (
-            <form onSubmit={createProject} className="bg-slate-800 border border-slate-700 rounded overflow-hidden flex flex-col">
-              <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-700 bg-slate-900/40">
-                <FileText size={13} className="text-blue-400" />
-                <span className="text-xs font-semibold text-slate-200">Create new project</span>
-                <span className="text-[10px] text-slate-500 ml-1">— enter basic details, refine later</span>
-              </div>
-
-              <div className="p-4 grid grid-cols-1 gap-3 md:grid-cols-2">
-                <div>
-                  <label className={labelCls}>Project Name *</label>
-                  <input value={projectName} onChange={(e) => setProjectName(e.target.value)}
-                    className={inputCls} placeholder="Office Building Framing" required />
+              <div className="flex items-center gap-2">
+                <div className="relative">
+                  <Search className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-500" size={12} />
+                  <input value={searchText} onChange={(e) => setSearchText(e.target.value)}
+                    className="bg-slate-700 border border-slate-600 rounded pl-7 pr-3 py-1 text-xs text-slate-200 focus:outline-none focus:border-blue-500 placeholder-slate-500 w-52"
+                    placeholder="Search projects…" />
                 </div>
-                <div>
-                  <label className={labelCls}>Project Number</label>
-                  <input value={projectNumber} onChange={(e) => setProjectNumber(e.target.value)}
-                    className={inputCls} placeholder="Auto-filled if blank" />
-                </div>
-                <div>
-                  <label className={labelCls}>Client</label>
-                  <input value={client} onChange={(e) => setClient(e.target.value)}
-                    className={inputCls} placeholder="Client name" />
-                </div>
-                <div>
-                  <label className={labelCls}>Location</label>
-                  <input value={location} onChange={(e) => setLocation(e.target.value)}
-                    className={inputCls} placeholder="City, State" />
-                </div>
-                <div>
-                  <label className={labelCls}>Predicted End Date</label>
-                  <input type="date" value={predictedEndDate} onChange={(e) => setPredictedEndDate(e.target.value)}
-                    className={inputCls} />
-                </div>
-                <div>
-                  <label className={labelCls}>Project Type</label>
-                  <select value={projectType} onChange={(e) => setProjectType(e.target.value as ProjectType)}
-                    className="w-full bg-slate-700 border border-slate-600 rounded px-2.5 py-2 text-sm text-slate-200 focus:outline-none focus:border-blue-500 cursor-pointer">
-                    <option>New Construction</option><option>Renovation</option><option>Inspection</option><option>Mixed</option>
-                  </select>
-                </div>
-                <div className="md:col-span-2">
-                  <label className={labelCls}>Notes / Description</label>
-                  <textarea value={description} onChange={(e) => setDescription(e.target.value)}
-                    className="w-full bg-slate-700 border border-slate-600 rounded px-2.5 py-2 text-sm text-slate-200 focus:outline-none focus:border-blue-500 placeholder-slate-500 min-h-16 resize-none"
-                    placeholder="Optional project notes" />
-                </div>
-              </div>
-
-              <div className="flex justify-end gap-2 px-4 py-3 border-t border-slate-700 bg-slate-900/40">
-                <button type="submit" disabled={!projectName.trim()}
-                  className="flex items-center gap-1.5 px-4 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded text-xs font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
-                  <Save size={12} /> Save Project &amp; Open
+                <button onClick={() => setShowNewModal(true)}
+                  className="flex items-center gap-1 px-3 py-1 rounded bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium transition-colors">
+                  <Plus size={11} /> New Project
                 </button>
               </div>
-            </form>
-          )}
+            </div>
 
-          {/* ── Existing projects table ── */}
-          {selectedMode === 'existing' && (
-            <div className="bg-slate-800 border border-slate-700 rounded overflow-hidden flex flex-col flex-1 min-h-0">
-              <div className="flex items-center justify-between px-4 py-3 border-b border-slate-700 bg-slate-900/40 shrink-0">
-                <div className="flex items-center gap-2">
-                  <FolderOpen size={13} className="text-slate-400" />
-                  <span className="text-xs font-semibold text-slate-200">Saved projects</span>
-                  <span className="text-[10px] text-slate-500">{filteredProjects.length} shown</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="relative">
-                    <Search className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-500" size={12} />
-                    <input value={searchText} onChange={(e) => setSearchText(e.target.value)}
-                      className="bg-slate-700 border border-slate-600 rounded pl-7 pr-3 py-1 text-xs text-slate-200 focus:outline-none focus:border-blue-500 placeholder-slate-500 w-52"
-                      placeholder="Search projects…" />
-                  </div>
-                  <button onClick={() => setSelectedMode('new')}
-                    className="flex items-center gap-1 px-3 py-1 rounded bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium transition-colors">
-                    <Plus size={11} /> New Project
-                  </button>
-                </div>
-              </div>
-
-              <div className="overflow-auto flex-1">
-                <table className="w-full min-w-[980px] text-xs border-collapse">
-                  <thead className="sticky top-0 z-10">
-                    <tr className="bg-slate-900 text-slate-400 border-b border-slate-700">
-                      {['Name', 'Project No.', 'Client', 'Location', 'Type', 'Status', 'Predicted End', 'Created', 'Last Modified', ''].map((h) => (
-                        <th key={h} className={`px-3 py-2 text-left text-[10px] font-bold uppercase tracking-wider ${h === '' ? 'text-right' : ''}`}>{h}</th>
-                      ))}
+            <div className="overflow-auto flex-1">
+              <table className="w-full min-w-[980px] text-xs border-collapse">
+                <thead className="sticky top-0 z-10">
+                  <tr className="bg-slate-900 text-slate-400 border-b border-slate-700">
+                    {['Name', 'Project No.', 'Client', 'Location', 'Type', 'Status', 'Predicted End', 'Created', 'Last Modified', ''].map((h) => (
+                      <th key={h} className={`px-3 py-2 text-left text-[10px] font-bold uppercase tracking-wider ${h === '' ? 'text-right' : ''}`}>{h}</th>
+                    ))}
                     </tr>
                   </thead>
                   <tbody>
@@ -420,10 +332,81 @@ export const ProjectHome: React.FC = () => {
                 </table>
               </div>
             </div>
-          )}
 
         </div>
       </div>
+
+      {/* ── New project modal ── */}
+      {showNewModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden w-full max-w-xl shadow-2xl">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-700 bg-slate-900/40">
+              <div className="flex items-center gap-2">
+                <FileText size={13} className="text-blue-400" />
+                <span className="text-xs font-semibold text-slate-200">New project</span>
+                <span className="text-[10px] text-slate-500 ml-1">— enter basic details, refine later</span>
+              </div>
+              <button onClick={closeModal} className="text-slate-500 hover:text-white transition-colors">
+                <X size={15} />
+              </button>
+            </div>
+
+            <form onSubmit={createProject}>
+              <div className="p-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+                <div>
+                  <label className={labelCls}>Project Name *</label>
+                  <input autoFocus value={projectName} onChange={(e) => setProjectName(e.target.value)}
+                    className={inputCls} placeholder="Office Building Framing" required />
+                </div>
+                <div>
+                  <label className={labelCls}>Project Number</label>
+                  <input value={projectNumber} onChange={(e) => setProjectNumber(e.target.value)}
+                    className={inputCls} placeholder="Auto-filled if blank" />
+                </div>
+                <div>
+                  <label className={labelCls}>Client</label>
+                  <input value={client} onChange={(e) => setClient(e.target.value)}
+                    className={inputCls} placeholder="Client name" />
+                </div>
+                <div>
+                  <label className={labelCls}>Location</label>
+                  <input value={location} onChange={(e) => setLocation(e.target.value)}
+                    className={inputCls} placeholder="City, State" />
+                </div>
+                <div>
+                  <label className={labelCls}>Predicted End Date</label>
+                  <input type="date" value={predictedEndDate} onChange={(e) => setPredictedEndDate(e.target.value)}
+                    className={inputCls} />
+                </div>
+                <div>
+                  <label className={labelCls}>Project Type</label>
+                  <select value={projectType} onChange={(e) => setProjectType(e.target.value as ProjectType)}
+                    className="w-full bg-slate-700 border border-slate-600 rounded px-2.5 py-2 text-sm text-slate-200 focus:outline-none focus:border-blue-500 cursor-pointer">
+                    <option>New Construction</option><option>Renovation</option><option>Inspection</option><option>Mixed</option>
+                  </select>
+                </div>
+                <div className="md:col-span-2">
+                  <label className={labelCls}>Notes / Description</label>
+                  <textarea value={description} onChange={(e) => setDescription(e.target.value)}
+                    className="w-full bg-slate-700 border border-slate-600 rounded px-2.5 py-2 text-sm text-slate-200 focus:outline-none focus:border-blue-500 placeholder-slate-500 min-h-16 resize-none"
+                    placeholder="Optional project notes" />
+                </div>
+              </div>
+              <div className="flex justify-end gap-2 px-4 py-3 border-t border-slate-700 bg-slate-900/40">
+                <button type="button" onClick={closeModal}
+                  className="px-4 py-1.5 text-slate-400 hover:text-white text-xs transition-colors">
+                  Cancel
+                </button>
+                <button type="submit" disabled={!projectName.trim()}
+                  className="flex items-center gap-1.5 px-4 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded text-xs font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+                  <Save size={12} /> Save &amp; Open
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };
