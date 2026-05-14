@@ -8,6 +8,7 @@ interface SiteVisit {
   projectId: string;
   title: string;
   date: string;
+  time?: string;
   status: string;
   notes: string;
   checklist: { id: string; text: string; done: boolean }[];
@@ -110,7 +111,9 @@ export const Dashboard: React.FC = () => {
     return m;
   }, []);
 
-  const todayVisits = allVisits.filter(v => v.date === today && v.status !== 'Completed');
+  const todayVisits = allVisits
+    .filter(v => v.date === today && v.status !== 'Completed')
+    .sort((a, b) => (a.time || '99:99').localeCompare(b.time || '99:99'));
   const upcomingVisits = allVisits.filter(v => v.date > today && v.status !== 'Completed')
     .sort((a, b) => a.date.localeCompare(b.date))
     .slice(0, 5);
@@ -131,10 +134,14 @@ export const Dashboard: React.FC = () => {
     return m;
   }, []);
 
-  const openProject = (projectId: string) => {
-    window.localStorage.setItem('struccalc.activeProject.v3', projectId);
+  const startVisit = (visit: SiteVisit) => {
+    const visits = readVisits().map(v =>
+      v.id !== visit.id ? v : { ...v, status: 'In Progress', updatedAt: new Date().toISOString() }
+    );
+    window.localStorage.setItem('struccalc.sitevisits.v1', JSON.stringify(visits));
+    window.localStorage.setItem('struccalc.activeProject.v3', visit.projectId);
     window.localStorage.setItem('struccalc.sessionMode.v3', 'project');
-    navigate('/dashboard');
+    navigate('/site-visits');
   };
 
   return (
@@ -180,13 +187,16 @@ export const Dashboard: React.FC = () => {
                         <span className="text-[10px] font-mono uppercase tracking-wider text-slate-500">{proj.name}{proj.projectNumber ? ` · ${proj.projectNumber}` : ''}</span>
                       </div>
                     )}
-                    <div className="text-sm font-semibold text-slate-100">{v.title}</div>
+                    <div className="flex items-baseline gap-2">
+                      {v.time && <span className="text-lg font-bold font-mono text-blue-300 shrink-0">{v.time}</span>}
+                      <div className="text-sm font-semibold text-slate-100">{v.title}</div>
+                    </div>
                     {v.checklist.length > 0 && (
                       <div className="text-xs text-slate-500 mt-1">{doneCount}/{v.checklist.length} checklist items</div>
                     )}
                   </div>
                   <button
-                    onClick={() => openProject(v.projectId)}
+                    onClick={() => startVisit(v)}
                     className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-medium shrink-0 transition-colors"
                   >
                     <PlayCircle size={13} /> Start visit

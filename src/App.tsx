@@ -9,18 +9,19 @@ import { ConcreteDesign } from './pages/ConcreteDesign';
 import { SteelDesign } from './pages/SteelDesign';
 import { Loads } from './pages/Loads';
 import { Variables } from './pages/Variables';
-import { Documents } from './pages/Documents';
 import { VariablesProvider } from './context/VariablesContext';
 import { AppErrorBoundary } from './components/AppErrorBoundary';
 import { ProjectHome } from './pages/ProjectHome';
 import { SettingsPage } from './pages/SettingsPage';
 import { VisualWorkspace } from './pages/VisualWorkspace';
-import { ComingSoon } from './pages/ComingSoon';
 import { Observations } from './pages/Observations';
 import { SiteVisits } from './pages/SiteVisits';
 import { InboxPage } from './pages/Inbox';
+import { ProjectSettings } from './pages/ProjectSettings';
+import { Photos } from './pages/Photos';
+import { Reports } from './pages/Reports';
+import { Library } from './pages/Library';
 import { applyWebsiteStyleSettings, getWebsiteStyleSettings } from './utils/websiteStyle';
-import { Camera, BookOpen, SlidersHorizontal } from 'lucide-react';
 import './styles/websiteTheme.css';
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
@@ -46,16 +47,16 @@ const AppContent = () => {
         <Route path="steel" element={<SteelDesign />} />
         <Route path="concrete" element={<ConcreteDesign />} />
         <Route path="loads" element={<Loads />} />
-        <Route path="documents" element={<Documents />} />
+        <Route path="documents" element={<Reports />} />
         <Route path="visual-workspace" element={<VisualWorkspace />} />
         <Route path="variables" element={<Variables />} />
         <Route path="settings" element={<SettingsPage />} />
         <Route path="observations" element={<Observations />} />
         <Route path="site-visits" element={<SiteVisits />} />
-        <Route path="photos" element={<ComingSoon icon={Camera} title="Photos" description="Organize and annotate photos from site visits, linked to observations." />} />
+        <Route path="photos" element={<Photos />} />
         <Route path="inbox" element={<InboxPage />} />
-        <Route path="library" element={<ComingSoon icon={BookOpen} title="Library" description="Reusable calculation templates, standard details, and reference documents." />} />
-        <Route path="project-settings" element={<ComingSoon icon={SlidersHorizontal} title="Project Settings" description="Manage project details, team members, and preferences." />} />
+        <Route path="library" element={<Library />} />
+        <Route path="project-settings" element={<ProjectSettings />} />
       </Route>
 
       <Route path="/workspace" element={<Navigate to="/dashboard" replace />} />

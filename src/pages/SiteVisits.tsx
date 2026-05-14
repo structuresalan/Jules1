@@ -14,6 +14,7 @@ interface SiteVisit {
   projectId: string;
   title: string;
   date: string;
+  time?: string;
   status: VisitStatus;
   notes: string;
   checklist: ChecklistItem[];
@@ -58,6 +59,7 @@ export const SiteVisits: React.FC = () => {
   // Form state
   const [title, setTitle] = useState('');
   const [date, setDate] = useState(todayIso());
+  const [time, setTime] = useState('');
   const [visitStatus, setVisitStatus] = useState<VisitStatus>('Planned');
   const [notes, setNotes] = useState('');
   const [checklistInput, setChecklistInput] = useState('');
@@ -65,21 +67,25 @@ export const SiteVisits: React.FC = () => {
   const [editingId, setEditingId] = useState<string | null>(null);
 
   const projectVisits = useMemo(
-    () => allVisits.filter(v => v.projectId === projectId).sort((a, b) => b.date.localeCompare(a.date)),
+    () => allVisits.filter(v => v.projectId === projectId).sort((a, b) => {
+      const dateCmp = b.date.localeCompare(a.date);
+      if (dateCmp !== 0) return dateCmp;
+      return (a.time || '99:99').localeCompare(b.time || '99:99');
+    }),
     [allVisits, projectId]
   );
 
   const store = (next: SiteVisit[]) => { setAllVisits(next); saveVisits(next); };
 
   const resetForm = () => {
-    setTitle(''); setDate(todayIso()); setVisitStatus('Planned');
+    setTitle(''); setDate(todayIso()); setTime(''); setVisitStatus('Planned');
     setNotes(''); setChecklistItems([]); setChecklistInput('');
   };
 
   const openNewForm = () => { resetForm(); setEditingId(null); setShowForm(true); };
 
   const openEditForm = (v: SiteVisit) => {
-    setTitle(v.title); setDate(v.date); setVisitStatus(v.status);
+    setTitle(v.title); setDate(v.date); setTime(v.time || ''); setVisitStatus(v.status);
     setNotes(v.notes); setChecklistItems(v.checklist);
     setEditingId(v.id); setShowForm(true);
   };
@@ -97,11 +103,11 @@ export const SiteVisits: React.FC = () => {
     const now = new Date().toISOString();
     if (editingId) {
       store(allVisits.map(v => v.id !== editingId ? v : {
-        ...v, title: title.trim(), date, status: visitStatus,
+        ...v, title: title.trim(), date, time: time || undefined, status: visitStatus,
         notes: notes.trim(), checklist: checklistItems, updatedAt: now,
       }));
     } else {
-      store([{ id: makeId(), projectId, title: title.trim(), date, status: visitStatus,
+      store([{ id: makeId(), projectId, title: title.trim(), date, time: time || undefined, status: visitStatus,
         notes: notes.trim(), checklist: checklistItems, createdAt: now, updatedAt: now,
       }, ...allVisits]);
     }
@@ -177,6 +183,10 @@ export const SiteVisits: React.FC = () => {
               <input type="date" value={date} onChange={e => setDate(e.target.value)} className={inputCls} />
             </div>
             <div>
+              <label className={labelCls}>Time (optional)</label>
+              <input type="time" value={time} onChange={e => setTime(e.target.value)} className={inputCls} />
+            </div>
+            <div>
               <label className={labelCls}>Status</label>
               <select value={visitStatus} onChange={e => setVisitStatus(e.target.value as VisitStatus)} className={inputCls}>
                 <option>Planned</option>
@@ -236,8 +246,9 @@ export const SiteVisits: React.FC = () => {
           {projectVisits.map(v => (
             <div key={v.id} className="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden hover:border-slate-600 transition-colors">
               <div className="flex items-center gap-3 px-4 py-3 cursor-pointer" onClick={() => setExpandedId(expandedId === v.id ? null : v.id)}>
-                <div className="bg-blue-600/10 border border-blue-500/20 rounded-lg px-2.5 py-1.5 text-center shrink-0">
+                <div className="bg-blue-600/10 border border-blue-500/20 rounded-lg px-2.5 py-1.5 text-center shrink-0 min-w-[72px]">
                   <div className="text-[10px] font-bold text-blue-400 font-mono">{formatDate(v.date)}</div>
+                  {v.time && <div className="text-[10px] text-blue-300 font-mono mt-0.5">{v.time}</div>}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-medium text-slate-200 truncate">{v.title}</div>
