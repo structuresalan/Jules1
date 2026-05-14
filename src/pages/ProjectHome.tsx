@@ -332,7 +332,6 @@ export const ProjectHome: React.FC = () => {
                 </table>
               </div>
             </div>
-          </div>
 
         </div>
       </div>
