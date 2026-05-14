@@ -79,11 +79,12 @@ const genId = () => `m_${++_ctr}`;
 
 // Ensure any markup loaded from localStorage (possibly from an older schema) has all fields
 function normalizeMarkup(raw: Record<string, unknown>): Markup {
+  const asArr = <T,>(v: unknown): T[] => Array.isArray(v) ? (v as T[]) : [];
   return {
     id:          String(raw.id ?? genId()),
     type:        (raw.type as MarkupType) ?? 'box',
     number:      Number(raw.number ?? 0),
-    points:      (raw.points as Pt[]) ?? [],
+    points:      asArr<Pt>(raw.points),
     text:        String(raw.text ?? ''),
     color:       String(raw.color ?? '#ef4444'),
     strokeWidth: Number(raw.strokeWidth ?? 2),
@@ -98,9 +99,9 @@ function normalizeMarkup(raw: Record<string, unknown>): Markup {
     layerId:     String(raw.layerId ?? 'l1'),
     createdAt:   String(raw.createdAt ?? new Date().toISOString()),
     imageData:   raw.imageData as string | undefined,
-    comments:    (raw.comments as Markup['comments']) ?? [],
-    linkedPhotoIds: (raw.linkedPhotoIds as string[] | undefined) ?? [],
-    linkedDocIds:   (raw.linkedDocIds   as string[] | undefined) ?? [],
+    comments:    asArr<NonNullable<Markup['comments']>[number]>(raw.comments),
+    linkedPhotoIds: asArr<string>(raw.linkedPhotoIds),
+    linkedDocIds:   asArr<string>(raw.linkedDocIds),
   };
 }
 
@@ -594,7 +595,12 @@ export function VisualWorkspace() {
   const PHOTOS_KEY = `vw.photos.${projectId || 'default'}`;
   const DOCS_KEY   = `vw.docs.${projectId || 'default'}`;
   useEffect(() => {
-    try { const s = localStorage.getItem(PHOTOS_KEY); if (s) setSitePhotos(JSON.parse(s)); } catch {}
+    try {
+      const s = localStorage.getItem(PHOTOS_KEY);
+      if (!s) return;
+      const parsed = JSON.parse(s);
+      if (Array.isArray(parsed)) setSitePhotos(parsed);
+    } catch {}
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [PHOTOS_KEY]);
   useEffect(() => {
@@ -602,7 +608,12 @@ export function VisualWorkspace() {
     return () => clearTimeout(t);
   }, [sitePhotos, PHOTOS_KEY]);
   useEffect(() => {
-    try { const s = localStorage.getItem(DOCS_KEY); if (s) setAttachedDocs(JSON.parse(s)); } catch {}
+    try {
+      const s = localStorage.getItem(DOCS_KEY);
+      if (!s) return;
+      const parsed = JSON.parse(s);
+      if (Array.isArray(parsed)) setAttachedDocs(parsed);
+    } catch {}
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [DOCS_KEY]);
   useEffect(() => {
