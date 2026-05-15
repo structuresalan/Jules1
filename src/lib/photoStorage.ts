@@ -5,9 +5,15 @@
 
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { storage, auth } from '../firebase';
+import { checkUploadAllowed, recordUpload, recordDelete } from './userProfile';
 
 const MAX_DIMENSION = 1600;
 const JPEG_QUALITY = 0.85;
+const MAX_SOURCE_BYTES = 50 * 1024 * 1024;
+
+export class QuotaError extends Error {
+  constructor(message: string) { super(message); this.name = 'QuotaError'; }
+}
 
 /**
  * Compress an image file: resize to max 1600px on the longest side, convert
@@ -53,29 +59,45 @@ const blobToDataUrl = (blob: Blob): Promise<string> =>
     r.readAsDataURL(blob);
   });
 
+export interface UploadResult {
+  url: string;
+  bytes: number;
+}
+
 /**
- * Upload a compressed photo. Returns a URL — either a Storage download URL
- * (when available) or a base64 data URL (offline fallback).
+ * Upload a compressed photo. Returns the URL and the compressed size in bytes.
+ * Throws QuotaError if the user's tier limit would be exceeded.
  */
-export const uploadPhoto = async (file: File, photoId: string): Promise<string> => {
+export const uploadPhoto = async (file: File, photoId: string): Promise<UploadResult> => {
+  if (file.size > MAX_SOURCE_BYTES) {
+    throw new QuotaError('Source file too large (max 50 MB)');
+  }
   const blob = await compressImage(file);
+  const precheck = await checkUploadAllowed(blob.size);
+  if (!precheck.allowed) throw new QuotaError(precheck.reason ?? 'Upload blocked');
+
   const uid = auth?.currentUser?.uid;
+  let url: string;
   if (storage && uid) {
     try {
       const path = `users/${uid}/photos/${photoId}.jpg`;
       const r = ref(storage, path);
       await uploadBytes(r, blob, { contentType: 'image/jpeg' });
-      return await getDownloadURL(r);
+      url = await getDownloadURL(r);
     } catch {
-      return await blobToDataUrl(blob); // fallback
+      url = await blobToDataUrl(blob);
     }
+  } else {
+    url = await blobToDataUrl(blob);
   }
-  return await blobToDataUrl(blob);
+  await recordUpload(blob.size);
+  return { url, bytes: blob.size };
 };
 
-/** Delete a photo from Firebase Storage. No-op for legacy base64 photos. */
-export const deletePhotoFile = async (photoId: string, url: string): Promise<void> => {
-  if (url.startsWith('data:')) return; // legacy base64 — nothing to delete
+/** Delete a photo from Firebase Storage and decrement quota counters. */
+export const deletePhotoFile = async (photoId: string, url: string, bytes: number): Promise<void> => {
+  await recordDelete(bytes);
+  if (url.startsWith('data:')) return;
   const uid = auth?.currentUser?.uid;
   if (!storage || !uid) return;
   try {

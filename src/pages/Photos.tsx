@@ -1,8 +1,9 @@
-import React, { useState, useMemo, useRef } from 'react';
-import { Camera, Plus, X, Trash2, Tag, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { Camera, Plus, X, Trash2, Tag, ChevronLeft, ChevronRight, Loader2, AlertCircle } from 'lucide-react';
 import { useCollection } from '../lib/useCollection';
 import { COLLECTIONS } from '../lib/db';
-import { uploadPhoto, deletePhotoFile } from '../lib/photoStorage';
+import { uploadPhoto, deletePhotoFile, QuotaError } from '../lib/photoStorage';
+import { subscribeProfile, formatBytes, TIER_LIMITS, type UserProfile } from '../lib/userProfile';
 
 interface Photo {
   id: string;
@@ -12,6 +13,7 @@ interface Photo {
   caption: string;
   takenAt: string;
   createdAt: string;
+  bytes?: number;
 }
 
 const getActiveProjectId = () => window.localStorage.getItem('struccalc.activeProject.v3') || '';
@@ -27,7 +29,11 @@ export const Photos: React.FC = () => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editCaption, setEditCaption] = useState('');
   const [uploading, setUploading] = useState(0);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => subscribeProfile(setProfile), []);
 
   const projectPhotos = useMemo(
     () => allPhotos.filter(p => p.projectId === projectId).sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
@@ -38,11 +44,12 @@ export const Photos: React.FC = () => {
     if (!files || files.length === 0) return;
     const images = Array.from(files).filter(f => f.type.startsWith('image/'));
     if (images.length === 0) return;
+    setUploadError(null);
     setUploading(images.length);
     for (const file of images) {
       const id = makeId();
       try {
-        const url = await uploadPhoto(file, id);
+        const { url, bytes } = await uploadPhoto(file, id);
         save({
           id,
           projectId,
@@ -51,9 +58,11 @@ export const Photos: React.FC = () => {
           caption: '',
           takenAt: new Date().toISOString().split('T')[0],
           createdAt: new Date().toISOString(),
+          bytes,
         });
       } catch (err) {
-        console.error('Photo upload failed', err);
+        if (err instanceof QuotaError) setUploadError(err.message);
+        else console.error('Photo upload failed', err);
       } finally {
         setUploading(u => u - 1);
       }
@@ -62,7 +71,7 @@ export const Photos: React.FC = () => {
 
   const deletePhoto = (photo: Photo) => {
     if (lightboxIdx !== null) setLightboxIdx(null);
-    void deletePhotoFile(photo.id, photo.dataUrl);
+    void deletePhotoFile(photo.id, photo.dataUrl, photo.bytes ?? 0);
     remove(photo.id);
   };
 
@@ -112,6 +121,40 @@ export const Photos: React.FC = () => {
           onChange={e => { void handleFiles(e.target.files); e.target.value = ''; }}
         />
       </div>
+
+      {/* Storage usage indicator */}
+      {profile && (() => {
+        const limits = TIER_LIMITS[profile.tier];
+        const pct = Math.min(100, (profile.storageUsedBytes / limits.bytes) * 100);
+        const countPct = Math.min(100, (profile.photoCount / limits.photoCount) * 100);
+        const near = pct > 80 || countPct > 80;
+        return (
+          <div className="bg-slate-800 border border-slate-700 rounded-xl px-4 py-3">
+            <div className="flex items-center justify-between text-xs mb-2">
+              <div className="flex items-center gap-2">
+                <span className="font-mono uppercase tracking-wider text-slate-500">{profile.tier} plan</span>
+                <span className="text-slate-400">{formatBytes(profile.storageUsedBytes)} of {formatBytes(limits.bytes)}</span>
+              </div>
+              <span className="text-slate-500 font-mono">{profile.photoCount.toLocaleString()} / {limits.photoCount.toLocaleString()} photos</span>
+            </div>
+            <div className="h-1.5 bg-slate-700 rounded-full overflow-hidden">
+              <div
+                className={`h-full transition-all ${near ? 'bg-amber-500' : 'bg-blue-500'}`}
+                style={{ width: `${pct}%` }}
+              />
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Upload error banner */}
+      {uploadError && (
+        <div className="flex items-center gap-2 px-4 py-3 bg-red-900/30 border border-red-800/50 rounded-xl text-sm text-red-300">
+          <AlertCircle size={16} className="shrink-0" />
+          <span className="flex-1">{uploadError}</span>
+          <button onClick={() => setUploadError(null)} className="text-red-400 hover:text-red-200"><X size={14} /></button>
+        </div>
+      )}
 
       {/* Drop zone when empty */}
       {projectPhotos.length === 0 ? (
