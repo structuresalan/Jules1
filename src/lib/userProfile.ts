@@ -16,6 +16,7 @@ export interface UserProfile {
   photoCount: number;
   uploadsToday: number;
   uploadsResetAt: string;
+  promoActive?: boolean;
 }
 
 export interface TierLimits {
@@ -45,6 +46,7 @@ const defaultProfile = (): UserProfile => ({
   photoCount: 0,
   uploadsToday: 0,
   uploadsResetAt: nextMidnightIso(),
+  promoActive: false,
 });
 
 const lsRead = (): UserProfile => {
@@ -96,6 +98,13 @@ const writeProfile = async (p: UserProfile): Promise<void> => {
   try { await setDoc(ref, p); } catch { /* offline ok */ }
 };
 
+export const getEffectiveLimits = (p: UserProfile): TierLimits => {
+  if (p.promoActive) {
+    return { bytes: 100 * 1024 ** 3, photoCount: 999999, uploadsPerDay: 99999, maxFileBytes: 50 * 1024 ** 2 };
+  }
+  return TIER_LIMITS[p.tier];
+};
+
 export interface UploadCheck {
   allowed: boolean;
   reason?: string;
@@ -104,7 +113,7 @@ export interface UploadCheck {
 /** Check whether an upload of `fileBytes` is allowed against the user's quota. */
 export const checkUploadAllowed = async (fileBytes: number): Promise<UploadCheck> => {
   const p = rolloverIfNeeded(await getProfile());
-  const limits = TIER_LIMITS[p.tier];
+  const limits = getEffectiveLimits(p);
 
   if (fileBytes > limits.maxFileBytes) {
     const mb = Math.round(limits.maxFileBytes / 1024 ** 2);
@@ -161,4 +170,27 @@ export const formatBytes = (bytes: number): string => {
   if (bytes < 1024 ** 2) return `${(bytes / 1024).toFixed(1)} KB`;
   if (bytes < 1024 ** 3) return `${(bytes / 1024 ** 2).toFixed(1)} MB`;
   return `${(bytes / 1024 ** 3).toFixed(2)} GB`;
+};
+
+export const initUserProfile = async (tier: Tier): Promise<void> => {
+  // Wait for auth.currentUser to be set (up to 3 seconds)
+  for (let i = 0; i < 30; i++) {
+    if (auth?.currentUser) break;
+    await new Promise(r => setTimeout(r, 100));
+  }
+  const p: UserProfile = { ...defaultProfile(), tier };
+  lsWrite(p);
+  const ref = profileRef();
+  if (!ref) return;
+  try { await setDoc(ref, p); } catch { /* offline ok */ }
+};
+
+export const redeemPromoCode = async (code: string): Promise<{ success: boolean; message: string }> => {
+  const validCode = String(import.meta.env.VITE_PROMO_CODE || '').trim();
+  if (!validCode) return { success: false, message: 'No promo codes are active.' };
+  if (code.trim() !== validCode) return { success: false, message: 'Invalid code.' };
+  const p = await getProfile();
+  if (p.promoActive) return { success: false, message: 'Code already redeemed.' };
+  await writeProfile({ ...p, promoActive: true });
+  return { success: true, message: 'Code accepted — all limits removed.' };
 };

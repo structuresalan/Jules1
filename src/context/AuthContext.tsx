@@ -10,6 +10,7 @@ import {
   type User,
 } from '../firebase';
 import { AuthContext } from './authContextInstance';
+import { initUserProfile, type Tier } from '../lib/userProfile';
 
 const getSignupInviteCode = () =>
   String(import.meta.env.VITE_SIGNUP_INVITE_CODE || '')
@@ -28,7 +29,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const ignoreNullAuthStateUntilRef = useRef(0);
   const authConfigured = Boolean(auth);
 
-  const createAccount = async (email: string, password: string, inviteCode = '') => {
+  const createAccount = async (email: string, password: string, inviteCode = '', tier = 'starter') => {
     const activeAuth = auth;
     const normalizedEmail = email.trim();
 
@@ -43,6 +44,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setLoading(true);
     await setPersistence(activeAuth, browserLocalPersistence);
     const credential = await createUserWithEmailAndPassword(activeAuth, normalizedEmail, password);
+
+    initUserProfile(tier as Tier).catch(() => {}); // fire and forget
 
     ignoreNullAuthStateUntilRef.current = Date.now() + 6000;
     setUser(credential.user);

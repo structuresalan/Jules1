@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { BrandMark } from '../components/BrandMark';
+import type { Tier } from '../lib/userProfile';
 import './Login.css';
 
 type AuthMode = 'signin' | 'create';
@@ -33,6 +34,7 @@ export const Login: React.FC = () => {
   const [keepSignedIn, setKeepSignedIn] = useState(true);
   const [errorMessage, setErrorMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [selectedTier, setSelectedTier] = useState<Tier>('starter');
   const pwStrength = getStrength(password);
 
   if (user) return <Navigate to="/" replace />;
@@ -49,7 +51,7 @@ export const Login: React.FC = () => {
     setIsSubmitting(true);
     try {
       if (authMode === 'create') {
-        await createAccount(email, password, inviteCode);
+        await createAccount(email, password, inviteCode, selectedTier);
       } else {
         await login(email, password);
       }
@@ -403,6 +405,35 @@ export const Login: React.FC = () => {
                       </svg>
                     </span>
                     <input type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} style={inpS} placeholder="••••••••" autoComplete="new-password" minLength={6} required />
+                  </div>
+                </div>
+              )}
+
+              {/* tier picker */}
+              {authMode === 'create' && (
+                <div style={{ marginBottom: 14 }}>
+                  <div style={{ fontSize: 12, color: '#374151', fontWeight: 500, marginBottom: 8 }}>Plan</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+                    {([
+                      { id: 'starter' as Tier, name: 'Starter', price: 'Free', storage: '1 GB', photos: '500' },
+                      { id: 'pro' as Tier, name: 'Pro', price: '$29/mo', storage: '5 GB', photos: '2,500' },
+                      { id: 'business' as Tier, name: 'Business', price: '$79/mo', storage: '20 GB', photos: '10,000' },
+                    ] as const).map(t => (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => setSelectedTier(t.id)}
+                        style={{
+                          border: selectedTier === t.id ? '2px solid #2563eb' : '1px solid #d6dae3',
+                          borderRadius: 7, padding: '10px 8px', background: selectedTier === t.id ? '#eff6ff' : '#fff',
+                          cursor: 'pointer', textAlign: 'left', transition: 'all .15s',
+                        }}
+                      >
+                        <div style={{ fontSize: 12, fontWeight: 700, color: '#0f1117', marginBottom: 2 }}>{t.name}</div>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: '#2563eb', marginBottom: 4 }}>{t.price}</div>
+                        <div style={{ fontSize: 10, color: '#6b7280', lineHeight: 1.5 }}>{t.storage}<br/>{t.photos} photos</div>
+                      </button>
+                    ))}
                   </div>
                 </div>
               )}

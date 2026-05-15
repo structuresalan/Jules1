@@ -5,7 +5,7 @@ export interface AuthContextType {
   user: User | null;
   loading: boolean;
   authConfigured: boolean;
-  createAccount: (email: string, password: string, inviteCode?: string) => Promise<void>;
+  createAccount: (email: string, password: string, inviteCode?: string, tier?: string) => Promise<void>;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   mockLogin: () => void;
