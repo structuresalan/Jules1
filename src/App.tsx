@@ -20,6 +20,7 @@ import { InboxPage } from './pages/Inbox';
 import { ProjectSettings } from './pages/ProjectSettings';
 import { Photos } from './pages/Photos';
 import { Reports } from './pages/Reports';
+import { ReportEditor } from './pages/ReportEditor';
 import { Library } from './pages/Library';
 import { ClientReviewPage } from './pages/ClientReviewPage';
 import { applyWebsiteStyleSettings, getWebsiteStyleSettings } from './utils/websiteStyle';
@@ -50,6 +51,7 @@ const AppContent = () => {
         <Route path="concrete" element={<ConcreteDesign />} />
         <Route path="loads" element={<Loads />} />
         <Route path="documents" element={<Reports />} />
+        <Route path="reports/:reportId" element={<ReportEditor />} />
         <Route path="visual-workspace" element={<VisualWorkspace />} />
         <Route path="variables" element={<Variables />} />
         <Route path="settings" element={<SettingsPage />} />

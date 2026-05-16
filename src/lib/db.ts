@@ -175,4 +175,5 @@ export const COLLECTIONS = {
   siteVisits:   { col: 'sitevisits',   ls: 'struccalc.sitevisits.v1' },
   photos:       { col: 'photos',       ls: 'struccalc.photos.v1' },
   library:      { col: 'library',      ls: 'struccalc.library.v1' },
+  reports:      { col: 'reports',      ls: 'struccalc.reports.v1' },
 } as const;
