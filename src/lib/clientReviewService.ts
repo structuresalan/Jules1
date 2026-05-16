@@ -4,6 +4,12 @@ import {
 } from 'firebase/firestore';
 import { auth, db } from '../firebase';
 
+export interface ReviewAttachment {
+  id: string;
+  url: string;
+  caption?: string;
+}
+
 export interface ClientReview {
   id: string;
   projectId: string;
@@ -18,6 +24,7 @@ export interface ClientReview {
   firmName?: string;
   status: 'active' | 'closed';
   createdAt: string;
+  attachments?: ReviewAttachment[];
 }
 
 export type CommentStatus = 'pending' | 'addressed' | 'approved' | 'denied';
@@ -42,6 +49,7 @@ export const createClientReview = async (
   clientEmail: string,
   clientName: string,
   firmName?: string,
+  attachments?: ReviewAttachment[],
 ): Promise<ClientReview> => {
   if (!db || !auth?.currentUser) throw new Error('Not signed in');
   const uid = auth.currentUser.uid;
@@ -60,6 +68,7 @@ export const createClientReview = async (
     firmName,
     status: 'active',
     createdAt: new Date().toISOString(),
+    attachments: attachments && attachments.length > 0 ? attachments : undefined,
   };
   await setDoc(doc(db, 'clientReviews', id), review);
   return review;

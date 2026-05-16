@@ -189,6 +189,28 @@ export const ClientReviewPage: React.FC = () => {
           </div>
         </div>
 
+        {/* Attachments */}
+        {review.attachments && review.attachments.length > 0 && (
+          <div className="bg-slate-800 border border-slate-700 rounded-lg p-5">
+            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-3">
+              Attached Photos · {review.attachments.length}
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              {review.attachments.map(a => (
+                <a key={a.id} href={a.url} target="_blank" rel="noopener noreferrer"
+                  className="group relative aspect-square rounded overflow-hidden border border-slate-700 hover:border-blue-500 transition-colors">
+                  <img src={a.url} alt={a.caption || ''} className="w-full h-full object-cover" />
+                  {a.caption && (
+                    <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-2 text-[11px] text-slate-100">
+                      {a.caption}
+                    </div>
+                  )}
+                </a>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Comment form */}
         <div className="bg-slate-800 border border-slate-700 rounded-lg p-5">
           <div className="flex items-center gap-2 mb-4">

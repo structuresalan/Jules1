@@ -6,8 +6,19 @@ import { subscribeProfile, type UserProfile } from '../lib/userProfile';
 import {
   createClientReview, subscribeProjectReviews, subscribeComments,
   respondToComment, closeReview,
-  type ClientReview, type ClientComment, type CommentStatus,
+  type ClientReview, type ClientComment, type CommentStatus, type ReviewAttachment,
 } from '../lib/clientReviewService';
+import { useCollection } from '../lib/useCollection';
+
+interface PhotoRecord {
+  id: string;
+  projectId: string;
+  dataUrl: string;
+  name: string;
+  caption: string;
+  takenAt: string;
+  createdAt: string;
+}
 
 type ProjectStatus = 'Active' | 'On Hold' | 'Closed' | 'Archived';
 type ProjectType = 'New Construction' | 'Renovation' | 'Inspection' | 'Mixed';
@@ -25,6 +36,9 @@ interface ProjectRecord {
   updatedAt: string;
   predictedEndDate?: string;
   colorIndex?: number;
+  ownerUid?: string;
+  ownerEmail?: string;
+  companyId?: string;
 }
 
 const STORAGE_KEY = 'struccalc.projects.v3';
@@ -250,6 +264,11 @@ export const ProjectSettings: React.FC = () => {
   const [shareName, setShareName] = useState('');
   const [sharing, setSharing] = useState(false);
   const [shareError, setShareError] = useState('');
+  const [selectedPhotoIds, setSelectedPhotoIds] = useState<Set<string>>(new Set());
+
+  // Project photos for the attachment picker
+  const { items: allPhotos } = useCollection<PhotoRecord>(COLLECTIONS.photos.col, COLLECTIONS.photos.ls);
+  const projectPhotos = project ? allPhotos.filter(p => p.projectId === project.id) : [];
 
   useEffect(() => {
     const p = readProject();
@@ -281,6 +300,7 @@ export const ProjectSettings: React.FC = () => {
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
+    const isTeamUser = profile?.companyId && (profile?.tier === 'pro' || profile?.tier === 'business');
     const updated: ProjectRecord = {
       ...project,
       name: name.trim(),
@@ -292,6 +312,9 @@ export const ProjectSettings: React.FC = () => {
       status,
       predictedEndDate: status === 'Active' ? predictedEndDate : '',
       updatedAt: new Date().toISOString(),
+      ownerUid: project.ownerUid || user?.uid || undefined,
+      ownerEmail: project.ownerEmail || user?.email || undefined,
+      companyId: isTeamUser ? profile!.companyId : project.companyId,
     };
     saveProject(updated);
     setProject(updated);
@@ -305,20 +328,33 @@ export const ProjectSettings: React.FC = () => {
     setSharing(true);
     setShareError('');
     try {
+      const attachments: ReviewAttachment[] = projectPhotos
+        .filter(p => selectedPhotoIds.has(p.id))
+        .map(p => ({ id: p.id, url: p.dataUrl, caption: p.caption || undefined }));
       await createClientReview(
         { id: project.id, name: project.name, projectNumber: project.projectNumber, description: project.description },
         shareEmail,
         shareName,
         profile?.company,
+        attachments,
       );
       setShowShareForm(false);
       setShareEmail('');
       setShareName('');
+      setSelectedPhotoIds(new Set());
     } catch (err) {
       setShareError(err instanceof Error ? err.message : 'Failed to create review link.');
     } finally {
       setSharing(false);
     }
+  };
+
+  const togglePhotoSelection = (id: string) => {
+    setSelectedPhotoIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
   };
 
   const canShareWithClients = profile?.tier === 'pro' || profile?.tier === 'business';
@@ -475,6 +511,37 @@ export const ProjectSettings: React.FC = () => {
                     />
                   </div>
                 </div>
+                {projectPhotos.length > 0 && (
+                  <div>
+                    <div className={labelCls}>
+                      Attach Photos
+                      {selectedPhotoIds.size > 0 && <span className="ml-2 text-blue-400 normal-case">· {selectedPhotoIds.size} selected</span>}
+                    </div>
+                    <div className="grid grid-cols-4 gap-2 max-h-48 overflow-y-auto p-1 bg-slate-900/50 rounded border border-slate-700">
+                      {projectPhotos.map(p => {
+                        const selected = selectedPhotoIds.has(p.id);
+                        return (
+                          <button
+                            key={p.id}
+                            type="button"
+                            onClick={() => togglePhotoSelection(p.id)}
+                            className={`relative aspect-square rounded overflow-hidden border-2 transition-all ${
+                              selected ? 'border-blue-500 ring-2 ring-blue-500/30' : 'border-slate-700 hover:border-slate-500'
+                            }`}
+                            title={p.caption || p.name}
+                          >
+                            <img src={p.dataUrl} alt="" className="w-full h-full object-cover" />
+                            {selected && (
+                              <div className="absolute top-1 right-1 w-4 h-4 rounded-full bg-blue-500 flex items-center justify-center">
+                                <CheckCircle size={10} className="text-white" />
+                              </div>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
                 {shareError && <div className="text-xs text-red-400">{shareError}</div>}
                 <div className="flex items-center gap-2">
                   <button

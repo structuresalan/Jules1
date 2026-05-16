@@ -12,6 +12,7 @@
   "dependencies": {
     "@stripe/stripe-js": "^5.4.0",
     "firebase": "^12.12.1",
+    "firebase-admin": "^13.10.0",
     "lucide-react": "^1.14.0",
     "pdfjs-dist": "^5.7.284",
     "react": "^19.2.5",
@@ -23,10 +24,10 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "@vercel/node": "^3.2.27",
     "@types/node": "^24.12.2",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
+    "@vercel/node": "^3.2.27",
     "@vitejs/plugin-react": "^6.0.1",
     "autoprefixer": "^10.5.0",
     "eslint": "^10.2.1",
