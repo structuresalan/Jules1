@@ -259,7 +259,8 @@ export const SettingsPage: React.FC = () => {
     setPendingInvite(null);
   };
 
-  const handleUpgrade = async (tier: 'private' | 'pro' | 'business') => {
+  const handleUpgrade = async (tier: Tier) => {
+    if (tier === 'lite') return; // Free tier — no Stripe checkout needed.
     if (!auth?.currentUser?.email) return;
     setUpgrading(tier);
     try {
@@ -291,7 +292,7 @@ export const SettingsPage: React.FC = () => {
     { id: 'billing', label: 'Billing', icon: <CreditCard size={15} /> },
   ];
 
-  const effectiveLimits = profile ? getEffectiveLimits(profile) : TIER_LIMITS.private;
+  const effectiveLimits = profile ? getEffectiveLimits(profile) : TIER_LIMITS.lite;
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -404,7 +405,7 @@ export const SettingsPage: React.FC = () => {
       )}
 
       {/* Team tab */}
-      {activeTab === 'team' && profile?.tier === 'private' && !profile?.companyId && !pendingInvite && (
+      {activeTab === 'team' && (profile?.tier === 'lite' || profile?.tier === 'private') && !profile?.companyId && !pendingInvite && (
         <div className="bg-slate-800 border border-slate-700 rounded p-8 text-center">
           <div className="flex justify-center mb-4">
             <div className="w-12 h-12 rounded bg-blue-600/20 border border-blue-500/30 flex items-center justify-center">
@@ -425,7 +426,7 @@ export const SettingsPage: React.FC = () => {
         </div>
       )}
 
-      {activeTab === 'team' && (profile?.tier !== 'private' || profile?.companyId || pendingInvite) && (
+      {activeTab === 'team' && ((profile?.tier !== 'lite' && profile?.tier !== 'private') || profile?.companyId || pendingInvite) && (
         <div className="space-y-4">
 
           {/* Pending invite banner */}
@@ -727,7 +728,7 @@ export const SettingsPage: React.FC = () => {
 
           <div className="bg-slate-800 border border-slate-700 rounded p-5">
             <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-3">Plans</div>
-            <div className="grid grid-cols-1 gap-2 lg:grid-cols-3">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
               {(Object.keys(TIER_LIMITS) as Tier[]).map(tier => (
                 <div
                   key={tier}
@@ -738,7 +739,7 @@ export const SettingsPage: React.FC = () => {
                     {profile?.tier === tier && <span className="text-[10px] font-bold uppercase tracking-wider text-blue-400">Current</span>}
                   </div>
                   <div className="text-[11px] font-semibold text-blue-400 mb-1">
-                    {tier === 'private' ? '$9/mo' : tier === 'pro' ? '$29/mo' : '$79/mo'}
+                    {tier === 'lite' ? 'Free' : tier === 'private' ? '$9/mo' : tier === 'pro' ? '$29/mo' : '$79/mo'}
                   </div>
                   {tier === 'private' && (
                     <div className="text-[9px] font-bold uppercase tracking-wider text-green-400 mb-2">
@@ -750,7 +751,7 @@ export const SettingsPage: React.FC = () => {
                     <div>{TIER_LIMITS[tier].photoCount.toLocaleString()} photos</div>
                     <div>{TIER_LIMITS[tier].uploadsPerDay}/day uploads</div>
                   </div>
-                  {profile?.tier !== tier && (
+                  {profile?.tier !== tier && tier !== 'lite' && (
                     <button
                       onClick={() => handleUpgrade(tier)}
                       disabled={upgrading === tier}

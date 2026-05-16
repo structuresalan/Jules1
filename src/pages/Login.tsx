@@ -35,7 +35,7 @@ export const Login: React.FC = () => {
   const [keepSignedIn, setKeepSignedIn] = useState(true);
   const [errorMessage, setErrorMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [selectedTier, setSelectedTier] = useState<Tier>('private');
+  const [selectedTier, setSelectedTier] = useState<Tier>('lite');
   const [resetSent, setResetSent] = useState(false);
   const pwStrength = getStrength(password);
 
@@ -437,8 +437,9 @@ export const Login: React.FC = () => {
               {authMode === 'create' && (
                 <div style={{ marginBottom: 14 }}>
                   <div style={{ fontSize: 12, color: '#374151', fontWeight: 500, marginBottom: 8 }}>Plan</div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                     {([
+                      { id: 'lite' as Tier, name: 'Lite', price: 'Free', storage: '100 MB', photos: '25' },
                       { id: 'private' as Tier, name: 'Private', price: '$9/mo', storage: '1 GB', photos: '500' },
                       { id: 'pro' as Tier, name: 'Pro', price: '$29/mo', storage: '5 GB', photos: '2,500' },
                       { id: 'business' as Tier, name: 'Business', price: '$79/mo', storage: '20 GB', photos: '10,000' },

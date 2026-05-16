@@ -8,7 +8,7 @@
 import { doc, getDoc, setDoc, onSnapshot, type Unsubscribe } from 'firebase/firestore';
 import { auth, db } from '../firebase';
 
-export type Tier = 'private' | 'pro' | 'business';
+export type Tier = 'lite' | 'private' | 'pro' | 'business';
 
 export interface UserProfile {
   tier: Tier;
@@ -32,9 +32,10 @@ export interface TierLimits {
 }
 
 export const TIER_LIMITS: Record<Tier, TierLimits> = {
-  private:  { bytes: 1  * 1024 ** 3, photoCount: 500,   uploadsPerDay: 50,   maxFileBytes: 5 * 1024 ** 2 },
-  pro:      { bytes: 5  * 1024 ** 3, photoCount: 2500,  uploadsPerDay: 200,  maxFileBytes: 5 * 1024 ** 2 },
-  business: { bytes: 20 * 1024 ** 3, photoCount: 10000, uploadsPerDay: 1000, maxFileBytes: 5 * 1024 ** 2 },
+  lite:     { bytes: 100 * 1024 ** 2, photoCount: 25,    uploadsPerDay: 5,    maxFileBytes: 5 * 1024 ** 2 },
+  private:  { bytes: 1  * 1024 ** 3,  photoCount: 500,   uploadsPerDay: 50,   maxFileBytes: 5 * 1024 ** 2 },
+  pro:      { bytes: 5  * 1024 ** 3,  photoCount: 2500,  uploadsPerDay: 200,  maxFileBytes: 5 * 1024 ** 2 },
+  business: { bytes: 20 * 1024 ** 3,  photoCount: 10000, uploadsPerDay: 1000, maxFileBytes: 5 * 1024 ** 2 },
 };
 
 const LS_KEY = 'struccalc.userProfile.v1';
@@ -46,7 +47,7 @@ const nextMidnightIso = () => {
 };
 
 const defaultProfile = (): UserProfile => ({
-  tier: 'private',
+  tier: 'lite',
   storageUsedBytes: 0,
   photoCount: 0,
   uploadsToday: 0,
@@ -118,7 +119,7 @@ export const getEffectiveLimits = (p: UserProfile): TierLimits => {
   if (p.promoActive) {
     return { bytes: 100 * 1024 ** 3, photoCount: 999999, uploadsPerDay: 99999, maxFileBytes: 50 * 1024 ** 2 };
   }
-  return TIER_LIMITS[normalizeTier(p.tier)] ?? TIER_LIMITS.private;
+  return TIER_LIMITS[normalizeTier(p.tier)] ?? TIER_LIMITS.lite;
 };
 
 export interface UploadCheck {
