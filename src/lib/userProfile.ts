@@ -20,6 +20,10 @@ export interface UserProfile {
   displayName?: string;
   company?: string;
   discipline?: string;
+  companyId?: string;
+  companyRole?: 'owner' | 'manager' | 'employee';
+  company?: string;
+  discipline?: string;
 }
 
 export interface TierLimits {
@@ -191,6 +195,11 @@ export const initUserProfile = async (tier: Tier, extra?: { displayName?: string
 export const updateAccountInfo = async (fields: { displayName?: string; company?: string; discipline?: string }): Promise<void> => {
   const p = await getProfile();
   await writeProfile({ ...p, ...fields });
+};
+
+export const updateCompanyInfo = async (companyId: string, companyRole: 'owner' | 'manager' | 'employee'): Promise<void> => {
+  const p = await getProfile();
+  await writeProfile({ ...p, companyId, companyRole });
 };
 
 export const redeemPromoCode = async (code: string): Promise<{ success: boolean; message: string }> => {

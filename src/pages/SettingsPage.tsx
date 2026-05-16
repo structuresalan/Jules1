@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { Monitor, Palette, Sparkles, SlidersHorizontal, User, Users, CreditCard, Save, UserPlus, Trash2, Shield } from 'lucide-react';
+import { Monitor, Palette, Sparkles, SlidersHorizontal, User, Users, CreditCard, Save, UserPlus, Trash2, Shield, HardDrive, Image, Zap, Building2, ChevronRight, Check, X } from 'lucide-react';
 import { type WebsiteAccent, type WebsiteDensity, type WebsiteStyle, useWebsiteStyleSettings } from '../utils/websiteStyle';
-import { updateAccountInfo, subscribeProfile } from '../lib/userProfile';
-import type { UserProfile } from '../lib/userProfile';
-import { subscribeTeam, inviteMember, removeMember, updateMemberRole } from '../lib/teamService';
-import type { TeamMember, TeamRole } from '../lib/teamService';
+import { updateAccountInfo, updateCompanyInfo, subscribeProfile, formatBytes, getEffectiveLimits, redeemPromoCode, TIER_LIMITS } from '../lib/userProfile';
+import type { UserProfile, Tier } from '../lib/userProfile';
+import {
+  createCompany, subscribeCompany, subscribeMembers, inviteMember,
+  removeMember, updateMemberRole, checkPendingInvite, acceptInvite, declineInvite,
+} from '../lib/teamService';
+import type { Company, CompanyMember, CompanyRole, CompanyInvite } from '../lib/teamService';
 import { auth, updatePassword, reauthenticateWithCredential, EmailAuthProvider } from '../firebase';
 
 const styleOptions: Array<{
@@ -45,74 +48,143 @@ type SettingsTab = 'appearance' | 'account' | 'team' | 'billing';
 export const SettingsPage: React.FC = () => {
   const { settings, updateSettings } = useWebsiteStyleSettings();
   const [activeTab, setActiveTab] = useState<SettingsTab>('appearance');
+
+  // Profile state
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  useEffect(() => subscribeProfile(setProfile), []);
 
   // Account tab state
-  const [acctName, setAcctName] = useState('');
-  const [acctCompany, setAcctCompany] = useState('');
-  const [acctDiscipline, setAcctDiscipline] = useState('Structural');
-  const [acctSaving, setAcctSaving] = useState(false);
-  const [acctSaved, setAcctSaved] = useState(false);
-  const [pwCurrent, setPwCurrent] = useState('');
-  const [pwNew, setPwNew] = useState('');
-  const [pwConfirm, setPwConfirm] = useState('');
-  const [pwError, setPwError] = useState('');
-  const [pwSaving, setPwSaving] = useState(false);
-  const [pwSaved, setPwSaved] = useState(false);
+  const [discipline, setDiscipline] = useState('');
+  const [savingAccount, setSavingAccount] = useState(false);
+  const [accountSaved, setAccountSaved] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  const [passwordSuccess, setPasswordSuccess] = useState('');
+  const [savingPassword, setSavingPassword] = useState(false);
 
-  // Teams tab state
-  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
+  // Billing tab state
+  const [promoInput, setPromoInput] = useState('');
+  const [promoStatus, setPromoStatus] = useState('');
+  const [promoLoading, setPromoLoading] = useState(false);
+
+  // Company state
+  const [company, setCompany] = useState<Company | null>(null);
+  const [companyMembers, setCompanyMembers] = useState<CompanyMember[]>([]);
+  const [pendingInvite, setPendingInvite] = useState<CompanyInvite | null>(null);
+  const [companyName, setCompanyName] = useState('');
+  const [companyDesc, setCompanyDesc] = useState('');
+  const [creatingCompany, setCreatingCompany] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteRole, setInviteRole] = useState<TeamRole>('member');
+  const [inviteRole, setInviteRole] = useState<'manager' | 'employee'>('employee');
   const [inviting, setInviting] = useState(false);
   const [inviteError, setInviteError] = useState('');
+  const [acceptingInvite, setAcceptingInvite] = useState(false);
 
-  useEffect(() => subscribeProfile(setProfile), []);
-  useEffect(() => subscribeTeam(setTeamMembers), []);
-
+  // Sync discipline from profile
   useEffect(() => {
-    if (profile?.displayName) setAcctName(profile.displayName);
-    if (profile?.company) setAcctCompany(profile.company);
-    if (profile?.discipline) setAcctDiscipline(profile.discipline);
-  }, [profile]);
+    if (profile?.discipline !== undefined) setDiscipline(profile.discipline ?? '');
+  }, [profile?.discipline]);
+
+  // Subscribe to company if user has one
+  useEffect(() => {
+    const companyId = profile?.companyId;
+    if (!companyId) {
+      setCompany(null);
+      setCompanyMembers([]);
+      return;
+    }
+    const unsub1 = subscribeCompany(companyId, setCompany);
+    const unsub2 = subscribeMembers(companyId, setCompanyMembers);
+    return () => { unsub1(); unsub2(); };
+  }, [profile?.companyId]);
+
+  // Check for pending invite when signed in
+  useEffect(() => {
+    if (!auth?.currentUser) return;
+    checkPendingInvite().then(setPendingInvite);
+  }, [auth?.currentUser?.uid]);
 
   const handleSaveAccount = async () => {
-    setAcctSaving(true);
-    await updateAccountInfo({ displayName: acctName, company: acctCompany, discipline: acctDiscipline });
-    setAcctSaving(false);
-    setAcctSaved(true);
-    setTimeout(() => setAcctSaved(false), 2000);
+    setSavingAccount(true);
+    await updateAccountInfo({ discipline });
+    setSavingAccount(false);
+    setAccountSaved(true);
+    setTimeout(() => setAccountSaved(false), 2000);
   };
 
   const handleChangePassword = async () => {
-    setPwError('');
-    if (pwNew !== pwConfirm) { setPwError('Passwords do not match.'); return; }
-    if (pwNew.length < 6) { setPwError('Password must be at least 6 characters.'); return; }
-    const user = auth?.currentUser;
-    if (!user || !user.email) { setPwError('Not signed in.'); return; }
-    setPwSaving(true);
-    try {
-      const credential = EmailAuthProvider.credential(user.email, pwCurrent);
-      await reauthenticateWithCredential(user, credential);
-      await updatePassword(user, pwNew);
-      setPwSaved(true);
-      setPwCurrent(''); setPwNew(''); setPwConfirm('');
-      setTimeout(() => setPwSaved(false), 2000);
-    } catch {
-      setPwError('Current password is incorrect.');
-    } finally {
-      setPwSaving(false);
+    setPasswordError('');
+    setPasswordSuccess('');
+    if (!newPassword || newPassword !== confirmPassword) {
+      setPasswordError('Passwords do not match.');
+      return;
     }
+    if (newPassword.length < 6) {
+      setPasswordError('Password must be at least 6 characters.');
+      return;
+    }
+    const user = auth?.currentUser;
+    if (!user || !user.email) { setPasswordError('Not signed in.'); return; }
+    setSavingPassword(true);
+    try {
+      const credential = EmailAuthProvider.credential(user.email, currentPassword);
+      await reauthenticateWithCredential(user, credential);
+      await updatePassword(user, newPassword);
+      setPasswordSuccess('Password updated.');
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setPasswordError(msg.includes('wrong-password') || msg.includes('invalid-credential') ? 'Current password is incorrect.' : 'Failed to update password.');
+    }
+    setSavingPassword(false);
+  };
+
+  const handleRedeem = async () => {
+    if (!promoInput.trim()) return;
+    setPromoLoading(true);
+    setPromoStatus('');
+    const result = await redeemPromoCode(promoInput.trim());
+    setPromoStatus(result.message);
+    setPromoLoading(false);
+  };
+
+  const handleCreateCompany = async () => {
+    if (!companyName.trim()) return;
+    setCreatingCompany(true);
+    try {
+      const co = await createCompany(companyName, companyDesc);
+      await updateCompanyInfo(co.id, 'owner');
+    } catch { /* ok */ }
+    setCreatingCompany(false);
   };
 
   const handleInvite = async () => {
-    if (!inviteEmail.trim()) return;
+    if (!inviteEmail.trim() || !company) return;
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(inviteEmail)) { setInviteError('Invalid email.'); return; }
     setInviting(true);
     setInviteError('');
-    await inviteMember(inviteEmail, inviteRole);
+    await inviteMember(company.id, company.name, inviteEmail, inviteRole);
     setInviteEmail('');
     setInviting(false);
+  };
+
+  const handleAcceptInvite = async () => {
+    if (!pendingInvite) return;
+    setAcceptingInvite(true);
+    await acceptInvite(pendingInvite);
+    await updateCompanyInfo(pendingInvite.companyId, pendingInvite.role);
+    setPendingInvite(null);
+    setAcceptingInvite(false);
+  };
+
+  const handleDeclineInvite = async () => {
+    if (!pendingInvite) return;
+    await declineInvite(pendingInvite.id);
+    setPendingInvite(null);
   };
 
   const tabs: Array<{ id: SettingsTab; label: string; icon: React.ReactNode }> = [
@@ -121,6 +193,8 @@ export const SettingsPage: React.FC = () => {
     { id: 'team', label: 'Team', icon: <Users size={15} /> },
     { id: 'billing', label: 'Billing', icon: <CreditCard size={15} /> },
   ];
+
+  const effectiveLimits = profile ? getEffectiveLimits(profile) : TIER_LIMITS.starter;
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -158,86 +232,44 @@ export const SettingsPage: React.FC = () => {
         ))}
       </div>
 
+      {/* Account tab */}
       {activeTab === 'account' && (
         <div className="space-y-4">
-          {/* Profile info */}
           <div className="bg-slate-800 border border-slate-700 rounded p-5">
             <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-4">Profile</div>
             <div className="space-y-3">
-              {/* Avatar */}
-              <div className="flex items-center gap-4 mb-5">
-                <div className="w-12 h-12 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold text-lg select-none">
-                  {acctName ? acctName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() : (auth?.currentUser?.email?.[0] ?? '?').toUpperCase()}
-                </div>
-                <div>
-                  <div className="text-sm font-medium text-slate-200">{acctName || 'No name set'}</div>
-                  <div className="text-xs text-slate-500">{auth?.currentUser?.email}</div>
-                </div>
-              </div>
-
-              <div>
-                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1.5">Full Name</label>
-                <input
-                  value={acctName}
-                  onChange={e => setAcctName(e.target.value)}
-                  placeholder="Avery Morgan"
-                  className="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-blue-500"
-                />
-              </div>
-              <div>
-                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1.5">Company</label>
-                <input
-                  value={acctCompany}
-                  onChange={e => setAcctCompany(e.target.value)}
-                  placeholder="Riverside Engineering, PC"
-                  className="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-blue-500"
-                />
-              </div>
               <div>
                 <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1.5">Discipline</label>
-                <select
-                  value={acctDiscipline}
-                  onChange={e => setAcctDiscipline(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm text-slate-200 outline-none focus:border-blue-500"
-                >
-                  <option>Structural</option>
-                  <option>Architectural</option>
-                  <option>MEP</option>
-                  <option>Civil / Site</option>
-                  <option>General Contractor</option>
-                  <option>Inspector</option>
-                </select>
-              </div>
-              <div>
-                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1.5">Email</label>
                 <input
-                  value={auth?.currentUser?.email ?? ''}
-                  disabled
-                  className="w-full bg-slate-900/50 border border-slate-700 rounded px-3 py-2 text-sm text-slate-500 outline-none cursor-not-allowed"
+                  value={discipline}
+                  onChange={e => setDiscipline(e.target.value)}
+                  placeholder="Structural Engineer"
+                  className="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-blue-500"
                 />
               </div>
               <button
                 onClick={handleSaveAccount}
-                disabled={acctSaving}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm font-medium rounded transition-colors"
+                disabled={savingAccount}
+                className="flex items-center gap-2 px-3 py-1 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-xs font-medium rounded transition-colors"
               >
-                <Save size={13} />
-                {acctSaved ? 'Saved!' : acctSaving ? 'Saving…' : 'Save Changes'}
+                <Save size={12} />
+                {accountSaved ? 'Saved!' : savingAccount ? 'Saving…' : 'Save'}
               </button>
             </div>
           </div>
 
-          {/* Change password */}
           <div className="bg-slate-800 border border-slate-700 rounded p-5">
-            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-4">Change Password</div>
+            <div className="flex items-center gap-2 mb-4">
+              <Shield size={14} className="text-slate-400" />
+              <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Change Password</div>
+            </div>
             <div className="space-y-3">
               <div>
                 <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1.5">Current Password</label>
                 <input
                   type="password"
-                  value={pwCurrent}
-                  onChange={e => setPwCurrent(e.target.value)}
-                  placeholder="••••••••"
+                  value={currentPassword}
+                  onChange={e => setCurrentPassword(e.target.value)}
                   className="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-blue-500"
                 />
               </div>
@@ -245,9 +277,8 @@ export const SettingsPage: React.FC = () => {
                 <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1.5">New Password</label>
                 <input
                   type="password"
-                  value={pwNew}
-                  onChange={e => setPwNew(e.target.value)}
-                  placeholder="••••••••"
+                  value={newPassword}
+                  onChange={e => setNewPassword(e.target.value)}
                   className="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-blue-500"
                 />
               </div>
@@ -255,241 +286,450 @@ export const SettingsPage: React.FC = () => {
                 <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1.5">Confirm New Password</label>
                 <input
                   type="password"
-                  value={pwConfirm}
-                  onChange={e => setPwConfirm(e.target.value)}
-                  placeholder="••••••••"
+                  value={confirmPassword}
+                  onChange={e => setConfirmPassword(e.target.value)}
                   className="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-blue-500"
                 />
               </div>
-              {pwError && <div className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded px-3 py-2">{pwError}</div>}
+              {passwordError && <div className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded px-3 py-2">{passwordError}</div>}
+              {passwordSuccess && <div className="text-xs text-green-400 bg-green-500/10 border border-green-500/20 rounded px-3 py-2">{passwordSuccess}</div>}
               <button
                 onClick={handleChangePassword}
-                disabled={pwSaving || !pwCurrent || !pwNew || !pwConfirm}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm font-medium rounded transition-colors"
+                disabled={savingPassword}
+                className="flex items-center gap-2 px-3 py-1 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-xs font-medium rounded transition-colors"
               >
-                <Shield size={13} />
-                {pwSaved ? 'Password Updated!' : pwSaving ? 'Updating…' : 'Update Password'}
+                <Shield size={12} />
+                {savingPassword ? 'Updating…' : 'Update Password'}
               </button>
             </div>
           </div>
         </div>
       )}
 
+      {/* Team tab */}
       {activeTab === 'team' && (
         <div className="space-y-4">
-          {/* Invite */}
-          <div className="bg-slate-800 border border-slate-700 rounded p-5">
-            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-4">Invite Member</div>
-            <div className="flex gap-2">
-              <input
-                type="email"
-                value={inviteEmail}
-                onChange={e => setInviteEmail(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleInvite()}
-                placeholder="colleague@firm.com"
-                className="flex-1 bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-blue-500"
-              />
-              <select
-                value={inviteRole}
-                onChange={e => setInviteRole(e.target.value as TeamRole)}
-                className="bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm text-slate-200 outline-none focus:border-blue-500"
-              >
-                <option value="member">Member</option>
-                <option value="admin">Admin</option>
-              </select>
-              <button
-                onClick={handleInvite}
-                disabled={inviting || !inviteEmail.trim()}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm font-medium rounded transition-colors"
-              >
-                <UserPlus size={13} />
-                {inviting ? '…' : 'Invite'}
-              </button>
-            </div>
-            {inviteError && <div className="mt-2 text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded px-3 py-2">{inviteError}</div>}
-          </div>
 
-          {/* Member list */}
-          <div className="bg-slate-800 border border-slate-700 rounded p-5">
-            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-4">Members</div>
-            <div className="space-y-2">
-              {/* Owner row (current user) */}
-              <div className="flex items-center justify-between py-2.5 px-3 bg-slate-900 rounded border border-slate-700">
-                <div className="flex items-center gap-3">
-                  <div className="w-7 h-7 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-bold">
-                    {(auth?.currentUser?.email?.[0] ?? '?').toUpperCase()}
-                  </div>
-                  <div>
-                    <div className="text-sm text-slate-200">{auth?.currentUser?.email}</div>
-                    <div className="text-[10px] text-slate-500">You</div>
+          {/* Pending invite banner */}
+          {pendingInvite && !profile?.companyId && (
+            <div className="bg-blue-500/10 border border-blue-500/30 rounded p-5">
+              <div className="text-[10px] font-bold uppercase tracking-wider text-blue-400 mb-2">Company Invitation</div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-sm font-semibold text-slate-100">{pendingInvite.companyName}</div>
+                  <div className="text-xs text-slate-400 mt-0.5">
+                    You've been invited as <span className="capitalize text-slate-300 font-medium">{pendingInvite.role}</span>
                   </div>
                 </div>
-                <span className="text-[10px] font-bold uppercase tracking-wider bg-blue-600/20 text-blue-400 border border-blue-500/30 px-2 py-0.5 rounded">Owner</span>
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleDeclineInvite}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-300 text-xs font-medium rounded transition-colors"
+                  >
+                    <X size={12} /> Decline
+                  </button>
+                  <button
+                    onClick={handleAcceptInvite}
+                    disabled={acceptingInvite}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-xs font-medium rounded transition-colors"
+                  >
+                    <Check size={12} /> {acceptingInvite ? 'Joining…' : 'Accept & Join'}
+                  </button>
+                </div>
               </div>
+            </div>
+          )}
 
-              {teamMembers.length === 0 && (
-                <div className="text-center py-8 text-slate-600 text-sm">No team members yet. Invite someone above.</div>
-              )}
+          {/* No company yet */}
+          {!profile?.companyId && !pendingInvite && (
+            <div className="bg-slate-800 border border-slate-700 rounded p-5">
+              <div className="flex items-center gap-3 mb-4">
+                <Building2 size={18} className="text-blue-400" />
+                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Create Your Company</div>
+              </div>
+              <div className="space-y-3">
+                <div>
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1.5">Company Name</label>
+                  <input
+                    value={companyName}
+                    onChange={e => setCompanyName(e.target.value)}
+                    placeholder="Riverside Engineering, PC"
+                    className="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1.5">Description <span className="text-slate-600 normal-case font-normal">optional</span></label>
+                  <input
+                    value={companyDesc}
+                    onChange={e => setCompanyDesc(e.target.value)}
+                    placeholder="Structural engineering consultancy"
+                    className="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-blue-500"
+                  />
+                </div>
+                <button
+                  onClick={handleCreateCompany}
+                  disabled={creatingCompany || !companyName.trim()}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm font-medium rounded transition-colors"
+                >
+                  <Building2 size={13} />
+                  {creatingCompany ? 'Creating…' : 'Create Company'}
+                </button>
+                <div className="text-[10px] text-slate-600 pt-1">Already part of a company? Ask your CEO to invite you by email.</div>
+              </div>
+            </div>
+          )}
 
-              {teamMembers.map(m => (
-                <div key={m.id} className="flex items-center justify-between py-2.5 px-3 bg-slate-900 rounded border border-slate-700">
+          {/* Company exists */}
+          {profile?.companyId && company && (
+            <>
+              {/* Company header */}
+              <div className="bg-slate-800 border border-slate-700 rounded p-5">
+                <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="w-7 h-7 rounded-full bg-slate-700 flex items-center justify-center text-slate-400 text-xs font-bold">
-                      {m.email[0].toUpperCase()}
+                    <div className="w-10 h-10 rounded bg-blue-600/20 border border-blue-500/30 flex items-center justify-center">
+                      <Building2 size={18} className="text-blue-400" />
                     </div>
                     <div>
-                      <div className="text-sm text-slate-200">{m.email}</div>
-                      <div className="text-[10px] text-slate-500 flex items-center gap-1.5">
-                        <span className={`inline-block w-1.5 h-1.5 rounded-full ${m.status === 'active' ? 'bg-green-500' : 'bg-amber-500'}`}/>
-                        {m.status === 'pending' ? 'Invite pending' : 'Active'}
-                      </div>
+                      <div className="text-sm font-semibold text-slate-100">{company.name}</div>
+                      {company.description && <div className="text-xs text-slate-500 mt-0.5">{company.description}</div>}
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border ${
+                    profile.companyRole === 'owner' ? 'bg-amber-500/20 text-amber-400 border-amber-500/30' :
+                    profile.companyRole === 'manager' ? 'bg-purple-500/20 text-purple-400 border-purple-500/30' :
+                    'bg-slate-700 text-slate-400 border-slate-600'
+                  }`}>
+                    {profile.companyRole}
+                  </div>
+                </div>
+                <div className="mt-3 pt-3 border-t border-slate-700 flex gap-4 text-[10px] text-slate-500">
+                  <span>{companyMembers.filter(m => m.status === 'active').length} active members</span>
+                  <span>{companyMembers.filter(m => m.status === 'pending').length} pending invites</span>
+                </div>
+              </div>
+
+              {/* Invite (owner + manager only) */}
+              {(profile.companyRole === 'owner' || profile.companyRole === 'manager') && (
+                <div className="bg-slate-800 border border-slate-700 rounded p-5">
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-4">Invite Employee</div>
+                  <div className="flex gap-2">
+                    <input
+                      type="email"
+                      value={inviteEmail}
+                      onChange={e => setInviteEmail(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && handleInvite()}
+                      placeholder="colleague@firm.com"
+                      className="flex-1 bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-blue-500"
+                    />
                     <select
-                      value={m.role}
-                      onChange={e => updateMemberRole(m.id, e.target.value as TeamRole)}
-                      className="bg-slate-800 border border-slate-600 rounded px-2 py-1 text-xs text-slate-300 outline-none focus:border-blue-500"
+                      value={inviteRole}
+                      onChange={e => setInviteRole(e.target.value as 'manager' | 'employee')}
+                      className="bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm text-slate-200 outline-none focus:border-blue-500"
                     >
-                      <option value="member">Member</option>
-                      <option value="admin">Admin</option>
+                      <option value="employee">Employee</option>
+                      {profile.companyRole === 'owner' && <option value="manager">Manager</option>}
                     </select>
                     <button
-                      onClick={() => removeMember(m.id)}
-                      className="p-1.5 text-slate-600 hover:text-red-400 transition-colors rounded hover:bg-red-500/10"
+                      onClick={handleInvite}
+                      disabled={inviting || !inviteEmail.trim()}
+                      className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm font-medium rounded transition-colors whitespace-nowrap"
                     >
-                      <Trash2 size={13} />
+                      <UserPlus size={13} />
+                      {inviting ? '…' : 'Invite'}
                     </button>
                   </div>
+                  {inviteError && <div className="mt-2 text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded px-3 py-2">{inviteError}</div>}
+                </div>
+              )}
+
+              {/* Member list */}
+              <div className="bg-slate-800 border border-slate-700 rounded p-5">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-4">Team</div>
+                <div className="space-y-2">
+                  {companyMembers
+                    .sort((a, b) => {
+                      const order: Record<CompanyRole, number> = { owner: 0, manager: 1, employee: 2 };
+                      return order[a.role] - order[b.role];
+                    })
+                    .map(m => (
+                      <div key={m.id} className="flex items-center justify-between py-2.5 px-3 bg-slate-900 rounded border border-slate-700">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${
+                            m.role === 'owner' ? 'bg-amber-600/30 text-amber-400' :
+                            m.role === 'manager' ? 'bg-purple-600/30 text-purple-400' :
+                            'bg-slate-700 text-slate-400'
+                          }`}>
+                            {m.email[0].toUpperCase()}
+                          </div>
+                          <div>
+                            <div className="text-sm text-slate-200">{m.email}</div>
+                            <div className="text-[10px] text-slate-500 flex items-center gap-1.5">
+                              <span className={`inline-block w-1.5 h-1.5 rounded-full ${m.status === 'active' ? 'bg-green-500' : 'bg-amber-500'}`}/>
+                              {m.status === 'pending' ? 'Invite pending' : 'Active'}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {/* Role badge / dropdown for owner */}
+                          {m.role === 'owner' ? (
+                            <span className="text-[10px] font-bold uppercase tracking-wider bg-amber-500/20 text-amber-400 border border-amber-500/30 px-2 py-0.5 rounded">Owner</span>
+                          ) : profile.companyRole === 'owner' ? (
+                            <select
+                              value={m.role}
+                              onChange={e => updateMemberRole(company.id, m.id, e.target.value as CompanyRole)}
+                              className="bg-slate-800 border border-slate-600 rounded px-2 py-1 text-xs text-slate-300 outline-none focus:border-blue-500"
+                            >
+                              <option value="employee">Employee</option>
+                              <option value="manager">Manager</option>
+                            </select>
+                          ) : (
+                            <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border ${
+                              m.role === 'manager' ? 'bg-purple-500/20 text-purple-400 border-purple-500/30' : 'bg-slate-700 text-slate-400 border-slate-600'
+                            }`}>{m.role}</span>
+                          )}
+                          {/* Remove button — owner can remove anyone except self, manager can remove employees */}
+                          {m.role !== 'owner' && (profile.companyRole === 'owner' || (profile.companyRole === 'manager' && m.role === 'employee')) && (
+                            <button
+                              onClick={() => removeMember(company.id, m.id)}
+                              className="p-1.5 text-slate-600 hover:text-red-400 transition-colors rounded hover:bg-red-500/10"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            </>
+          )}
+
+        </div>
+      )}
+
+      {/* Billing tab */}
+      {activeTab === 'billing' && (
+        <div className="space-y-4">
+          <div className="bg-slate-800 border border-slate-700 rounded p-5">
+            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-4">Current Plan</div>
+            {profile && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Zap size={14} className="text-blue-400" />
+                    <span className="text-sm font-semibold text-slate-100 capitalize">{profile.tier}</span>
+                  </div>
+                  <span className="text-[10px] font-bold uppercase tracking-wider bg-blue-500/20 text-blue-400 border border-blue-500/30 px-2 py-0.5 rounded">Active</span>
+                </div>
+                <div className="grid grid-cols-2 gap-3 pt-1">
+                  <div className="bg-slate-900 rounded border border-slate-700 px-3 py-2.5">
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <HardDrive size={11} className="text-slate-500" />
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Storage</span>
+                    </div>
+                    <div className="text-sm font-semibold text-slate-200">{formatBytes(profile.storageUsedBytes)}</div>
+                    <div className="text-[10px] text-slate-500">of {formatBytes(effectiveLimits.bytes)}</div>
+                    <div className="mt-2 h-1 bg-slate-700 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-blue-500 rounded-full"
+                        style={{ width: `${Math.min(100, (profile.storageUsedBytes / effectiveLimits.bytes) * 100).toFixed(1)}%` }}
+                      />
+                    </div>
+                  </div>
+                  <div className="bg-slate-900 rounded border border-slate-700 px-3 py-2.5">
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <Image size={11} className="text-slate-500" />
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Photos</span>
+                    </div>
+                    <div className="text-sm font-semibold text-slate-200">{profile.photoCount.toLocaleString()}</div>
+                    <div className="text-[10px] text-slate-500">of {effectiveLimits.photoCount.toLocaleString()}</div>
+                    <div className="mt-2 h-1 bg-slate-700 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-blue-500 rounded-full"
+                        style={{ width: `${Math.min(100, (profile.photoCount / effectiveLimits.photoCount) * 100).toFixed(1)}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+                <div className="bg-slate-900 rounded border border-slate-700 px-3 py-2.5">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <Zap size={11} className="text-slate-500" />
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Daily Uploads</span>
+                  </div>
+                  <div className="text-sm font-semibold text-slate-200">{profile.uploadsToday} <span className="text-slate-500 text-xs font-normal">today</span></div>
+                  <div className="text-[10px] text-slate-500">limit: {effectiveLimits.uploadsPerDay}/day</div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="bg-slate-800 border border-slate-700 rounded p-5">
+            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-3">Plans</div>
+            <div className="grid grid-cols-1 gap-2 lg:grid-cols-3">
+              {(Object.keys(TIER_LIMITS) as Tier[]).map(tier => (
+                <div
+                  key={tier}
+                  className={`rounded border px-4 py-3 ${profile?.tier === tier ? 'bg-blue-600/10 border-blue-500/40' : 'bg-slate-900 border-slate-700'}`}
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-semibold text-slate-100 capitalize">{tier}</span>
+                    {profile?.tier === tier && <span className="text-[10px] font-bold uppercase tracking-wider text-blue-400">Current</span>}
+                  </div>
+                  <div className="space-y-1 text-[10px] text-slate-500">
+                    <div>{formatBytes(TIER_LIMITS[tier].bytes)} storage</div>
+                    <div>{TIER_LIMITS[tier].photoCount.toLocaleString()} photos</div>
+                    <div>{TIER_LIMITS[tier].uploadsPerDay}/day uploads</div>
+                  </div>
+                  {profile?.tier !== tier && (
+                    <button className="mt-3 flex items-center gap-1.5 px-3 py-1 bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium rounded transition-colors">
+                      <ChevronRight size={11} /> Upgrade
+                    </button>
+                  )}
                 </div>
               ))}
             </div>
           </div>
+
+          <div className="bg-slate-800 border border-slate-700 rounded p-5">
+            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-3">Promo Code</div>
+            <div className="flex gap-2">
+              <input
+                value={promoInput}
+                onChange={e => setPromoInput(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleRedeem()}
+                placeholder="Enter code"
+                className="flex-1 bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-blue-500"
+              />
+              <button
+                onClick={handleRedeem}
+                disabled={promoLoading || !promoInput.trim()}
+                className="px-3 py-1 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-xs font-medium rounded transition-colors"
+              >
+                {promoLoading ? '…' : 'Redeem'}
+              </button>
+            </div>
+            {promoStatus && <div className="mt-2 text-xs text-slate-400">{promoStatus}</div>}
+          </div>
         </div>
       )}
 
-      {activeTab === 'billing' && (
-        <div className="bg-slate-800 border border-slate-700 rounded-xl p-8 flex flex-col items-center justify-center gap-3 min-h-48 text-center">
-          <CreditCard size={28} className="text-slate-600" />
-          <div className="text-slate-400 font-medium">Billing coming soon</div>
-          <div className="text-sm text-slate-600 max-w-xs">Subscription plans, invoices, and payment methods will appear here.</div>
-        </div>
-      )}
+      {/* Appearance tab */}
+      {activeTab === 'appearance' && <>
+        <section className="bg-slate-800 border border-slate-700 rounded-xl p-6">
+          <div className="mb-5 flex items-center gap-3">
+            <Sparkles className="text-blue-400" size={22} />
+            <div>
+              <h2 className="text-xl font-bold text-slate-100">Website Style</h2>
+              <p className="text-sm text-slate-400">
+                Pick the overall interface style. The dark glass option is inspired by premium desktop apps.
+              </p>
+            </div>
+          </div>
 
-      {activeTab === 'appearance' && <><section className="bg-slate-800 border border-slate-700 rounded-xl p-6">
-        <div className="mb-5 flex items-center gap-3">
-          <Sparkles className="text-blue-400" size={22} />
-          <div>
-            <h2 className="text-xl font-bold text-slate-100">Website Style</h2>
-            <p className="text-sm text-slate-400">
-              Pick the overall interface style. The dark glass option is inspired by premium desktop apps.
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+            {styleOptions.map((option) => {
+              const active = settings.style === option.value;
+
+              return (
+                <button
+                  key={option.value}
+                  onClick={() => updateSettings({ style: option.value })}
+                  className={`rounded-2xl border p-4 text-left transition ${
+                    active
+                      ? 'bg-blue-600/20 border border-blue-500'
+                      : 'bg-slate-700/50 border border-slate-600 hover:bg-slate-700'
+                  }`}
+                >
+                  <div className="mb-4 flex items-center justify-between">
+                    <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${active ? 'bg-blue-600 text-white' : 'bg-slate-600 text-slate-300'}`}>
+                      <Monitor size={20} />
+                    </div>
+                    {active && <span className="bg-blue-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">Active</span>}
+                  </div>
+                  <h3 className="font-bold text-slate-100">{option.title}</h3>
+                  <p className="mt-2 text-sm text-slate-400">{option.description}</p>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+
+        <section className="bg-slate-800 border border-slate-700 rounded-xl p-6">
+          <div className="mb-5 flex items-center gap-3">
+            <Palette className="text-blue-400" size={22} />
+            <div>
+              <h2 className="text-xl font-bold text-slate-100">Accent &amp; Density</h2>
+              <p className="text-sm text-slate-400">Fine tune the app feel.</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+            <div>
+              <h3 className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-400">Accent Color</h3>
+              <div className="flex flex-wrap gap-2">
+                {accentOptions.map((option) => (
+                  <button
+                    key={option.value}
+                    onClick={() => updateSettings({ accent: option.value })}
+                    className={`rounded-full border px-4 py-2 text-sm font-semibold ${
+                      settings.accent === option.value
+                        ? 'bg-blue-600 border-blue-400 text-white'
+                        : 'bg-slate-700 border border-slate-600 text-slate-300 hover:bg-slate-600'
+                    }`}
+                  >
+                    {option.title}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <h3 className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-400">Density</h3>
+              <div className="flex flex-wrap gap-2">
+                {densityOptions.map((option) => (
+                  <button
+                    key={option.value}
+                    onClick={() => updateSettings({ density: option.value })}
+                    className={`rounded-full border px-4 py-2 text-sm font-semibold ${
+                      settings.density === option.value
+                        ? 'bg-blue-600 border-blue-400 text-white'
+                        : 'bg-slate-700 border border-slate-600 text-slate-300 hover:bg-slate-600'
+                    }`}
+                  >
+                    {option.title}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="overflow-hidden bg-slate-800 border border-slate-700 rounded-xl">
+          <div className="border-b border-slate-700 px-6 py-4">
+            <h2 className="text-xl font-bold text-slate-100">Preview</h2>
+            <p className="mt-1 text-sm text-slate-400">
+              The selected style is applied immediately across the app.
             </p>
           </div>
-        </div>
-
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-          {styleOptions.map((option) => {
-            const active = settings.style === option.value;
-
-            return (
-              <button
-                key={option.value}
-                onClick={() => updateSettings({ style: option.value })}
-                className={`rounded-2xl border p-4 text-left transition ${
-                  active
-                    ? 'bg-blue-600/20 border border-blue-500'
-                    : 'bg-slate-700/50 border border-slate-600 hover:bg-slate-700'
-                }`}
-              >
-                <div className="mb-4 flex items-center justify-between">
-                  <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${active ? 'bg-blue-600 text-white' : 'bg-slate-600 text-slate-300'}`}>
-                    <Monitor size={20} />
+          <div className="relative p-8">
+            <div className="absolute inset-0 bg-gradient-to-br from-blue-500/20 via-purple-500/10 to-amber-500/10" />
+            <div className="relative mx-auto max-w-3xl rounded-[2rem] border border-slate-600 bg-slate-900/50 p-5 shadow-2xl">
+              <div className="mb-8 flex gap-2">
+                <span className="w-3 h-3 rounded-full bg-red-400" />
+                <span className="w-3 h-3 rounded-full bg-amber-300" />
+                <span className="w-3 h-3 rounded-full bg-green-400" />
+              </div>
+              <div className="mx-auto flex w-fit gap-3 rounded-3xl border border-slate-600 bg-slate-700/50 p-3">
+                {['Steel', 'Docs', 'Map', 'Review', 'Print'].map((label) => (
+                  <div key={label} className="rounded-2xl bg-black/40 px-4 py-3 text-sm font-bold text-white shadow">
+                    {label}
                   </div>
-                  {active && <span className="bg-blue-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">Active</span>}
-                </div>
-                <h3 className="font-bold text-slate-100">{option.title}</h3>
-                <p className="mt-2 text-sm text-slate-400">{option.description}</p>
-              </button>
-            );
-          })}
-        </div>
-      </section>
-
-      <section className="bg-slate-800 border border-slate-700 rounded-xl p-6">
-        <div className="mb-5 flex items-center gap-3">
-          <Palette className="text-blue-400" size={22} />
-          <div>
-            <h2 className="text-xl font-bold text-slate-100">Accent &amp; Density</h2>
-            <p className="text-sm text-slate-400">Fine tune the app feel.</p>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          <div>
-            <h3 className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-400">Accent Color</h3>
-            <div className="flex flex-wrap gap-2">
-              {accentOptions.map((option) => (
-                <button
-                  key={option.value}
-                  onClick={() => updateSettings({ accent: option.value })}
-                  className={`rounded-full border px-4 py-2 text-sm font-semibold ${
-                    settings.accent === option.value
-                      ? 'bg-blue-600 border-blue-400 text-white'
-                      : 'bg-slate-700 border border-slate-600 text-slate-300 hover:bg-slate-600'
-                  }`}
-                >
-                  {option.title}
-                </button>
-              ))}
+                ))}
+              </div>
             </div>
           </div>
-
-          <div>
-            <h3 className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-400">Density</h3>
-            <div className="flex flex-wrap gap-2">
-              {densityOptions.map((option) => (
-                <button
-                  key={option.value}
-                  onClick={() => updateSettings({ density: option.value })}
-                  className={`rounded-full border px-4 py-2 text-sm font-semibold ${
-                    settings.density === option.value
-                      ? 'bg-blue-600 border-blue-400 text-white'
-                      : 'bg-slate-700 border border-slate-600 text-slate-300 hover:bg-slate-600'
-                  }`}
-                >
-                  {option.title}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section className="overflow-hidden bg-slate-800 border border-slate-700 rounded-xl">
-        <div className="border-b border-slate-700 px-6 py-4">
-          <h2 className="text-xl font-bold text-slate-100">Preview</h2>
-          <p className="mt-1 text-sm text-slate-400">
-            The selected style is applied immediately across the app.
-          </p>
-        </div>
-        <div className="relative p-8">
-          <div className="absolute inset-0 bg-gradient-to-br from-blue-500/20 via-purple-500/10 to-amber-500/10" />
-          <div className="relative mx-auto max-w-3xl rounded-[2rem] border border-slate-600 bg-slate-900/50 p-5 shadow-2xl">
-            <div className="mb-8 flex gap-2">
-              <span className="w-3 h-3 rounded-full bg-red-400" />
-              <span className="w-3 h-3 rounded-full bg-amber-300" />
-              <span className="w-3 h-3 rounded-full bg-green-400" />
-            </div>
-            <div className="mx-auto flex w-fit gap-3 rounded-3xl border border-slate-600 bg-slate-700/50 p-3">
-              {['Steel', 'Docs', 'Map', 'Review', 'Print'].map((label) => (
-                <div key={label} className="rounded-2xl bg-black/40 px-4 py-3 text-sm font-bold text-white shadow">
-                  {label}
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </section></>}
+        </section>
+      </>}
     </div>
   );
 };
