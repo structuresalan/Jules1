@@ -1,6 +1,13 @@
-import React, { useState } from 'react';
-import { Save, SlidersHorizontal } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { CheckCircle, ChevronDown, ChevronRight, Copy, Link, MessageSquare, Save, SlidersHorizontal, Users, X, XCircle } from 'lucide-react';
 import { dbWrite, COLLECTIONS } from '../lib/db';
+import { useAuth } from '../hooks/useAuth';
+import { subscribeProfile, type UserProfile } from '../lib/userProfile';
+import {
+  createClientReview, subscribeProjectReviews, subscribeComments,
+  respondToComment, closeReview,
+  type ClientReview, type ClientComment, type CommentStatus,
+} from '../lib/clientReviewService';
 
 type ProjectStatus = 'Active' | 'On Hold' | 'Closed' | 'Archived';
 type ProjectType = 'New Construction' | 'Renovation' | 'Inspection' | 'Mixed';
@@ -40,9 +47,193 @@ const saveProject = (updated: ProjectRecord) => {
 const inputCls = 'w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-blue-500 placeholder-slate-500';
 const labelCls = 'block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5';
 
+const statusConfig: Record<CommentStatus, { label: string; color: string }> = {
+  pending:   { label: 'Pending',   color: 'text-amber-400 bg-amber-900/30 border-amber-700/40' },
+  addressed: { label: 'Addressed', color: 'text-blue-400 bg-blue-900/30 border-blue-700/40' },
+  approved:  { label: 'Approved',  color: 'text-green-400 bg-green-900/30 border-green-700/40' },
+  denied:    { label: 'Denied',    color: 'text-red-400 bg-red-900/30 border-red-700/40' },
+};
+
+const fmt = (iso: string) => {
+  try {
+    return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(new Date(iso));
+  } catch { return iso; }
+};
+
+// ── Review comment row ───────────────────────────────────────────────────────
+
+const CommentRow: React.FC<{ comment: ClientComment; reviewId: string }> = ({ comment, reviewId }) => {
+  const [responding, setResponding] = useState(false);
+  const [responseText, setResponseText] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const cfg = statusConfig[comment.status];
+
+  const act = async (status: CommentStatus, response?: string) => {
+    setSaving(true);
+    try { await respondToComment(reviewId, comment.id, status, response); } catch { /* ok */ }
+    setSaving(false);
+    setResponding(false);
+    setResponseText('');
+  };
+
+  return (
+    <div className="bg-slate-900 border border-slate-700/60 rounded-lg p-4">
+      <div className="flex items-start justify-between gap-3 mb-2">
+        <div>
+          <span className="text-xs font-semibold text-slate-200">{comment.authorName}</span>
+          <span className="text-[11px] text-slate-500 ml-2">{comment.authorEmail}</span>
+          <span className="text-[11px] text-slate-600 ml-2">{fmt(comment.createdAt)}</span>
+        </div>
+        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${cfg.color}`}>
+          {cfg.label}
+        </span>
+      </div>
+
+      <p className="text-sm text-slate-300 leading-relaxed mb-3">{comment.text}</p>
+
+      {comment.engineerResponse && (
+        <div className="mb-3 pl-3 border-l-2 border-blue-600/40">
+          <div className="text-[10px] font-bold uppercase tracking-wider text-blue-400 mb-1">Your Response</div>
+          <p className="text-sm text-slate-400">{comment.engineerResponse}</p>
+        </div>
+      )}
+
+      {comment.status === 'pending' && !responding && (
+        <div className="flex items-center gap-2 mt-1">
+          <button
+            onClick={() => act('approved')}
+            disabled={saving}
+            className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold rounded bg-green-900/40 border border-green-700/50 text-green-400 hover:bg-green-800/40 disabled:opacity-50 transition-colors"
+          >
+            <CheckCircle size={10} /> Approve
+          </button>
+          <button
+            onClick={() => act('denied')}
+            disabled={saving}
+            className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold rounded bg-red-900/40 border border-red-700/50 text-red-400 hover:bg-red-800/40 disabled:opacity-50 transition-colors"
+          >
+            <XCircle size={10} /> Deny
+          </button>
+          <button
+            onClick={() => setResponding(true)}
+            className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold rounded bg-slate-700 border border-slate-600 text-slate-300 hover:text-white hover:border-slate-500 transition-colors"
+          >
+            <MessageSquare size={10} /> Address
+          </button>
+        </div>
+      )}
+
+      {responding && (
+        <div className="mt-2 space-y-2">
+          <textarea
+            value={responseText}
+            onChange={e => setResponseText(e.target.value)}
+            placeholder="Write your response to the client…"
+            rows={3}
+            className="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-blue-500 placeholder-slate-500 resize-none"
+          />
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => act('addressed', responseText)}
+              disabled={saving || !responseText.trim()}
+              className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-[11px] font-semibold rounded transition-colors"
+            >
+              {saving ? 'Saving…' : 'Send Response'}
+            </button>
+            <button
+              onClick={() => { setResponding(false); setResponseText(''); }}
+              className="px-3 py-1.5 text-[11px] text-slate-400 hover:text-slate-200 transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ── Review card (expandable) ─────────────────────────────────────────────────
+
+const ReviewCard: React.FC<{ review: ClientReview; projectId: string }> = ({ review, projectId: _projectId }) => {
+  const [open, setOpen] = useState(true);
+  const [comments, setComments] = useState<ClientComment[]>([]);
+  const [copied, setCopied] = useState(false);
+  const [closing, setClosing] = useState(false);
+
+  useEffect(() => subscribeComments(review.id, setComments), [review.id]);
+
+  const reviewUrl = `${window.location.origin}/review/${review.id}?token=${review.token}`;
+
+  const copyLink = async () => {
+    try { await navigator.clipboard.writeText(reviewUrl); setCopied(true); setTimeout(() => setCopied(false), 2000); } catch { /* ok */ }
+  };
+
+  const handleClose = async () => {
+    if (!window.confirm('Close this review? The client link will stop working.')) return;
+    setClosing(true);
+    await closeReview(review.id);
+    setClosing(false);
+  };
+
+  const pendingCount = comments.filter(c => c.status === 'pending').length;
+
+  return (
+    <div className="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden">
+      <div className="flex items-center justify-between p-4 cursor-pointer select-none" onClick={() => setOpen(o => !o)}>
+        <div className="flex items-center gap-3 min-w-0">
+          {open ? <ChevronDown size={14} className="text-slate-500 shrink-0" /> : <ChevronRight size={14} className="text-slate-500 shrink-0" />}
+          <div className="min-w-0">
+            <div className="text-sm font-semibold text-slate-100 truncate">{review.clientName || review.clientEmail}</div>
+            {review.clientName && <div className="text-[11px] text-slate-500 truncate">{review.clientEmail}</div>}
+          </div>
+          {pendingCount > 0 && (
+            <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400 bg-amber-900/30 border border-amber-700/40 px-2 py-0.5 rounded shrink-0">
+              {pendingCount} new
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-2 ml-3 shrink-0" onClick={e => e.stopPropagation()}>
+          <button
+            onClick={copyLink}
+            className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold rounded border border-slate-600 text-slate-400 hover:text-white hover:border-slate-400 transition-colors"
+          >
+            <Copy size={10} /> {copied ? 'Copied!' : 'Copy Link'}
+          </button>
+          <button
+            onClick={handleClose}
+            disabled={closing}
+            className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold rounded border border-red-800/50 text-red-400 hover:bg-red-900/30 transition-colors disabled:opacity-50"
+          >
+            <X size={10} /> Close
+          </button>
+        </div>
+      </div>
+
+      {open && (
+        <div className="border-t border-slate-700 p-4 space-y-3">
+          {comments.length === 0 ? (
+            <div className="text-sm text-slate-500 text-center py-4">
+              No comments yet. Share the link with your client.
+            </div>
+          ) : (
+            comments.map(c => <CommentRow key={c.id} comment={c} reviewId={review.id} />)
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ── Main component ───────────────────────────────────────────────────────────
+
 export const ProjectSettings: React.FC = () => {
+  const { user } = useAuth();
   const [project, setProject] = React.useState<ProjectRecord | null>(readProject);
   const [saved, setSaved] = useState(false);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [reviews, setReviews] = useState<ClientReview[]>([]);
 
   const [name, setName] = useState(project?.name || '');
   const [projectNumber, setProjectNumber] = useState(project?.projectNumber || '');
@@ -53,7 +244,14 @@ export const ProjectSettings: React.FC = () => {
   const [status, setStatus] = useState<ProjectStatus>(project?.status || 'Active');
   const [predictedEndDate, setPredictedEndDate] = useState(project?.predictedEndDate || '');
 
-  React.useEffect(() => {
+  // Share form state
+  const [showShareForm, setShowShareForm] = useState(false);
+  const [shareEmail, setShareEmail] = useState('');
+  const [shareName, setShareName] = useState('');
+  const [sharing, setSharing] = useState(false);
+  const [shareError, setShareError] = useState('');
+
+  useEffect(() => {
     const p = readProject();
     setProject(p);
     if (p) {
@@ -63,6 +261,13 @@ export const ProjectSettings: React.FC = () => {
       setPredictedEndDate(p.predictedEndDate || '');
     }
   }, []);
+
+  useEffect(() => subscribeProfile(setProfile), []);
+
+  useEffect(() => {
+    if (!project?.id) return;
+    return subscribeProjectReviews(project.id, setReviews);
+  }, [project?.id]);
 
   if (!project) {
     return (
@@ -93,6 +298,30 @@ export const ProjectSettings: React.FC = () => {
     setSaved(true);
     setTimeout(() => setSaved(false), 2500);
   };
+
+  const handleShare = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user) return;
+    setSharing(true);
+    setShareError('');
+    try {
+      await createClientReview(
+        { id: project.id, name: project.name, projectNumber: project.projectNumber, description: project.description },
+        shareEmail,
+        shareName,
+        profile?.company,
+      );
+      setShowShareForm(false);
+      setShareEmail('');
+      setShareName('');
+    } catch (err) {
+      setShareError(err instanceof Error ? err.message : 'Failed to create review link.');
+    } finally {
+      setSharing(false);
+    }
+  };
+
+  const canShareWithClients = profile?.tier === 'pro' || profile?.tier === 'business';
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500 max-w-2xl">
@@ -190,6 +419,95 @@ export const ProjectSettings: React.FC = () => {
           {saved && <span className="text-sm text-green-400">Saved!</span>}
         </div>
       </form>
+
+      {/* ── Client Review ─────────────────────────────────────────────────── */}
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <Users size={14} className="text-blue-400" />
+              <span className="text-sm font-semibold text-slate-100">Client Review</span>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-blue-400 border border-blue-500/40 bg-blue-600/10 px-1.5 py-0.5 rounded">Pro</span>
+            </div>
+            <p className="text-[11px] text-slate-500 mt-0.5">Share a link so clients can view the project and leave comments.</p>
+          </div>
+          {canShareWithClients && !showShareForm && (
+            <button
+              onClick={() => setShowShareForm(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold rounded transition-colors shrink-0"
+            >
+              <Link size={11} /> New Link
+            </button>
+          )}
+        </div>
+
+        {!canShareWithClients ? (
+          <div className="bg-slate-800 border border-slate-700 rounded-xl p-6 text-center">
+            <div className="text-slate-400 text-sm mb-3">Upgrade to Pro or Business to share projects with clients and collect feedback.</div>
+            <a href="/settings?tab=billing" className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold rounded transition-colors">
+              View Plans
+            </a>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {showShareForm && (
+              <form onSubmit={handleShare} className="bg-slate-800 border border-blue-500/40 rounded-xl p-5 space-y-4">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">New Client Review Link</div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className={labelCls}>Client Name</label>
+                    <input
+                      value={shareName}
+                      onChange={e => setShareName(e.target.value)}
+                      placeholder="Jane Smith"
+                      className={inputCls}
+                    />
+                  </div>
+                  <div>
+                    <label className={labelCls}>Client Email</label>
+                    <input
+                      type="email"
+                      value={shareEmail}
+                      onChange={e => setShareEmail(e.target.value)}
+                      placeholder="jane@client.com"
+                      required
+                      className={inputCls}
+                    />
+                  </div>
+                </div>
+                {shareError && <div className="text-xs text-red-400">{shareError}</div>}
+                <div className="flex items-center gap-2">
+                  <button
+                    type="submit"
+                    disabled={sharing || !shareEmail.trim()}
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm font-semibold rounded transition-colors"
+                  >
+                    {sharing ? 'Creating…' : 'Create Link'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setShowShareForm(false); setShareError(''); }}
+                    className="px-4 py-2 text-sm text-slate-400 hover:text-slate-200 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {reviews.length === 0 && !showShareForm && (
+              <div className="bg-slate-800 border border-slate-700 rounded-xl p-6 text-center">
+                <MessageSquare size={22} className="text-slate-600 mx-auto mb-2" />
+                <div className="text-sm text-slate-500">No active client reviews. Click "New Link" to share this project.</div>
+              </div>
+            )}
+
+            {reviews.map(r => (
+              <ReviewCard key={r.id} review={r} projectId={project.id} />
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 };

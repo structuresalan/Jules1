@@ -291,7 +291,7 @@ export const SettingsPage: React.FC = () => {
     { id: 'billing', label: 'Billing', icon: <CreditCard size={15} /> },
   ];
 
-  const effectiveLimits = profile ? getEffectiveLimits(profile) : TIER_LIMITS.starter;
+  const effectiveLimits = profile ? getEffectiveLimits(profile) : TIER_LIMITS.private;
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -404,7 +404,7 @@ export const SettingsPage: React.FC = () => {
       )}
 
       {/* Team tab */}
-      {activeTab === 'team' && profile?.tier === 'starter' && !profile?.companyId && !pendingInvite && (
+      {activeTab === 'team' && profile?.tier === 'private' && !profile?.companyId && !pendingInvite && (
         <div className="bg-slate-800 border border-slate-700 rounded p-8 text-center">
           <div className="flex justify-center mb-4">
             <div className="w-12 h-12 rounded bg-blue-600/20 border border-blue-500/30 flex items-center justify-center">
@@ -425,7 +425,7 @@ export const SettingsPage: React.FC = () => {
         </div>
       )}
 
-      {activeTab === 'team' && (profile?.tier !== 'starter' || profile?.companyId || pendingInvite) && (
+      {activeTab === 'team' && (profile?.tier !== 'private' || profile?.companyId || pendingInvite) && (
         <div className="space-y-4">
 
           {/* Pending invite banner */}
@@ -733,9 +733,12 @@ export const SettingsPage: React.FC = () => {
                   key={tier}
                   className={`rounded border px-4 py-3 ${profile?.tier === tier ? 'bg-blue-600/10 border-blue-500/40' : 'bg-slate-900 border-slate-700'}`}
                 >
-                  <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center justify-between mb-1">
                     <span className="text-sm font-semibold text-slate-100 capitalize">{tier}</span>
                     {profile?.tier === tier && <span className="text-[10px] font-bold uppercase tracking-wider text-blue-400">Current</span>}
+                  </div>
+                  <div className="text-[11px] font-semibold text-blue-400 mb-2">
+                    {tier === 'private' ? '$9/mo' : tier === 'pro' ? '$29/mo' : '$79/mo'}
                   </div>
                   <div className="space-y-1 text-[10px] text-slate-500">
                     <div>{formatBytes(TIER_LIMITS[tier].bytes)} storage</div>
@@ -744,8 +747,8 @@ export const SettingsPage: React.FC = () => {
                   </div>
                   {profile?.tier !== tier && (
                     <button
-                      onClick={() => tier !== 'starter' && handleUpgrade(tier as 'pro' | 'business')}
-                      disabled={upgrading === tier || tier === 'starter'}
+                      onClick={() => tier !== 'private' && handleUpgrade(tier as 'pro' | 'business')}
+                      disabled={upgrading === tier || tier === 'private'}
                       className="w-full mt-3 text-[10px] font-bold uppercase tracking-wider border border-slate-600 text-slate-400 hover:text-white hover:border-slate-400 disabled:opacity-40 disabled:cursor-not-allowed rounded px-2 py-1.5 transition-colors"
                     >
                       {upgrading === tier ? 'Redirecting…' : 'Upgrade'}

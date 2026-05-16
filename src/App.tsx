@@ -21,6 +21,7 @@ import { ProjectSettings } from './pages/ProjectSettings';
 import { Photos } from './pages/Photos';
 import { Reports } from './pages/Reports';
 import { Library } from './pages/Library';
+import { ClientReviewPage } from './pages/ClientReviewPage';
 import { applyWebsiteStyleSettings, getWebsiteStyleSettings } from './utils/websiteStyle';
 import './styles/websiteTheme.css';
 
@@ -39,6 +40,7 @@ const AppContent = () => {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
+      <Route path="/review/:reviewId" element={<ClientReviewPage />} />
       <Route path="/qa/visual-workspace" element={<VisualWorkspace />} />
 
       <Route path="/" element={<ProtectedRoute><MainLayout /></ProtectedRoute>}>

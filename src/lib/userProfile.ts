@@ -8,7 +8,7 @@
 import { doc, getDoc, setDoc, onSnapshot, type Unsubscribe } from 'firebase/firestore';
 import { auth, db } from '../firebase';
 
-export type Tier = 'starter' | 'pro' | 'business';
+export type Tier = 'private' | 'pro' | 'business';
 
 export interface UserProfile {
   tier: Tier;
@@ -32,7 +32,7 @@ export interface TierLimits {
 }
 
 export const TIER_LIMITS: Record<Tier, TierLimits> = {
-  starter:  { bytes: 1  * 1024 ** 3, photoCount: 500,   uploadsPerDay: 50,   maxFileBytes: 5 * 1024 ** 2 },
+  private:  { bytes: 1  * 1024 ** 3, photoCount: 500,   uploadsPerDay: 50,   maxFileBytes: 5 * 1024 ** 2 },
   pro:      { bytes: 5  * 1024 ** 3, photoCount: 2500,  uploadsPerDay: 200,  maxFileBytes: 5 * 1024 ** 2 },
   business: { bytes: 20 * 1024 ** 3, photoCount: 10000, uploadsPerDay: 1000, maxFileBytes: 5 * 1024 ** 2 },
 };
@@ -46,7 +46,7 @@ const nextMidnightIso = () => {
 };
 
 const defaultProfile = (): UserProfile => ({
-  tier: 'starter',
+  tier: 'private',
   storageUsedBytes: 0,
   photoCount: 0,
   uploadsToday: 0,
@@ -80,13 +80,16 @@ const rolloverIfNeeded = (p: UserProfile): UserProfile => {
   return p;
 };
 
+const migrateProfile = (p: UserProfile): UserProfile =>
+  (p.tier as string) === 'starter' ? { ...p, tier: 'private' } : p;
+
 /** Read profile from Firestore (falls back to localStorage). */
 export const getProfile = async (): Promise<UserProfile> => {
   const ref = profileRef();
-  if (!ref) return rolloverIfNeeded(lsRead());
+  if (!ref) return migrateProfile(rolloverIfNeeded(lsRead()));
   try {
     const snap = await getDoc(ref);
-    const data = snap.exists() ? { ...defaultProfile(), ...(snap.data() as Partial<UserProfile>) } : defaultProfile();
+    const data = snap.exists() ? migrateProfile({ ...defaultProfile(), ...(snap.data() as Partial<UserProfile>) }) : defaultProfile();
     const rolled = rolloverIfNeeded(data);
     lsWrite(rolled);
     return rolled;
@@ -103,11 +106,14 @@ const writeProfile = async (p: UserProfile): Promise<void> => {
   try { await setDoc(ref, p); } catch { /* offline ok */ }
 };
 
+const normalizeTier = (t: string): Tier =>
+  t === 'starter' ? 'private' : (t as Tier);
+
 export const getEffectiveLimits = (p: UserProfile): TierLimits => {
   if (p.promoActive) {
     return { bytes: 100 * 1024 ** 3, photoCount: 999999, uploadsPerDay: 99999, maxFileBytes: 50 * 1024 ** 2 };
   }
-  return TIER_LIMITS[p.tier];
+  return TIER_LIMITS[normalizeTier(p.tier)] ?? TIER_LIMITS.private;
 };
 
 export interface UploadCheck {
@@ -160,10 +166,10 @@ export const recordDelete = async (fileBytes: number): Promise<void> => {
 /** Subscribe to live profile changes. */
 export const subscribeProfile = (onData: (p: UserProfile) => void): Unsubscribe => {
   const ref = profileRef();
-  onData(rolloverIfNeeded(lsRead()));
+  onData(migrateProfile(rolloverIfNeeded(lsRead())));
   if (!ref) return () => {};
   return onSnapshot(ref, snap => {
-    const data = snap.exists() ? { ...defaultProfile(), ...(snap.data() as Partial<UserProfile>) } : defaultProfile();
+    const data = snap.exists() ? migrateProfile({ ...defaultProfile(), ...(snap.data() as Partial<UserProfile>) }) : defaultProfile();
     const rolled = rolloverIfNeeded(data);
     lsWrite(rolled);
     onData(rolled);

@@ -29,7 +29,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const ignoreNullAuthStateUntilRef = useRef(0);
   const authConfigured = Boolean(auth);
 
-  const createAccount = async (email: string, password: string, inviteCode = '', tier = 'starter', displayName = '', company = '', discipline = '') => {
+  const createAccount = async (email: string, password: string, inviteCode = '', tier = 'private', displayName = '', company = '', discipline = '') => {
     const activeAuth = auth;
     const normalizedEmail = email.trim();
 
