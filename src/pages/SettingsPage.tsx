@@ -374,7 +374,7 @@ export const SettingsPage: React.FC = () => {
                   <Building2 size={13} />
                   {creatingCompany ? 'Creating…' : 'Create Company'}
                 </button>
-                <div className="text-[10px] text-slate-600 pt-1">Already part of a company? Ask your CEO to invite you by email.</div>
+                <div className="text-[10px] text-slate-600 pt-1">Already part of a company? Ask your CEO or a Manager to invite you by email.</div>
               </div>
             </div>
           )}
