@@ -9,12 +9,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   try {
-    const { tier, uid, email, origin } = req.body as { tier: 'pro' | 'business'; uid: string; email: string; origin: string };
+    const { tier, uid, email, origin } = req.body as { tier: 'private' | 'pro' | 'business'; uid: string; email: string; origin: string };
 
     if (!tier || !uid || !email) return res.status(400).json({ error: 'Missing required fields' });
 
-    const priceId = tier === 'pro' ? process.env.STRIPE_PRICE_ID_PRO : process.env.STRIPE_PRICE_ID_BUSINESS;
-    if (!priceId) return res.status(500).json({ error: 'Price ID not configured' });
+    const priceId =
+      tier === 'private'  ? process.env.STRIPE_PRICE_ID_PRIVATE :
+      tier === 'pro'      ? process.env.STRIPE_PRICE_ID_PRO :
+      tier === 'business' ? process.env.STRIPE_PRICE_ID_BUSINESS :
+      undefined;
+    if (!priceId) return res.status(500).json({ error: `Price ID not configured for tier "${tier}"` });
 
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',

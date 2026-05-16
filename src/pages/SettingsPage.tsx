@@ -122,8 +122,8 @@ export const SettingsPage: React.FC = () => {
               { tier: data.tier },
               { merge: true }
             );
-            // If user owns a company, propagate tier to the company too
-            if (profile?.companyId && profile.companyRole === 'owner') {
+            // If user owns a company, propagate Pro/Business tier to the company too
+            if (profile?.companyId && profile.companyRole === 'owner' && (data.tier === 'pro' || data.tier === 'business')) {
               const { updateCompanyTier } = await import('../lib/teamService');
               await updateCompanyTier(profile.companyId, data.tier);
             }
@@ -259,7 +259,7 @@ export const SettingsPage: React.FC = () => {
     setPendingInvite(null);
   };
 
-  const handleUpgrade = async (tier: 'pro' | 'business') => {
+  const handleUpgrade = async (tier: 'private' | 'pro' | 'business') => {
     if (!auth?.currentUser?.email) return;
     setUpgrading(tier);
     try {
@@ -747,8 +747,8 @@ export const SettingsPage: React.FC = () => {
                   </div>
                   {profile?.tier !== tier && (
                     <button
-                      onClick={() => tier !== 'private' && handleUpgrade(tier as 'pro' | 'business')}
-                      disabled={upgrading === tier || tier === 'private'}
+                      onClick={() => handleUpgrade(tier)}
+                      disabled={upgrading === tier}
                       className="w-full mt-3 text-[10px] font-bold uppercase tracking-wider border border-slate-600 text-slate-400 hover:text-white hover:border-slate-400 disabled:opacity-40 disabled:cursor-not-allowed rounded px-2 py-1.5 transition-colors"
                     >
                       {upgrading === tier ? 'Redirecting…' : 'Upgrade'}
