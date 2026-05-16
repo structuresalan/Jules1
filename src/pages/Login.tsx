@@ -3,9 +3,10 @@ import { Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { BrandMark } from '../components/BrandMark';
 import type { Tier } from '../lib/userProfile';
+import { auth, sendPasswordResetEmail } from '../firebase';
 import './Login.css';
 
-type AuthMode = 'signin' | 'create';
+type AuthMode = 'signin' | 'create' | 'reset';
 
 const strengthLabels = ['—', 'WEAK', 'FAIR', 'GOOD', 'STRONG'];
 
@@ -35,6 +36,7 @@ export const Login: React.FC = () => {
   const [errorMessage, setErrorMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedTier, setSelectedTier] = useState<Tier>('starter');
+  const [resetSent, setResetSent] = useState(false);
   const pwStrength = getStrength(password);
 
   if (user) return <Navigate to="/" replace />;
@@ -52,10 +54,15 @@ export const Login: React.FC = () => {
     try {
       if (authMode === 'create') {
         await createAccount(email, password, inviteCode, selectedTier, `${firstName} ${lastName}`.trim(), company, discipline);
+        navigate('/', { replace: true });
+      } else if (authMode === 'reset') {
+        if (!auth) throw new Error('Firebase not configured');
+        await sendPasswordResetEmail(auth, email.trim());
+        setResetSent(true);
       } else {
         await login(email, password);
+        navigate('/', { replace: true });
       }
-      navigate('/', { replace: true });
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Unable to continue.');
     } finally {
@@ -70,6 +77,7 @@ export const Login: React.FC = () => {
     setConfirmPassword('');
     setInviteCode('');
     setShowPassword(false);
+    setResetSent(false);
   };
 
   const ctrlS: React.CSSProperties = {
@@ -257,24 +265,31 @@ export const Login: React.FC = () => {
                 <span style={{ background: '#f0f2f6', border: '1px solid #dde0e8', padding: '2px 7px', borderRadius: 3, fontSize: 10, color: '#374151' }}>v2.4</span>
               </div>
               <h2 style={{ margin: '0 0 6px', fontSize: 24, fontWeight: 700, letterSpacing: '-.02em', lineHeight: 1.2, color: '#0f1117' }}>
-                {authMode === 'signin' ? 'Welcome back.' : 'Create your account.'}
+                {authMode === 'signin' ? 'Welcome back.' : authMode === 'create' ? 'Create your account.' : 'Reset your password.'}
               </h2>
               <p style={{ margin: 0, color: '#6b7280', fontSize: 13 }}>
-                {authMode === 'signin' ? (
+                {authMode === 'signin' && (
                   <>New here?{' '}
                     <a href="#" onClick={e => { e.preventDefault(); switchMode('create'); }} style={{ color: '#2563eb', fontWeight: 600, textDecoration: 'none' }}>Create an account →</a>
                   </>
-                ) : (
+                )}
+                {authMode === 'create' && (
                   <>Already a user?{' '}
                     <a href="#" onClick={e => { e.preventDefault(); switchMode('signin'); }} style={{ color: '#2563eb', fontWeight: 600, textDecoration: 'none' }}>Sign in →</a>
+                  </>
+                )}
+                {authMode === 'reset' && (
+                  <>Enter your email and we'll send a reset link.{' '}
+                    <a href="#" onClick={e => { e.preventDefault(); switchMode('signin'); }} style={{ color: '#2563eb', fontWeight: 600, textDecoration: 'none' }}>Back to sign in →</a>
                   </>
                 )}
               </p>
             </div>
 
-            {/* tabs */}
+            {/* tabs (hidden in reset mode) */}
+            {authMode !== 'reset' && (
             <div style={{ display: 'flex', background: '#f0f2f6', border: '1px solid #dde0e8', borderRadius: 7, padding: 3, marginBottom: 22 }}>
-              {(['signin', 'create'] as AuthMode[]).map(m => (
+              {(['signin', 'create'] as Exclude<AuthMode, 'reset'>[]).map(m => (
                 <button key={m} type="button" onClick={() => switchMode(m)} style={{
                   flex: 1, textAlign: 'center', padding: '8px 10px', fontSize: 13, fontWeight: 500,
                   color: authMode === m ? '#0f1117' : '#6b7280',
@@ -287,6 +302,7 @@ export const Login: React.FC = () => {
                 </button>
               ))}
             </div>
+            )}
 
             {!authConfigured && (
               <div style={{ marginBottom: 16, fontSize: 12, color: '#d97706', background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: 6, padding: '8px 12px' }}>
@@ -297,6 +313,12 @@ export const Login: React.FC = () => {
             {errorMessage && (
               <div style={{ marginBottom: 16, fontSize: 12, color: '#dc2626', background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 6, padding: '8px 12px' }}>
                 {errorMessage}
+              </div>
+            )}
+
+            {resetSent && (
+              <div style={{ marginBottom: 16, fontSize: 12, color: '#059669', background: '#ecfdf5', border: '1px solid #6ee7b7', borderRadius: 6, padding: '8px 12px' }}>
+                ✓ Reset link sent. Check your inbox (and spam folder).
               </div>
             )}
 
@@ -356,7 +378,8 @@ export const Login: React.FC = () => {
                 </div>
               </div>
 
-              {/* password */}
+              {/* password (hidden in reset mode) */}
+              {authMode !== 'reset' && (
               <div style={fieldS}>
                 <label style={lblS}>Password <span style={hintS}>8+ CHARS</span></label>
                 <div style={ctrlS}>
@@ -393,6 +416,7 @@ export const Login: React.FC = () => {
                   </>
                 )}
               </div>
+              )}
 
               {/* confirm password */}
               {authMode === 'create' && (
@@ -455,7 +479,7 @@ export const Login: React.FC = () => {
                     <input type="checkbox" checked={keepSignedIn} onChange={e => setKeepSignedIn(e.target.checked)} />
                     Keep me signed in
                   </label>
-                  <a href="#" style={{ fontSize: 12.5, color: '#2563eb', textDecoration: 'none', fontWeight: 500 }}>Forgot password?</a>
+                  <a href="#" onClick={e => { e.preventDefault(); switchMode('reset'); }} style={{ fontSize: 12.5, color: '#2563eb', textDecoration: 'none', fontWeight: 500 }}>Forgot password?</a>
                 </div>
               )}
               {authMode === 'create' && (
@@ -481,8 +505,8 @@ export const Login: React.FC = () => {
               >
                 <span>
                   {isSubmitting
-                    ? (authMode === 'create' ? 'Creating account…' : 'Authenticating…')
-                    : (authMode === 'create' ? 'Create account' : 'Sign in to SimplifyStruct')}
+                    ? (authMode === 'create' ? 'Creating account…' : authMode === 'reset' ? 'Sending reset link…' : 'Authenticating…')
+                    : (authMode === 'create' ? 'Create account' : authMode === 'reset' ? 'Send reset link' : 'Sign in to SimplifyStruct')}
                 </span>
                 {!isSubmitting && (
                   <svg className="login-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

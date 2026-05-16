@@ -307,7 +307,28 @@ export const SettingsPage: React.FC = () => {
       )}
 
       {/* Team tab */}
-      {activeTab === 'team' && (
+      {activeTab === 'team' && profile?.tier === 'starter' && !profile?.companyId && !pendingInvite && (
+        <div className="bg-slate-800 border border-slate-700 rounded p-8 text-center">
+          <div className="flex justify-center mb-4">
+            <div className="w-12 h-12 rounded bg-blue-600/20 border border-blue-500/30 flex items-center justify-center">
+              <Users size={22} className="text-blue-400" />
+            </div>
+          </div>
+          <div className="text-lg font-semibold text-slate-100 mb-1">Teams is a Pro & Business feature</div>
+          <div className="text-sm text-slate-400 max-w-sm mx-auto mb-5">
+            Upgrade your plan to create a company, invite teammates, and assign roles.
+          </div>
+          <button
+            onClick={() => setActiveTab('billing')}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium rounded transition-colors"
+          >
+            <CreditCard size={13} />
+            View Plans
+          </button>
+        </div>
+      )}
+
+      {activeTab === 'team' && (profile?.tier !== 'starter' || profile?.companyId || pendingInvite) && (
         <div className="space-y-4">
 
           {/* Pending invite banner */}
