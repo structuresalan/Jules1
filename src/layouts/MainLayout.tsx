@@ -200,6 +200,10 @@ export const MainLayout: React.FC = () => {
           {/* APP section */}
           <div className="px-2 pb-1 text-[9px] font-bold uppercase tracking-widest text-slate-600 font-mono">App</div>
 
+          <NavLink to="/dashboard" end className={navLinkCls}>
+            <Home size={16} />
+            Home
+          </NavLink>
           <NavLink to="/" end className={navLinkCls}>
             <FolderOpen size={16} />
             Projects

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Calculator, Clock3, FileText, FolderOpen, LogOut, Pencil, Plus, Save, Search, Trash2, X } from 'lucide-react';
+import { Calculator, FileText, FolderOpen, LogOut, MoreHorizontal, Plus, Save, Search, Settings as SettingsIcon, Trash2, Users, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { BrandMark } from '../components/BrandMark';
 import { useAuth } from '../hooks/useAuth';
@@ -10,7 +10,7 @@ import { subscribeProfile, type UserProfile } from '../lib/userProfile';
 import { subscribeTeamProjects, type SharedProject } from '../lib/teamProjects';
 import { subscribeCompany, subscribeMembers, type Company, type CompanyMember } from '../lib/teamService';
 import { auth } from '../firebase';
-import { ArrowRight, Users } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 
 type ProjectStatus = 'Active' | 'On Hold' | 'Closed' | 'Archived';
 type ProjectType = 'New Construction' | 'Renovation' | 'Inspection' | 'Mixed';
@@ -52,15 +52,45 @@ const formatDateTime = (isoDate: string) => {
   }
 };
 
-const statusBadgeClass = (status: ProjectStatus) => {
-  switch (status) {
-    case 'Active':   return 'bg-green-900/40 text-green-400 border border-green-800/50';
-    case 'On Hold':  return 'bg-amber-900/40 text-amber-400 border border-amber-800/50';
-    case 'Closed':
-    case 'Archived':
-    default:         return 'bg-slate-700 text-slate-400 border border-slate-600';
-  }
-};
+// ── Section card ────────────────────────────────────────────────────────────
+
+const ProjectGroup: React.FC<{
+  label: string;
+  count: number;
+  shared?: boolean;
+  meta?: string;
+  action?: { label: string; onClick: () => void };
+  children: React.ReactNode;
+}> = ({ label, count, shared, meta, action, children }) => (
+  <div>
+    <div className="flex items-baseline justify-between gap-3 mb-2 px-1 flex-wrap">
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400">
+          {label} · {count}
+        </span>
+        {shared && (
+          <span className="text-[9px] font-semibold uppercase tracking-wider text-blue-400 bg-blue-500/15 border border-blue-500/30 px-1.5 py-0.5 rounded">
+            Shared
+          </span>
+        )}
+        {meta && <span className="text-[11px] text-slate-500">{meta}</span>}
+      </div>
+      {action && (
+        <button onClick={action.onClick} className="flex items-center gap-1 text-[11px] font-medium text-blue-400 hover:text-blue-300 transition-colors">
+          {action.label} <ArrowRight size={11} />
+        </button>
+      )}
+    </div>
+    <div className="bg-slate-800 rounded-lg overflow-hidden">{children}</div>
+  </div>
+);
+
+const EmptyRow: React.FC<{ message: string }> = ({ message }) => (
+  <div className="px-4 py-12 text-center text-xs text-slate-500">
+    <FolderOpen size={20} className="mx-auto mb-2 text-slate-700" />
+    {message}
+  </div>
+);
 
 export const ProjectHome: React.FC = () => {
   const navigate = useNavigate();
@@ -114,10 +144,7 @@ export const ProjectHome: React.FC = () => {
   const [description, setDescription] = useState('');
   const [projectType, setProjectType] = useState<ProjectType>('New Construction');
   const [predictedEndDate, setPredictedEndDate] = useState('');
-  const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
-  const [editProjectNumber, setEditProjectNumber] = useState('');
-  const [editStatus, setEditStatus] = useState<ProjectStatus>('Active');
-  const [editPredictedEndDate, setEditPredictedEndDate] = useState('');
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
   const filteredProjects = useMemo(() => {
     const query = searchText.trim().toLowerCase();
@@ -178,32 +205,16 @@ export const ProjectHome: React.FC = () => {
     navigate('/dashboard');
   };
 
-  const startEditProject = (project: ProjectRecord) => {
-    setEditingProjectId(project.id);
-    setEditProjectNumber(project.projectNumber);
-    setEditStatus(project.status);
-    setEditPredictedEndDate(project.predictedEndDate || '');
+  const openProjectSettings = (project: ProjectRecord) => {
+    window.localStorage.setItem(ACTIVE_PROJECT_KEY, project.id);
+    window.localStorage.setItem(SESSION_MODE_KEY, 'project');
+    navigate('/project-settings');
   };
 
-  const cancelEditProject = () => {
-    setEditingProjectId(null);
-    setEditProjectNumber('');
-    setEditStatus('Active');
-    setEditPredictedEndDate('');
-  };
-
-  const saveProjectEdit = (projectId: string) => {
-    const existing = projects.find(p => p.id === projectId);
-    if (existing) {
-      saveProject({
-        ...existing,
-        projectNumber: editProjectNumber.trim() || existing.projectNumber,
-        status: editStatus,
-        predictedEndDate: editStatus === 'Active' ? editPredictedEndDate : '',
-        updatedAt: new Date().toISOString(),
-      });
-    }
-    cancelEditProject();
+  const openTeamProject = (project: SharedProject) => {
+    window.localStorage.setItem(ACTIVE_PROJECT_KEY, project.id);
+    window.localStorage.setItem(SESSION_MODE_KEY, 'project');
+    navigate('/dashboard');
   };
 
   const startQuickCalculations = () => {
@@ -253,236 +264,138 @@ export const ProjectHome: React.FC = () => {
       </div>
 
       <div className="flex-1 overflow-y-auto">
-        <div className="mx-auto w-full max-w-7xl px-6 py-6 flex flex-col gap-6">
+        <div className="mx-auto w-full max-w-5xl px-6 py-7 flex flex-col gap-6">
 
-          {/* ── My Projects ── */}
-          <div className="bg-slate-800 border border-slate-700 rounded overflow-hidden flex flex-col">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-700 bg-slate-900/40 shrink-0">
-              <div className="flex items-center gap-2">
-                <FolderOpen size={13} className="text-slate-400" />
-                <span className="text-xs font-semibold text-slate-200">{isTeamUser ? 'My Projects' : 'Projects'}</span>
-                <span className="text-[10px] text-slate-500">{filteredProjects.length} shown</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="relative">
-                  <Search className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-500" size={12} />
-                  <input value={searchText} onChange={(e) => setSearchText(e.target.value)}
-                    className="bg-slate-700 border border-slate-600 rounded pl-7 pr-3 py-1 text-xs text-slate-200 focus:outline-none focus:border-blue-500 placeholder-slate-500 w-52"
-                    placeholder="Search projects…" />
-                </div>
-                <button onClick={() => setShowNewModal(true)}
-                  className="flex items-center gap-1 px-3 py-1 rounded bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium transition-colors">
-                  <Plus size={11} /> New Project
-                </button>
-              </div>
+          {/* ── Page header ── */}
+          <div className="flex items-end justify-between gap-3 flex-wrap">
+            <div>
+              <h1 className="text-[40px] tracking-tight text-slate-100 italic leading-none" style={{ fontFamily: '"Instrument Serif", Georgia, serif', fontWeight: 400 }}>
+                Projects
+              </h1>
+              <p className="mt-2 text-sm text-slate-500">
+                {projects.filter(p => p.status === 'Active').length} active · {projects.filter(p => p.status === 'Archived' || p.status === 'Closed').length} archived
+              </p>
             </div>
-
-            <div className="overflow-auto flex-1">
-              <table className="w-full min-w-[980px] text-xs border-collapse">
-                <thead className="sticky top-0 z-10">
-                  <tr className="bg-slate-900 text-slate-400 border-b border-slate-700">
-                    {['Name', 'Project No.', 'Client', 'Location', 'Type', 'Status', 'Predicted End', 'Created', 'Last Modified', ''].map((h) => (
-                      <th key={h} className={`px-3 py-2 text-left text-[10px] font-bold uppercase tracking-wider ${h === '' ? 'text-right' : ''}`}>{h}</th>
-                    ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredProjects.length === 0 ? (
-                      <tr>
-                        <td colSpan={10} className="px-4 py-12 text-center text-slate-500">
-                          <FolderOpen size={24} className="mx-auto mb-2 text-slate-700" />
-                          {projects.length === 0 ? 'No saved projects yet. Create a new project to get started.' : 'No projects match your search.'}
-                        </td>
-                      </tr>
-                    ) : filteredProjects.map((project) => {
-                      const colorIdx = project.colorIndex !== undefined ? project.colorIndex : stableIndexForId(project.id);
-                      const chipColor = colorForProject(colorIdx).hex;
-                      return (
-                      <tr key={project.id} className="border-b border-slate-700/50 hover:bg-slate-700/30 transition-colors">
-                        <td className="py-2.5 pl-0 pr-3">
-                          <div className="flex items-center gap-2.5">
-                            <div className="w-[3px] self-stretch min-h-[28px] rounded-full shrink-0" style={{ background: chipColor }} />
-                            <div>
-                              <div className="font-medium text-slate-200">{project.name}</div>
-                              {project.description && <div className="mt-0.5 max-w-xs truncate text-slate-500">{project.description}</div>}
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-3 py-2.5">
-                          {editingProjectId === project.id ? (
-                            <input value={editProjectNumber} onChange={(e) => setEditProjectNumber(e.target.value)}
-                              className="w-28 bg-slate-600 border border-slate-500 rounded px-2 py-1 text-xs text-slate-200 focus:outline-none focus:border-blue-500" />
-                          ) : (
-                            <span className="font-mono text-slate-400">{project.projectNumber}</span>
-                          )}
-                        </td>
-                        <td className="px-3 py-2.5 text-slate-400">{project.client || '—'}</td>
-                        <td className="px-3 py-2.5 text-slate-400">{project.location || '—'}</td>
-                        <td className="px-3 py-2.5 text-slate-400">{project.projectType || '—'}</td>
-                        <td className="px-3 py-2.5">
-                          {editingProjectId === project.id ? (
-                            <select value={editStatus} onChange={(e) => setEditStatus(e.target.value as ProjectStatus)}
-                              className="bg-slate-600 border border-slate-500 rounded px-2 py-1 text-xs text-slate-200 focus:outline-none focus:border-blue-500 cursor-pointer">
-                              <option>Active</option><option>On Hold</option><option>Closed</option><option>Archived</option>
-                            </select>
-                          ) : (
-                            <span className={`px-2 py-0.5 rounded text-[10px] font-semibold ${statusBadgeClass(project.status)}`}>
-                              {project.status}
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-3 py-2.5 text-slate-400">
-                          {editingProjectId === project.id ? (
-                            <input type="date" value={editPredictedEndDate}
-                              onChange={(e) => setEditPredictedEndDate(e.target.value)}
-                              disabled={editStatus !== 'Active'}
-                              className="bg-slate-600 border border-slate-500 rounded px-2 py-1 text-xs text-slate-200 focus:outline-none focus:border-blue-500 disabled:opacity-40" />
-                          ) : (
-                            project.status === 'Active' && project.predictedEndDate ? project.predictedEndDate : '—'
-                          )}
-                        </td>
-                        <td className="px-3 py-2.5 text-slate-500">{formatDateTime(project.createdAt)}</td>
-                        <td className="px-3 py-2.5 text-slate-500">
-                          <div className="flex items-center gap-1">
-                            <Clock3 size={11} className="text-slate-600" />
-                            {formatDateTime(project.updatedAt)}
-                          </div>
-                        </td>
-                        <td className="px-3 py-2.5">
-                          <div className="flex justify-end items-center gap-1">
-                            {editingProjectId === project.id ? (
-                              <>
-                                <button onClick={() => saveProjectEdit(project.id)}
-                                  className="flex items-center gap-1 px-2 py-1 rounded bg-green-900/30 border border-green-700/50 text-green-400 hover:bg-green-900/50 text-[10px] transition-colors">
-                                  <Save size={11} /> Save
-                                </button>
-                                <button onClick={cancelEditProject}
-                                  className="flex items-center gap-1 px-2 py-1 rounded bg-slate-700 border border-slate-600 text-slate-400 hover:text-white text-[10px] transition-colors">
-                                  <X size={11} /> Cancel
-                                </button>
-                              </>
-                            ) : (
-                              <>
-                                <button onClick={() => openProject(project)}
-                                  className="px-3 py-1 rounded bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-medium transition-colors">
-                                  Open
-                                </button>
-                                <button onClick={() => startEditProject(project)} title="Edit"
-                                  className="p-1 rounded bg-slate-700 hover:bg-slate-600 text-slate-400 hover:text-white transition-colors">
-                                  <Pencil size={12} />
-                                </button>
-                                <button onClick={() => deleteProject(project.id)} title="Delete"
-                                  className="p-1 rounded bg-slate-700 hover:bg-red-900/40 text-slate-500 hover:text-red-400 transition-colors">
-                                  <Trash2 size={12} />
-                                </button>
-                              </>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    );})}
-                  </tbody>
-                </table>
+            <div className="flex items-center gap-2">
+              <div className="relative">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500" size={12} />
+                <input value={searchText} onChange={(e) => setSearchText(e.target.value)}
+                  className="bg-slate-800 border border-slate-700 rounded pl-8 pr-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-blue-500 placeholder-slate-500 w-44"
+                  placeholder="Search" />
               </div>
+              <button onClick={() => setShowNewModal(true)}
+                className="flex items-center gap-1.5 px-3 py-2 rounded bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium transition-colors">
+                <Plus size={12} /> New project
+              </button>
             </div>
+          </div>
 
-            {/* ── Team Projects (Pro/Business + company members only) ── */}
-            {isTeamUser && (
-              <div className="bg-slate-800 border border-slate-700 rounded overflow-hidden flex flex-col">
-                <div className="flex items-center justify-between px-4 py-3 border-b border-slate-700 bg-slate-900/40 shrink-0 flex-wrap gap-2">
-                  <div className="flex items-center gap-2">
-                    <Users size={13} className="text-blue-400" />
-                    <span className="text-xs font-semibold text-slate-200">
-                      {company?.name || 'Team'}
-                    </span>
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-blue-400 bg-blue-600/10 border border-blue-500/30 px-1.5 py-0.5 rounded">
-                      Shared
-                    </span>
-                    <span className="text-[10px] text-slate-500">
-                      {filteredTeamProjects.length} project{filteredTeamProjects.length === 1 ? '' : 's'} · {members.length} member{members.length === 1 ? '' : 's'}
-                    </span>
+          {/* ── My projects ── */}
+          <ProjectGroup label={isTeamUser ? 'My projects' : 'All projects'} count={filteredProjects.length}>
+            {filteredProjects.length === 0 ? (
+              <EmptyRow message={projects.length === 0 ? 'No saved projects yet. Create one to get started.' : 'No projects match your search.'} />
+            ) : (
+              filteredProjects.map(project => {
+                const colorIdx = project.colorIndex !== undefined ? project.colorIndex : stableIndexForId(project.id);
+                const chipColor = colorForProject(colorIdx).hex;
+                const metaParts = [
+                  project.projectNumber,
+                  project.client,
+                  project.location,
+                ].filter(Boolean);
+                const isMenuOpen = openMenuId === project.id;
+                return (
+                  <div key={project.id} className="grid grid-cols-[10px_1fr_auto_18px] gap-3 items-center px-4 py-3 border-b border-slate-900/60 last:border-0 hover:bg-slate-700/30 transition-colors">
+                    <button onClick={() => openProject(project)} className="w-2 h-2 rounded-sm shrink-0" style={{ background: chipColor }} aria-label={`Open ${project.name}`} />
+                    <button onClick={() => openProject(project)} className="min-w-0 text-left">
+                      <div className="text-sm text-slate-200 truncate group-hover:text-white">{project.name}</div>
+                      <div className="text-[11px] text-slate-500 truncate mt-0.5">
+                        {metaParts.length > 0 ? metaParts.join(' · ') : 'No details'}
+                      </div>
+                    </button>
+                    <span className="text-[11px] text-slate-500 shrink-0 hidden sm:block">{formatDateTime(project.updatedAt)}</span>
+                    <div className="relative">
+                      <button
+                        onClick={() => setOpenMenuId(isMenuOpen ? null : project.id)}
+                        className="text-slate-500 hover:text-slate-200 transition-colors"
+                        aria-label="Actions"
+                      >
+                        <MoreHorizontal size={16} />
+                      </button>
+                      {isMenuOpen && (
+                        <>
+                          <div className="fixed inset-0 z-10" onClick={() => setOpenMenuId(null)} />
+                          <div className="absolute right-0 top-6 z-20 w-40 bg-slate-800 border border-slate-700 rounded-lg shadow-xl py-1">
+                            <button onClick={() => { setOpenMenuId(null); openProject(project); }}
+                              className="w-full text-left px-3 py-1.5 text-xs text-slate-200 hover:bg-slate-700 transition-colors">
+                              Open
+                            </button>
+                            <button onClick={() => { setOpenMenuId(null); openProjectSettings(project); }}
+                              className="w-full text-left px-3 py-1.5 text-xs text-slate-200 hover:bg-slate-700 transition-colors flex items-center gap-2">
+                              <SettingsIcon size={11} /> Edit details
+                            </button>
+                            <div className="my-1 border-t border-slate-700" />
+                            <button onClick={() => { setOpenMenuId(null); deleteProject(project.id); }}
+                              className="w-full text-left px-3 py-1.5 text-xs text-red-400 hover:bg-slate-700 transition-colors flex items-center gap-2">
+                              <Trash2 size={11} /> Delete
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </div>
                   </div>
-                  <button
-                    onClick={() => navigate('/settings?tab=team')}
-                    className="flex items-center gap-1 text-[11px] font-medium text-blue-400 hover:text-blue-300 transition-colors"
-                  >
-                    Manage team <ArrowRight size={11} />
-                  </button>
-                </div>
-
-                {filteredTeamProjects.length === 0 ? (
-                  <div className="px-4 py-10 text-center text-slate-500 text-xs">
-                    {teamProjects.length === 0
-                      ? 'No team projects yet. When your teammates create projects marked "Team", they will appear here.'
-                      : 'No team projects match your search.'}
-                  </div>
-                ) : (
-                  <div className="overflow-auto">
-                    <table className="w-full min-w-[980px] text-xs border-collapse">
-                      <thead className="sticky top-0 z-10">
-                        <tr className="bg-slate-900 text-slate-400 border-b border-slate-700">
-                          {['Name', 'Project No.', 'Owner', 'Client', 'Location', 'Type', 'Status', 'Last Modified', ''].map((h) => (
-                            <th key={h} className={`px-3 py-2 text-left text-[10px] font-bold uppercase tracking-wider ${h === '' ? 'text-right' : ''}`}>{h}</th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {filteredTeamProjects.map((project) => {
-                          const colorIdx = project.colorIndex !== undefined ? project.colorIndex : stableIndexForId(project.id);
-                          const chipColor = colorForProject(colorIdx).hex;
-                          return (
-                            <tr key={project.id} className="border-b border-slate-700/50 hover:bg-slate-700/30 transition-colors">
-                              <td className="py-2.5 pl-0 pr-3">
-                                <div className="flex items-center gap-2.5">
-                                  <div className="w-[3px] self-stretch min-h-[28px] rounded-full shrink-0" style={{ background: chipColor }} />
-                                  <div>
-                                    <div className="font-medium text-slate-200">{project.name}</div>
-                                    {project.description && <div className="mt-0.5 max-w-xs truncate text-slate-500">{project.description}</div>}
-                                  </div>
-                                </div>
-                              </td>
-                              <td className="px-3 py-2.5 font-mono text-slate-400">{project.projectNumber || '—'}</td>
-                              <td className="px-3 py-2.5 text-slate-400 truncate max-w-[180px]" title={project.ownerEmail}>{project.ownerEmail || '—'}</td>
-                              <td className="px-3 py-2.5 text-slate-400">{project.client || '—'}</td>
-                              <td className="px-3 py-2.5 text-slate-400">{project.location || '—'}</td>
-                              <td className="px-3 py-2.5 text-slate-400">{project.projectType || '—'}</td>
-                              <td className="px-3 py-2.5">
-                                <span className={`px-2 py-0.5 rounded text-[10px] font-semibold ${statusBadgeClass(project.status as ProjectStatus)}`}>
-                                  {project.status}
-                                </span>
-                              </td>
-                              <td className="px-3 py-2.5 text-slate-500">
-                                <div className="flex items-center gap-1">
-                                  <Clock3 size={11} className="text-slate-600" />
-                                  {formatDateTime(project.updatedAt)}
-                                </div>
-                              </td>
-                              <td className="px-3 py-2.5">
-                                <div className="flex justify-end items-center gap-1">
-                                  <button
-                                    onClick={() => {
-                                      window.localStorage.setItem(ACTIVE_PROJECT_KEY, project.id);
-                                      window.localStorage.setItem(SESSION_MODE_KEY, 'project');
-                                      navigate('/dashboard');
-                                    }}
-                                    className="px-3 py-1 rounded bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-medium transition-colors"
-                                  >
-                                    Open
-                                  </button>
-                                </div>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
+                );
+              })
             )}
+          </ProjectGroup>
+
+          {/* ── Team projects (Pro/Business + company members) ── */}
+          {isTeamUser && (
+            <ProjectGroup
+              label={company?.name || 'Team'}
+              count={filteredTeamProjects.length}
+              shared
+              meta={`${filteredTeamProjects.length} project${filteredTeamProjects.length === 1 ? '' : 's'} · ${members.length} member${members.length === 1 ? '' : 's'}`}
+              action={{ label: 'Manage team', onClick: () => navigate('/settings?tab=team') }}
+            >
+              {filteredTeamProjects.length === 0 ? (
+                <EmptyRow message={teamProjects.length === 0
+                  ? 'No team projects yet. Projects marked "Team" by your teammates appear here.'
+                  : 'No team projects match your search.'} />
+              ) : (
+                filteredTeamProjects.map(project => {
+                  const colorIdx = project.colorIndex !== undefined ? project.colorIndex : stableIndexForId(project.id);
+                  const chipColor = colorForProject(colorIdx).hex;
+                  const metaParts = [project.projectNumber, project.client, project.location].filter(Boolean);
+                  const owner = members.find(m => m.uid === project.ownerUid) || { email: project.ownerEmail, name: '' };
+                  const ownerInitial = (owner?.name || owner?.email || '?').slice(0, 1).toUpperCase();
+                  const ownerColor = colorForProject(stableIndexForId(project.ownerUid || project.id)).hex;
+                  return (
+                    <div key={project.id} className="grid grid-cols-[10px_1fr_auto_auto_18px] gap-3 items-center px-4 py-3 border-b border-slate-900/60 last:border-0 hover:bg-slate-700/30 transition-colors">
+                      <button onClick={() => openTeamProject(project)} className="w-2 h-2 rounded-sm shrink-0" style={{ background: chipColor }} aria-label={`Open ${project.name}`} />
+                      <button onClick={() => openTeamProject(project)} className="min-w-0 text-left">
+                        <div className="text-sm text-slate-200 truncate">{project.name}</div>
+                        <div className="text-[11px] text-slate-500 truncate mt-0.5">
+                          {metaParts.length > 0 ? metaParts.join(' · ') : 'No details'}
+                        </div>
+                      </button>
+                      <div className="flex shrink-0" title={`Owner: ${project.ownerEmail || 'unknown'}`}>
+                        <div className="w-5 h-5 rounded-full border-[1.5px] border-slate-800 flex items-center justify-center text-[10px] font-semibold text-white" style={{ background: ownerColor }}>
+                          {ownerInitial}
+                        </div>
+                      </div>
+                      <span className="text-[11px] text-slate-500 shrink-0 hidden sm:block">{formatDateTime(project.updatedAt)}</span>
+                      <span className="text-slate-500"><Users size={14} /></span>
+                    </div>
+                  );
+                })
+              )}
+            </ProjectGroup>
+          )}
 
         </div>
       </div>
+
 
       {/* ── New project modal ── */}
       {showNewModal && (
