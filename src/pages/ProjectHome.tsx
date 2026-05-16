@@ -7,7 +7,10 @@ import { colorForProject, stableIndexForId } from '../lib/projectColors';
 import { useCollection } from '../lib/useCollection';
 import { COLLECTIONS } from '../lib/db';
 import { subscribeProfile, type UserProfile } from '../lib/userProfile';
+import { subscribeTeamProjects, type SharedProject } from '../lib/teamProjects';
+import { subscribeCompany, subscribeMembers, type Company, type CompanyMember } from '../lib/teamService';
 import { auth } from '../firebase';
+import { ArrowRight, Users } from 'lucide-react';
 
 type ProjectStatus = 'Active' | 'On Hold' | 'Closed' | 'Archived';
 type ProjectType = 'New Construction' | 'Renovation' | 'Inspection' | 'Mixed';
@@ -67,10 +70,26 @@ export const ProjectHome: React.FC = () => {
     COLLECTIONS.projects.ls,
   );
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [teamProjects, setTeamProjects] = useState<SharedProject[]>([]);
+  const [company, setCompany] = useState<Company | null>(null);
+  const [members, setMembers] = useState<CompanyMember[]>([]);
   const [showNewModal, setShowNewModal] = useState(false);
   const [searchText, setSearchText] = useState('');
 
   useEffect(() => subscribeProfile(setProfile), []);
+
+  const isTeamUser = profile?.companyId && (profile.tier === 'pro' || profile.tier === 'business');
+
+  useEffect(() => {
+    if (!isTeamUser || !profile?.companyId) {
+      setTeamProjects([]); setMembers([]); setCompany(null);
+      return;
+    }
+    const u1 = subscribeTeamProjects(profile.companyId, setTeamProjects);
+    const u2 = subscribeCompany(profile.companyId, setCompany);
+    const u3 = subscribeMembers(profile.companyId, setMembers);
+    return () => { u1(); u2(); u3(); };
+  }, [isTeamUser, profile?.companyId]);
 
   // Wrap save to auto-tag projects with team-sharing fields when applicable.
   const saveProject = useCallback((project: ProjectRecord) => {
@@ -108,6 +127,15 @@ export const ProjectHome: React.FC = () => {
         .join(' ').toLowerCase().includes(query),
     );
   }, [projects, searchText]);
+
+  const filteredTeamProjects = useMemo(() => {
+    const query = searchText.trim().toLowerCase();
+    if (!query) return teamProjects;
+    return teamProjects.filter((p) =>
+      [p.name, p.projectNumber, p.client, p.location, p.status, p.projectType, p.ownerEmail]
+        .join(' ').toLowerCase().includes(query),
+    );
+  }, [teamProjects, searchText]);
 
   const openProject = (project: ProjectRecord) => {
     const updated = { ...project, updatedAt: new Date().toISOString() };
@@ -224,15 +252,15 @@ export const ProjectHome: React.FC = () => {
         </div>
       </div>
 
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <div className="mx-auto w-full max-w-7xl px-6 py-6 flex flex-col gap-4 h-full">
+      <div className="flex-1 overflow-y-auto">
+        <div className="mx-auto w-full max-w-7xl px-6 py-6 flex flex-col gap-6">
 
-          {/* ── Projects table ── */}
-          <div className="bg-slate-800 border border-slate-700 rounded overflow-hidden flex flex-col flex-1 min-h-0">
+          {/* ── My Projects ── */}
+          <div className="bg-slate-800 border border-slate-700 rounded overflow-hidden flex flex-col">
             <div className="flex items-center justify-between px-4 py-3 border-b border-slate-700 bg-slate-900/40 shrink-0">
               <div className="flex items-center gap-2">
                 <FolderOpen size={13} className="text-slate-400" />
-                <span className="text-xs font-semibold text-slate-200">Projects</span>
+                <span className="text-xs font-semibold text-slate-200">{isTeamUser ? 'My Projects' : 'Projects'}</span>
                 <span className="text-[10px] text-slate-500">{filteredProjects.length} shown</span>
               </div>
               <div className="flex items-center gap-2">
@@ -357,6 +385,101 @@ export const ProjectHome: React.FC = () => {
                 </table>
               </div>
             </div>
+
+            {/* ── Team Projects (Pro/Business + company members only) ── */}
+            {isTeamUser && (
+              <div className="bg-slate-800 border border-slate-700 rounded overflow-hidden flex flex-col">
+                <div className="flex items-center justify-between px-4 py-3 border-b border-slate-700 bg-slate-900/40 shrink-0 flex-wrap gap-2">
+                  <div className="flex items-center gap-2">
+                    <Users size={13} className="text-blue-400" />
+                    <span className="text-xs font-semibold text-slate-200">
+                      {company?.name || 'Team'}
+                    </span>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-blue-400 bg-blue-600/10 border border-blue-500/30 px-1.5 py-0.5 rounded">
+                      Shared
+                    </span>
+                    <span className="text-[10px] text-slate-500">
+                      {filteredTeamProjects.length} project{filteredTeamProjects.length === 1 ? '' : 's'} · {members.length} member{members.length === 1 ? '' : 's'}
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => navigate('/settings?tab=team')}
+                    className="flex items-center gap-1 text-[11px] font-medium text-blue-400 hover:text-blue-300 transition-colors"
+                  >
+                    Manage team <ArrowRight size={11} />
+                  </button>
+                </div>
+
+                {filteredTeamProjects.length === 0 ? (
+                  <div className="px-4 py-10 text-center text-slate-500 text-xs">
+                    {teamProjects.length === 0
+                      ? 'No team projects yet. When your teammates create projects marked "Team", they will appear here.'
+                      : 'No team projects match your search.'}
+                  </div>
+                ) : (
+                  <div className="overflow-auto">
+                    <table className="w-full min-w-[980px] text-xs border-collapse">
+                      <thead className="sticky top-0 z-10">
+                        <tr className="bg-slate-900 text-slate-400 border-b border-slate-700">
+                          {['Name', 'Project No.', 'Owner', 'Client', 'Location', 'Type', 'Status', 'Last Modified', ''].map((h) => (
+                            <th key={h} className={`px-3 py-2 text-left text-[10px] font-bold uppercase tracking-wider ${h === '' ? 'text-right' : ''}`}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredTeamProjects.map((project) => {
+                          const colorIdx = project.colorIndex !== undefined ? project.colorIndex : stableIndexForId(project.id);
+                          const chipColor = colorForProject(colorIdx).hex;
+                          return (
+                            <tr key={project.id} className="border-b border-slate-700/50 hover:bg-slate-700/30 transition-colors">
+                              <td className="py-2.5 pl-0 pr-3">
+                                <div className="flex items-center gap-2.5">
+                                  <div className="w-[3px] self-stretch min-h-[28px] rounded-full shrink-0" style={{ background: chipColor }} />
+                                  <div>
+                                    <div className="font-medium text-slate-200">{project.name}</div>
+                                    {project.description && <div className="mt-0.5 max-w-xs truncate text-slate-500">{project.description}</div>}
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="px-3 py-2.5 font-mono text-slate-400">{project.projectNumber || '—'}</td>
+                              <td className="px-3 py-2.5 text-slate-400 truncate max-w-[180px]" title={project.ownerEmail}>{project.ownerEmail || '—'}</td>
+                              <td className="px-3 py-2.5 text-slate-400">{project.client || '—'}</td>
+                              <td className="px-3 py-2.5 text-slate-400">{project.location || '—'}</td>
+                              <td className="px-3 py-2.5 text-slate-400">{project.projectType || '—'}</td>
+                              <td className="px-3 py-2.5">
+                                <span className={`px-2 py-0.5 rounded text-[10px] font-semibold ${statusBadgeClass(project.status as ProjectStatus)}`}>
+                                  {project.status}
+                                </span>
+                              </td>
+                              <td className="px-3 py-2.5 text-slate-500">
+                                <div className="flex items-center gap-1">
+                                  <Clock3 size={11} className="text-slate-600" />
+                                  {formatDateTime(project.updatedAt)}
+                                </div>
+                              </td>
+                              <td className="px-3 py-2.5">
+                                <div className="flex justify-end items-center gap-1">
+                                  <button
+                                    onClick={() => {
+                                      window.localStorage.setItem(ACTIVE_PROJECT_KEY, project.id);
+                                      window.localStorage.setItem(SESSION_MODE_KEY, 'project');
+                                      navigate('/dashboard');
+                                    }}
+                                    className="px-3 py-1 rounded bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-medium transition-colors"
+                                  >
+                                    Open
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
 
         </div>
       </div>

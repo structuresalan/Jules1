@@ -21,7 +21,6 @@ import { ProjectSettings } from './pages/ProjectSettings';
 import { Photos } from './pages/Photos';
 import { Reports } from './pages/Reports';
 import { Library } from './pages/Library';
-import { CompanyPage } from './pages/CompanyPage';
 import { ClientReviewPage } from './pages/ClientReviewPage';
 import { applyWebsiteStyleSettings, getWebsiteStyleSettings } from './utils/websiteStyle';
 import './styles/websiteTheme.css';
@@ -59,7 +58,6 @@ const AppContent = () => {
         <Route path="photos" element={<Photos />} />
         <Route path="inbox" element={<InboxPage />} />
         <Route path="library" element={<Library />} />
-        <Route path="company" element={<CompanyPage />} />
         <Route path="project-settings" element={<ProjectSettings />} />
       </Route>
 
