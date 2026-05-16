@@ -11,8 +11,14 @@ export interface Company {
   name: string;
   description?: string;
   ownerUid: string;
+  tier: 'pro' | 'business';
   createdAt: string;
 }
+
+export const TEAM_SIZE_LIMITS = {
+  pro: 2,
+  business: Infinity,
+} as const;
 
 export interface CompanyMember {
   id: string;
@@ -40,11 +46,11 @@ const userEmail = () => auth?.currentUser?.email?.toLowerCase() ?? null;
 
 // ── Company CRUD ────────────────────────────────────────────────────────────
 
-export const createCompany = async (name: string, description?: string): Promise<Company> => {
+export const createCompany = async (name: string, description: string | undefined, tier: 'pro' | 'business'): Promise<Company> => {
   const userId = uid();
   if (!db || !userId) throw new Error('Not signed in');
   const id = `co_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
-  const company: Company = { id, name: name.trim(), description, ownerUid: userId, createdAt: new Date().toISOString() };
+  const company: Company = { id, name: name.trim(), description, ownerUid: userId, tier, createdAt: new Date().toISOString() };
   await setDoc(doc(db, 'companies', id), company);
   // Add owner as first member
   const ownerId = `mem_${Date.now().toString(36)}`;
@@ -85,6 +91,17 @@ export const subscribeMembers = (companyId: string, onData: (members: CompanyMem
 export const inviteMember = async (companyId: string, companyName: string, email: string, role: 'manager' | 'employee'): Promise<void> => {
   const userId = uid();
   if (!db || !userId) return;
+  // Check team size limit
+  const company = await getCompany(companyId);
+  if (company) {
+    const limit = TEAM_SIZE_LIMITS[company.tier];
+    const membersSnap = await getDocs(collection(db, 'companies', companyId, 'members'));
+    if (membersSnap.size >= limit) {
+      throw new Error(company.tier === 'pro'
+        ? 'Pro plan allows up to 2 members. Upgrade to Business to invite more.'
+        : 'Team is at capacity.');
+    }
+  }
   const normalEmail = email.trim().toLowerCase();
   // Add pending member
   const memberId = `mem_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 5)}`;
@@ -133,10 +150,10 @@ export const checkPendingInvite = async (): Promise<CompanyInvite | null> => {
   } catch { return null; }
 };
 
-export const acceptInvite = async (invite: CompanyInvite): Promise<void> => {
+export const acceptInvite = async (invite: CompanyInvite): Promise<{ tier: 'pro' | 'business' } | null> => {
   const userId = uid();
   const email = userEmail();
-  if (!db || !userId || !email) return;
+  if (!db || !userId || !email) return null;
   // Mark invite accepted
   await setDoc(doc(db, 'invites', invite.id), { status: 'accepted' }, { merge: true });
   // Find the pending member doc and activate it
@@ -145,6 +162,15 @@ export const acceptInvite = async (invite: CompanyInvite): Promise<void> => {
   if (pendingDoc) {
     await setDoc(doc(db, 'companies', invite.companyId, 'members', pendingDoc.id), { uid: userId, status: 'active' }, { merge: true });
   }
+  // Return company tier so caller can update user profile
+  const company = await getCompany(invite.companyId);
+  return company ? { tier: company.tier } : null;
+};
+
+/** Update the company's tier (call when owner upgrades their subscription). */
+export const updateCompanyTier = async (companyId: string, tier: 'pro' | 'business'): Promise<void> => {
+  if (!db) return;
+  try { await setDoc(doc(db, 'companies', companyId), { tier }, { merge: true }); } catch { /* ok */ }
 };
 
 export const declineInvite = async (inviteId: string): Promise<void> => {

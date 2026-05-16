@@ -6,6 +6,7 @@ import type { UserProfile, Tier } from '../lib/userProfile';
 import {
   createCompany, subscribeCompany, subscribeMembers, inviteMember,
   removeMember, updateMemberRole, checkPendingInvite, acceptInvite, declineInvite,
+  TEAM_SIZE_LIMITS,
 } from '../lib/teamService';
 import type { Company, CompanyMember, CompanyRole, CompanyInvite } from '../lib/teamService';
 import { auth, updatePassword, reauthenticateWithCredential, EmailAuthProvider } from '../firebase';
@@ -121,6 +122,11 @@ export const SettingsPage: React.FC = () => {
               { tier: data.tier },
               { merge: true }
             );
+            // If user owns a company, propagate tier to the company too
+            if (profile?.companyId && profile.companyRole === 'owner') {
+              const { updateCompanyTier } = await import('../lib/teamService');
+              await updateCompanyTier(profile.companyId, data.tier);
+            }
           }
           setPaymentStatus('success');
         } else {
@@ -207,9 +213,10 @@ export const SettingsPage: React.FC = () => {
 
   const handleCreateCompany = async () => {
     if (!companyName.trim()) return;
+    if (profile?.tier !== 'pro' && profile?.tier !== 'business') return;
     setCreatingCompany(true);
     try {
-      const co = await createCompany(companyName, companyDesc);
+      const co = await createCompany(companyName, companyDesc, profile.tier);
       await updateCompanyInfo(co.id, 'owner');
     } catch { /* ok */ }
     setCreatingCompany(false);
@@ -220,16 +227,28 @@ export const SettingsPage: React.FC = () => {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(inviteEmail)) { setInviteError('Invalid email.'); return; }
     setInviting(true);
     setInviteError('');
-    await inviteMember(company.id, company.name, inviteEmail, inviteRole);
-    setInviteEmail('');
+    try {
+      await inviteMember(company.id, company.name, inviteEmail, inviteRole);
+      setInviteEmail('');
+    } catch (e: unknown) {
+      setInviteError(e instanceof Error ? e.message : 'Failed to invite');
+    }
     setInviting(false);
   };
 
   const handleAcceptInvite = async () => {
     if (!pendingInvite) return;
     setAcceptingInvite(true);
-    await acceptInvite(pendingInvite);
+    const result = await acceptInvite(pendingInvite);
     await updateCompanyInfo(pendingInvite.companyId, pendingInvite.role);
+    // Match the company's tier so invitee gets the same plan abilities
+    if (result?.tier && auth?.currentUser) {
+      const { db } = await import('../firebase');
+      const { doc, setDoc } = await import('firebase/firestore');
+      if (db) {
+        await setDoc(doc(db, 'users', auth.currentUser.uid, 'profile', 'main'), { tier: result.tier }, { merge: true });
+      }
+    }
     setPendingInvite(null);
     setAcceptingInvite(false);
   };
@@ -504,13 +523,28 @@ export const SettingsPage: React.FC = () => {
                 <div className="mt-3 pt-3 border-t border-slate-700 flex gap-4 text-[10px] text-slate-500">
                   <span>{companyMembers.filter(m => m.status === 'active').length} active members</span>
                   <span>{companyMembers.filter(m => m.status === 'pending').length} pending invites</span>
+                  <span className="ml-auto">
+                    {companyMembers.length} / {company.tier === 'business' ? '∞' : TEAM_SIZE_LIMITS[company.tier]} seats
+                    <span className="ml-2 capitalize text-blue-400 font-medium">{company.tier} plan</span>
+                  </span>
                 </div>
               </div>
 
               {/* Invite (owner + manager only) */}
-              {(profile.companyRole === 'owner' || profile.companyRole === 'manager') && (
+              {(profile.companyRole === 'owner' || profile.companyRole === 'manager') && (() => {
+                const seatsUsed = companyMembers.length;
+                const seatLimit = TEAM_SIZE_LIMITS[company.tier];
+                const atLimit = seatsUsed >= seatLimit;
+                return (
                 <div className="bg-slate-800 border border-slate-700 rounded p-5">
-                  <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-4">Invite Employee</div>
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Invite Employee</div>
+                    {atLimit && (
+                      <div className="text-[10px] text-amber-400">
+                        {company.tier === 'pro' ? 'Pro limit reached · Upgrade to Business for unlimited' : 'At capacity'}
+                      </div>
+                    )}
+                  </div>
                   <div className="flex gap-2">
                     <input
                       type="email"
@@ -530,16 +564,25 @@ export const SettingsPage: React.FC = () => {
                     </select>
                     <button
                       onClick={handleInvite}
-                      disabled={inviting || !inviteEmail.trim()}
-                      className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm font-medium rounded transition-colors whitespace-nowrap"
+                      disabled={inviting || !inviteEmail.trim() || atLimit}
+                      className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded transition-colors whitespace-nowrap"
                     >
                       <UserPlus size={13} />
                       {inviting ? '…' : 'Invite'}
                     </button>
                   </div>
                   {inviteError && <div className="mt-2 text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded px-3 py-2">{inviteError}</div>}
+                  {atLimit && company.tier === 'pro' && (
+                    <button
+                      onClick={() => setActiveTab('billing')}
+                      className="mt-3 w-full text-xs text-blue-400 hover:text-blue-300 font-medium border border-blue-500/30 bg-blue-500/10 rounded px-3 py-2 transition-colors"
+                    >
+                      Upgrade to Business →
+                    </button>
+                  )}
                 </div>
-              )}
+                );
+              })()}
 
               {/* Member list */}
               <div className="bg-slate-800 border border-slate-700 rounded p-5">
