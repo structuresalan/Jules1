@@ -39,11 +39,17 @@ export const SteelDesign: React.FC = () => {
   const isOk = interaction <= 1;
 
   const tabs: SteelTab[] = ['Beam', 'Column', 'Composite Beam', 'Single Angle', 'Base Plate', 'Anchorage'];
+  const stubTabs: SteelTab[] = ['Composite Beam', 'Single Angle', 'Base Plate', 'Anchorage'];
 
   const renderPlaceholder = (name: string) => (
-    <div className="bg-slate-800 border border-slate-700 rounded-lg p-8 text-slate-400">
-      <h2 className="text-xl font-semibold text-slate-200 mb-2">{name}</h2>
-      <p>Section kept in place so you can fill in your design logic without losing workflow structure.</p>
+    <div className="bg-slate-800 border border-slate-700 rounded-lg p-10 text-center">
+      <div className="inline-flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-amber-400 bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 rounded mb-3">
+        Coming Soon
+      </div>
+      <h2 className="text-xl font-semibold text-slate-200 mb-1.5">{name}</h2>
+      <p className="text-sm text-slate-500 max-w-md mx-auto">
+        This calculator isn't ready yet. We're prioritizing the modules engineers use most — Beam and Column are fully wired up. Reach out if you need {name} sooner.
+      </p>
     </div>
   );
 
@@ -70,11 +76,15 @@ export const SteelDesign: React.FC = () => {
 
       <div className="border-b border-slate-700 overflow-x-auto">
         <nav className="-mb-px flex space-x-8 min-w-max">
-          {tabs.map((tab) => (
-            <button key={tab} onClick={() => setActiveTab(tab)} className={`py-3 px-1 border-b-2 text-sm font-medium transition-colors ${activeTab === tab ? 'border-blue-500 text-blue-400' : 'border-transparent text-slate-500 hover:text-slate-300 hover:border-slate-600'}`}>
-              {tab}
-            </button>
-          ))}
+          {tabs.map((tab) => {
+            const isStub = stubTabs.includes(tab);
+            return (
+              <button key={tab} onClick={() => setActiveTab(tab)} className={`py-3 px-1 border-b-2 text-sm font-medium transition-colors inline-flex items-center gap-1.5 ${activeTab === tab ? 'border-blue-500 text-blue-400' : 'border-transparent text-slate-500 hover:text-slate-300 hover:border-slate-600'}`}>
+                {tab}
+                {isStub && <span className="text-[9px] font-bold uppercase tracking-wider text-amber-400 bg-amber-500/10 border border-amber-500/30 px-1.5 py-0.5 rounded">Coming Soon</span>}
+              </button>
+            );
+          })}
         </nav>
       </div>
 

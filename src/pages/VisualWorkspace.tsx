@@ -16,6 +16,9 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import { getActiveProjectId } from '../utils/projectDocuments';
 import type { RelationshipGraph } from '../components/RelationshipMap';
 import { RelationshipMap } from '../components/RelationshipMap';
+import { subscribeWorkspace, saveWorkspace } from '../lib/workspaceSync';
+import { useCollection } from '../lib/useCollection';
+import { COLLECTIONS } from '../lib/db';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -471,8 +474,9 @@ export function VisualWorkspace() {
   // More menu
   const [showMoreMenu, setShowMoreMenu] = useState(false);
 
-  // Site photos library
-  const [sitePhotos,         setSitePhotos]         = useState<SitePhoto[]>([]);
+  // Site photos library — now sourced from the canonical photos collection
+  // (sitePhotos + setSitePhotos are defined below alongside the workspace
+  // persistence block).
   const photoLibInputRef   = useRef<HTMLInputElement>(null);
   // Attached documents library
   const [attachedDocs,       setAttachedDocs]       = useState<AttachedDoc[]>([
@@ -533,44 +537,33 @@ export function VisualWorkspace() {
   const markups        = boardMarkups[activeBoardId] ?? [];
   const selectedMarkup = markups.find(m => m.id === selectedId) ?? null;
 
-  // ── Persistence: save/load markups per project in localStorage ────────────
-  const projectId   = getActiveProjectId();
-  const MARKUP_KEY  = `vw.markups.${projectId || 'default'}`;
+  // ── Persistence: Firestore-backed for markups, graphs, docs (cached in LS) ─
+  const projectId = getActiveProjectId();
 
+  // Markups
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem(MARKUP_KEY);
-      if (saved) {
-        const raw = JSON.parse(saved) as Record<string, unknown> | null;
-        if (!raw || typeof raw !== 'object') return;
-        const normalized: Record<string, Markup[]> = {};
-        for (const [boardId, list] of Object.entries(raw)) {
-          if (!Array.isArray(list)) continue;
-          normalized[boardId] = list.filter(item => item && typeof item === 'object').map(item => normalizeMarkup(item as Record<string, unknown>));
-        }
-        setBoardMarkups(normalized);
-        hist.current = { snaps: [normalized], idx: 0 };
-        const maxNum = Object.values(normalized).flat().reduce((max, m) => Math.max(max, m.number), 0);
-        if (maxNum >= SEED.length) setCounter(maxNum + 1);
+    return subscribeWorkspace<Record<string, Markup[]>>('workspace_markups', projectId, raw => {
+      if (!raw || typeof raw !== 'object') return;
+      const normalized: Record<string, Markup[]> = {};
+      for (const [boardId, list] of Object.entries(raw)) {
+        if (!Array.isArray(list)) continue;
+        normalized[boardId] = list.filter(item => item && typeof item === 'object').map(item => normalizeMarkup(item as unknown as Record<string, unknown>));
       }
-    } catch { /* ignore corrupt data */ }
+      setBoardMarkups(normalized);
+      hist.current = { snaps: [normalized], idx: 0 };
+      const maxNum = Object.values(normalized).flat().reduce((max, m) => Math.max(max, m.number), 0);
+      if (maxNum >= SEED.length) setCounter(maxNum + 1);
+    });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [MARKUP_KEY]);
-
+  }, [projectId]);
   useEffect(() => {
-    const t = setTimeout(() => {
-      try { localStorage.setItem(MARKUP_KEY, JSON.stringify(boardMarkups)); } catch { /* storage full */ }
-    }, 400);
+    const t = setTimeout(() => { void saveWorkspace('workspace_markups', projectId, boardMarkups); }, 400);
     return () => clearTimeout(t);
-  }, [boardMarkups, MARKUP_KEY]);
+  }, [boardMarkups, projectId]);
 
-  // ── Persistence: relationship graphs ─────────────────────────────────────
-  const GRAPH_KEY = `vw.graphs.${projectId || 'default'}`;
+  // Relationship graphs
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem(GRAPH_KEY);
-      if (!saved) return;
-      const parsed = JSON.parse(saved) as Record<string, unknown> | null;
+    return subscribeWorkspace<Record<string, RelationshipGraph>>('workspace_graphs', projectId, parsed => {
       if (!parsed || typeof parsed !== 'object') return;
       const cleaned: Record<string, RelationshipGraph> = {};
       for (const [boardId, g] of Object.entries(parsed)) {
@@ -582,44 +575,60 @@ export function VisualWorkspace() {
         };
       }
       setBoardGraphs(cleaned);
-    } catch { /* ignore */ }
+    });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [GRAPH_KEY]);
+  }, [projectId]);
   useEffect(() => {
-    const t = setTimeout(() => {
-      try { localStorage.setItem(GRAPH_KEY, JSON.stringify(boardGraphs)); } catch { /* storage full */ }
-    }, 400);
+    const t = setTimeout(() => { void saveWorkspace('workspace_graphs', projectId, boardGraphs); }, 400);
     return () => clearTimeout(t);
-  }, [boardGraphs, GRAPH_KEY]);
+  }, [boardGraphs, projectId]);
 
-  const PHOTOS_KEY = `vw.photos.${projectId || 'default'}`;
-  const DOCS_KEY   = `vw.docs.${projectId || 'default'}`;
+  // Attached docs
   useEffect(() => {
-    try {
-      const s = localStorage.getItem(PHOTOS_KEY);
-      if (!s) return;
-      const parsed = JSON.parse(s);
-      if (Array.isArray(parsed)) setSitePhotos(parsed);
-    } catch {}
+    return subscribeWorkspace<AttachedDoc[]>('workspace_docs', projectId, data => {
+      if (Array.isArray(data)) setAttachedDocs(data);
+    });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [PHOTOS_KEY]);
+  }, [projectId]);
   useEffect(() => {
-    const t = setTimeout(() => { try { localStorage.setItem(PHOTOS_KEY, JSON.stringify(sitePhotos)); } catch {} }, 400);
+    const t = setTimeout(() => { void saveWorkspace('workspace_docs', projectId, attachedDocs); }, 400);
     return () => clearTimeout(t);
-  }, [sitePhotos, PHOTOS_KEY]);
-  useEffect(() => {
-    try {
-      const s = localStorage.getItem(DOCS_KEY);
-      if (!s) return;
-      const parsed = JSON.parse(s);
-      if (Array.isArray(parsed)) setAttachedDocs(parsed);
-    } catch {}
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [DOCS_KEY]);
-  useEffect(() => {
-    const t = setTimeout(() => { try { localStorage.setItem(DOCS_KEY, JSON.stringify(attachedDocs)); } catch {} }, 400);
-    return () => clearTimeout(t);
-  }, [attachedDocs, DOCS_KEY]);
+  }, [attachedDocs, projectId]);
+
+  // Photos — now use the canonical project photos collection (no more vw.photos.* fork)
+  interface PhotoRow { id: string; projectId: string; dataUrl: string; name?: string; caption?: string; createdAt: string; takenAt?: string; bytes?: number }
+  const { items: allProjectPhotos, save: savePhotoRow, remove: removePhotoRow } = useCollection<PhotoRow>(
+    COLLECTIONS.photos.col,
+    COLLECTIONS.photos.ls,
+  );
+  // Adapt to the SitePhoto shape the rest of this file expects (data <-> dataUrl).
+  const sitePhotos: SitePhoto[] = React.useMemo(
+    () => allProjectPhotos
+      .filter(p => p.projectId === (projectId || 'default'))
+      .map(p => ({ id: p.id, name: p.name || p.id, data: p.dataUrl, createdAt: p.createdAt })),
+    [allProjectPhotos, projectId],
+  );
+  const setSitePhotos = useCallback((updater: SitePhoto[] | ((prev: SitePhoto[]) => SitePhoto[])) => {
+    const next = typeof updater === 'function' ? (updater as (prev: SitePhoto[]) => SitePhoto[])(sitePhotos) : updater;
+    const prevIds = new Set(sitePhotos.map(p => p.id));
+    const nextIds = new Set(next.map(p => p.id));
+    // Adds
+    next.forEach(p => {
+      if (!prevIds.has(p.id)) {
+        savePhotoRow({
+          id: p.id,
+          projectId: projectId || 'default',
+          dataUrl: p.data,
+          name: p.name,
+          caption: '',
+          createdAt: p.createdAt,
+          takenAt: p.createdAt,
+        });
+      }
+    });
+    // Removes
+    sitePhotos.forEach(p => { if (!nextIds.has(p.id)) removePhotoRow(p.id); });
+  }, [sitePhotos, savePhotoRow, removePhotoRow, projectId]);
 
   // ── Resize observer ───────────────────────────────────────────────────────
   useEffect(() => {

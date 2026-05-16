@@ -210,21 +210,25 @@ export const ConcreteDesign: React.FC = () => {
       {/* Navigation Sub-tabs */}
       <div className="border-b border-slate-700 overflow-x-auto custom-scrollbar">
         <nav className="-mb-px flex space-x-6 min-w-max px-2">
-          {concreteTabs.map((tab) => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`
-                whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors
-                ${activeTab === tab
-                  ? 'border-blue-500 text-blue-400'
-                  : 'border-transparent text-slate-500 hover:text-slate-300 hover:border-slate-500'
-                }
-              `}
-            >
-              {tab}
-            </button>
-          ))}
+          {concreteTabs.map((tab) => {
+            const isStub = tab !== 'Beam' && tab !== 'One-Way Slab';
+            return (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className={`
+                  whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors inline-flex items-center gap-1.5
+                  ${activeTab === tab
+                    ? 'border-blue-500 text-blue-400'
+                    : 'border-transparent text-slate-500 hover:text-slate-300 hover:border-slate-500'
+                  }
+                `}
+              >
+                {tab}
+                {isStub && <span className="text-[9px] font-bold uppercase tracking-wider text-amber-400 bg-amber-500/10 border border-amber-500/30 px-1.5 py-0.5 rounded">Coming Soon</span>}
+              </button>
+            );
+          })}
         </nav>
       </div>
 
@@ -562,9 +566,14 @@ export const ConcreteDesign: React.FC = () => {
 
         {/* Placeholders for other tabs */}
         {activeTab !== 'Beam' && activeTab !== 'One-Way Slab' && (
-          <div className="p-12 text-center border-2 border-dashed border-slate-700 rounded-lg">
-            <h3 className="text-lg font-medium text-slate-500">{activeTab} Design</h3>
-            <p className="mt-2 text-sm text-slate-500">This ACI 318 calculation module is under construction.</p>
+          <div className="bg-slate-800 border border-slate-700 rounded-lg p-10 text-center">
+            <div className="inline-flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-amber-400 bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 rounded mb-3">
+              Coming Soon
+            </div>
+            <h3 className="text-xl font-semibold text-slate-200 mb-1.5">{activeTab} Design</h3>
+            <p className="text-sm text-slate-500 max-w-md mx-auto">
+              This ACI 318 calculator isn't ready yet. Beam and One-Way Slab are fully wired up — we're working through the rest. Reach out if you need {activeTab} sooner.
+            </p>
           </div>
         )}
       </div>
