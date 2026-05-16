@@ -89,8 +89,13 @@ export const getProfile = async (): Promise<UserProfile> => {
   if (!ref) return migrateProfile(rolloverIfNeeded(lsRead()));
   try {
     const snap = await getDoc(ref);
-    const data = snap.exists() ? migrateProfile({ ...defaultProfile(), ...(snap.data() as Partial<UserProfile>) }) : defaultProfile();
-    const rolled = rolloverIfNeeded(data);
+    const raw = snap.exists() ? { ...defaultProfile(), ...(snap.data() as Partial<UserProfile>) } : defaultProfile();
+    const migrated = migrateProfile(raw);
+    // Persist the migration back to Firestore so legacy 'starter' becomes 'private' permanently.
+    if (migrated !== raw) {
+      try { await setDoc(ref, { tier: migrated.tier }, { merge: true }); } catch { /* ok */ }
+    }
+    const rolled = rolloverIfNeeded(migrated);
     lsWrite(rolled);
     return rolled;
   } catch {

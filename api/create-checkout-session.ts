@@ -27,7 +27,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       customer_email: email,
       client_reference_id: uid,
       metadata: { uid, tier },
-      subscription_data: { metadata: { uid, tier } },
+      subscription_data: {
+        metadata: { uid, tier },
+        // 30-day free trial on the Private tier. Card required, $0 today, auto-renews at $9/mo.
+        ...(tier === 'private' ? { trial_period_days: 30 } : {}),
+      },
       success_url: `${origin}/settings?tab=billing&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${origin}/settings?tab=billing&cancelled=1`,
     });

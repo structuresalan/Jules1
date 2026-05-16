@@ -737,9 +737,14 @@ export const SettingsPage: React.FC = () => {
                     <span className="text-sm font-semibold text-slate-100 capitalize">{tier}</span>
                     {profile?.tier === tier && <span className="text-[10px] font-bold uppercase tracking-wider text-blue-400">Current</span>}
                   </div>
-                  <div className="text-[11px] font-semibold text-blue-400 mb-2">
+                  <div className="text-[11px] font-semibold text-blue-400 mb-1">
                     {tier === 'private' ? '$9/mo' : tier === 'pro' ? '$29/mo' : '$79/mo'}
                   </div>
+                  {tier === 'private' && (
+                    <div className="text-[9px] font-bold uppercase tracking-wider text-green-400 mb-2">
+                      30-day free trial
+                    </div>
+                  )}
                   <div className="space-y-1 text-[10px] text-slate-500">
                     <div>{formatBytes(TIER_LIMITS[tier].bytes)} storage</div>
                     <div>{TIER_LIMITS[tier].photoCount.toLocaleString()} photos</div>
