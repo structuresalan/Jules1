@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { MapPin, ClipboardList, Network, Plus, ChevronRight, PlayCircle } from 'lucide-react';
+import { Camera, ChevronRight, ClipboardList, Eye, FileText, MapPin, Network, Plus, PlayCircle, Share2 } from 'lucide-react';
 import { colorForProject, stableIndexForId } from '../lib/projectColors';
 import { useCollection } from '../lib/useCollection';
 import { COLLECTIONS } from '../lib/db';
@@ -34,8 +34,25 @@ interface StoredProject {
   id: string;
   name: string;
   projectNumber?: string;
+  client?: string;
+  location?: string;
+  status?: string;
   colorIndex?: number;
+  createdAt?: string;
 }
+
+interface PhotoRecord {
+  id: string;
+  projectId: string;
+  dataUrl: string;
+  name: string;
+  caption: string;
+  createdAt: string;
+}
+
+const ACTIVE_PROJECT_KEY = 'struccalc.activeProject.v3';
+
+const getActiveProjectId = () => window.localStorage.getItem(ACTIVE_PROJECT_KEY) || '';
 
 const isoToday = () => new Date().toISOString().split('T')[0];
 
@@ -91,6 +108,13 @@ export const Dashboard: React.FC = () => {
     COLLECTIONS.projects.col,
     COLLECTIONS.projects.ls,
   );
+  const { items: allPhotos } = useCollection<PhotoRecord>(
+    COLLECTIONS.photos.col,
+    COLLECTIONS.photos.ls,
+  );
+
+  const activeProjectId = getActiveProjectId();
+  const activeProject = activeProjectId ? projects.find(p => p.id === activeProjectId) : null;
 
   const projectMap = React.useMemo(() => {
     const m: Record<string, StoredProject> = {};
@@ -128,6 +152,188 @@ export const Dashboard: React.FC = () => {
     navigate('/site-visits');
   };
 
+  // ── Project-status surface (when a project is active) ──────────────────────
+  if (activeProject) {
+    const projectObs    = allObs.filter(o => o.projectId === activeProject.id);
+    const projectVisits = allVisits.filter(v => v.projectId === activeProject.id);
+    const projectPhotos = allPhotos.filter(p => p.projectId === activeProject.id);
+    const openObs       = projectObs.filter(o => o.status !== 'Closed' && o.status !== 'Resolved');
+    const criticalObs   = openObs.filter(o => o.severity === 'High');
+    const nextVisit     = projectVisits
+      .filter(v => v.date >= today && v.status !== 'Completed')
+      .sort((a, b) => a.date.localeCompare(b.date))[0];
+    const sevenDaysAgo  = new Date(Date.now() - 7 * 86400000).toISOString();
+    const photosThisWeek = projectPhotos.filter(p => p.createdAt >= sevenDaysAgo).length;
+    const lastVisit = projectVisits
+      .filter(v => v.status === 'Completed' || v.date < today)
+      .sort((a, b) => b.date.localeCompare(a.date))[0];
+    const lastVisitLabel = lastVisit
+      ? `Last visit ${ageLabel(lastVisit.date).replace(' open', '')} ago`
+      : 'No visits yet';
+
+    const colorIdx = activeProject.colorIndex !== undefined ? activeProject.colorIndex : stableIndexForId(activeProject.id);
+    const chipColor = colorForProject(colorIdx).hex;
+
+    const recentObs = [...projectObs]
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .slice(0, 3);
+    const photoForObs = (obs: Observation): PhotoRecord | undefined =>
+      projectPhotos.find(p => p.createdAt >= obs.createdAt) || projectPhotos[0];
+
+    const obsBadge = (o: Observation) => {
+      if (o.severity === 'High' && o.status !== 'Closed' && o.status !== 'Resolved')
+        return { label: 'Critical', cls: 'bg-red-600/90 text-white' };
+      if (o.status === 'Closed' || o.status === 'Resolved')
+        return { label: 'Resolved', cls: 'bg-emerald-600/80 text-white' };
+      return { label: 'Open', cls: 'bg-black/60 text-white' };
+    };
+
+    const fmtDate = (iso: string) => {
+      try { return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(new Date(iso)); }
+      catch { return iso; }
+    };
+
+    return (
+      <div className="space-y-6 animate-in fade-in duration-500">
+        {/* Project header */}
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div>
+            <div className="flex items-center gap-2.5">
+              <div className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: chipColor }} />
+              <h1 className="text-3xl tracking-tight text-slate-100 italic" style={{ fontFamily: '"Instrument Serif", Georgia, serif', fontWeight: 400 }}>
+                {activeProject.name}
+              </h1>
+            </div>
+            <p className="mt-1.5 text-xs text-slate-500 pl-5">
+              {activeProject.status && <span className="text-emerald-400">● {activeProject.status}</span>}
+              {activeProject.status && <span className="mx-1.5">·</span>}
+              <span>{lastVisitLabel}</span>
+              {activeProject.client && <><span className="mx-1.5">·</span><span>{activeProject.client}</span></>}
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <Link to="/project-settings" className="flex items-center gap-1.5 px-3 py-1.5 text-xs border border-slate-700 text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg transition-colors">
+              <Share2 size={12} /> Share
+            </Link>
+            <Link to="/observations" className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-colors">
+              <Plus size={12} /> Observation
+            </Link>
+          </div>
+        </div>
+
+        {/* Stat cards */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <Link to="/observations" className="bg-slate-800 hover:bg-slate-700/60 border border-slate-700 rounded-lg p-4 transition-colors">
+            <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+              <Eye size={11} /> Observations
+            </div>
+            <div className="text-2xl font-semibold text-slate-100 leading-none">{projectObs.length}</div>
+            <div className="mt-2 text-[11px] text-slate-500">
+              {openObs.length > 0 ? (
+                <><span className="text-amber-400 font-semibold">{openObs.length} open</span>{criticalObs.length > 0 && <> · {criticalObs.length} critical</>}</>
+              ) : (
+                <span>All resolved</span>
+              )}
+            </div>
+          </Link>
+          <Link to="/site-visits" className="bg-slate-800 hover:bg-slate-700/60 border border-slate-700 rounded-lg p-4 transition-colors">
+            <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+              <MapPin size={11} /> Site Visits
+            </div>
+            <div className="text-2xl font-semibold text-slate-100 leading-none">{projectVisits.length}</div>
+            <div className="mt-2 text-[11px] text-slate-500">
+              {nextVisit ? <>Next: <span className="text-slate-300">{fmtDate(nextVisit.date)}{nextVisit.time ? ` ${nextVisit.time}` : ''}</span></> : 'No upcoming visits'}
+            </div>
+          </Link>
+          <Link to="/documents" className="bg-slate-800 hover:bg-slate-700/60 border border-slate-700 rounded-lg p-4 transition-colors">
+            <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+              <FileText size={11} /> Reports
+            </div>
+            <div className="text-2xl font-semibold text-slate-100 leading-none">{Math.max(1, Math.ceil(projectVisits.filter(v => v.status === 'Completed').length))}</div>
+            <div className="mt-2 text-[11px] text-slate-500">Generate from observations</div>
+          </Link>
+          <Link to="/photos" className="bg-slate-800 hover:bg-slate-700/60 border border-slate-700 rounded-lg p-4 transition-colors">
+            <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+              <Camera size={11} /> Photos
+            </div>
+            <div className="text-2xl font-semibold text-slate-100 leading-none">{projectPhotos.length}</div>
+            <div className="mt-2 text-[11px] text-slate-500">
+              {photosThisWeek > 0 ? <><span className="text-blue-400 font-semibold">+{photosThisWeek}</span> this week</> : 'No new photos'}
+            </div>
+          </Link>
+        </div>
+
+        {/* Week strip */}
+        <div>
+          <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 font-mono mb-2">This Week</div>
+          <div className="grid grid-cols-7 gap-2 bg-slate-800 border border-slate-700 rounded-lg p-2">
+            {weekDays.map(d => {
+              const visitCount = projectVisits.filter(v => v.date === d.iso && v.status !== 'Completed').length;
+              const isToday = d.isToday;
+              return (
+                <div key={d.iso}
+                  className={`px-2 py-2.5 rounded text-center transition-colors ${
+                    isToday ? 'bg-slate-700' : visitCount > 0 ? 'bg-blue-600/20 border border-blue-500/30' : 'hover:bg-slate-700/40'
+                  }`}>
+                  <div className="text-[9px] font-bold uppercase tracking-wider text-slate-500">{isToday ? 'Today' : d.label}</div>
+                  <div className={`text-base mt-0.5 ${isToday ? 'text-slate-100 font-semibold' : 'text-slate-300'}`}>{d.num}</div>
+                  {visitCount > 0 && <div className="w-1 h-1 rounded-full bg-blue-400 mx-auto mt-1.5" />}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Recent observations */}
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 font-mono">Recent Observations</div>
+            {projectObs.length > 3 && (
+              <Link to="/observations" className="flex items-center gap-1 text-[11px] text-blue-400 hover:text-blue-300">
+                See all <ChevronRight size={11} />
+              </Link>
+            )}
+          </div>
+          {recentObs.length === 0 ? (
+            <div className="bg-slate-800 border border-slate-700 rounded-lg p-10 text-center">
+              <Eye size={24} className="text-slate-700 mx-auto mb-2" />
+              <div className="text-sm text-slate-500 mb-3">No observations yet on this project.</div>
+              <Link to="/observations" className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-colors">
+                <Plus size={11} /> Log first observation
+              </Link>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {recentObs.map(o => {
+                const photo = photoForObs(o);
+                const badge = obsBadge(o);
+                return (
+                  <Link key={o.id} to="/observations" className="bg-slate-800 border border-slate-700 hover:border-blue-500 rounded-lg overflow-hidden transition-colors">
+                    <div className="aspect-[4/3] bg-slate-700 relative">
+                      {photo
+                        ? <img src={photo.dataUrl} alt="" className="w-full h-full object-cover" />
+                        : <div className="w-full h-full bg-gradient-to-br from-slate-600 to-slate-800" />
+                      }
+                      <span className={`absolute top-2 left-2 px-2 py-0.5 rounded text-[10px] font-semibold ${badge.cls}`}>{badge.label}</span>
+                    </div>
+                    <div className="p-3">
+                      <div className="text-sm font-medium text-slate-200 truncate">{o.title}</div>
+                      <div className="text-[11px] text-slate-500 mt-0.5 truncate">
+                        {ageLabel(o.createdAt).replace(' open', '')} ago
+                        {o.location && <> · {o.location}</>}
+                      </div>
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // ── Cross-project agenda (when no project is active) ───────────────────────
   return (
     <div className="space-y-7 animate-in fade-in duration-500">
 
