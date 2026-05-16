@@ -22,8 +22,6 @@ export interface UserProfile {
   discipline?: string;
   companyId?: string;
   companyRole?: 'owner' | 'manager' | 'employee';
-  company?: string;
-  discipline?: string;
 }
 
 export interface TierLimits {
