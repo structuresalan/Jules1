@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Calculator, Clock3, FileText, FolderOpen, LogOut, Pencil, Plus, Save, Search, Trash2, Users, X } from 'lucide-react';
+import { Calculator, Clock3, FileText, FolderOpen, LogOut, Pencil, Plus, Save, Search, Trash2, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { BrandMark } from '../components/BrandMark';
 import { useAuth } from '../hooks/useAuth';
@@ -7,7 +7,6 @@ import { colorForProject, stableIndexForId } from '../lib/projectColors';
 import { useCollection } from '../lib/useCollection';
 import { COLLECTIONS } from '../lib/db';
 import { subscribeProfile, type UserProfile } from '../lib/userProfile';
-import { subscribeTeamProjects, type SharedProject } from '../lib/teamProjects';
 import { auth } from '../firebase';
 
 type ProjectStatus = 'Active' | 'On Hold' | 'Closed' | 'Archived';
@@ -29,6 +28,7 @@ interface ProjectRecord {
   ownerUid?: string;
   ownerEmail?: string;
   companyId?: string;
+  visibility?: 'private' | 'team';
   _shared?: boolean; // UI-only flag set when this row came from team query
 }
 
@@ -62,24 +62,15 @@ const statusBadgeClass = (status: ProjectStatus) => {
 export const ProjectHome: React.FC = () => {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
-  const { items: ownProjects, save: rawSaveProject, remove: removeProject } = useCollection<ProjectRecord>(
+  const { items: projects, save: rawSaveProject, remove: removeProject } = useCollection<ProjectRecord>(
     COLLECTIONS.projects.col,
     COLLECTIONS.projects.ls,
   );
   const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [teamProjects, setTeamProjects] = useState<SharedProject[]>([]);
   const [showNewModal, setShowNewModal] = useState(false);
   const [searchText, setSearchText] = useState('');
 
   useEffect(() => subscribeProfile(setProfile), []);
-
-  useEffect(() => {
-    if (!profile?.companyId || (profile.tier !== 'pro' && profile.tier !== 'business')) {
-      setTeamProjects([]);
-      return;
-    }
-    return subscribeTeamProjects(profile.companyId, setTeamProjects);
-  }, [profile?.companyId, profile?.tier]);
 
   // Wrap save to auto-tag projects with team-sharing fields when applicable.
   const saveProject = useCallback((project: ProjectRecord) => {
@@ -89,18 +80,13 @@ export const ProjectHome: React.FC = () => {
       ownerUid: project.ownerUid || auth?.currentUser?.uid || undefined,
       ownerEmail: project.ownerEmail || auth?.currentUser?.email || undefined,
       companyId: isTeamUser ? profile!.companyId : project.companyId,
+      // Default visibility: 'team' for company members (so the project appears
+      // in the Company tab), 'private' for solo users. Preserve any existing choice.
+      visibility: project.visibility ?? (isTeamUser ? 'team' : 'private'),
     };
     rawSaveProject(tagged);
   }, [profile, rawSaveProject]);
 
-  // Merge own + team projects for the table. Own projects win on id collisions.
-  const projects = useMemo<ProjectRecord[]>(() => {
-    const ownIds = new Set(ownProjects.map(p => p.id));
-    const teamAsRecords: ProjectRecord[] = teamProjects
-      .filter(p => !ownIds.has(p.id))
-      .map(p => ({ ...p, _shared: true } as ProjectRecord));
-    return [...ownProjects, ...teamAsRecords];
-  }, [ownProjects, teamProjects]);
 
   const [projectName, setProjectName] = useState('');
   const [projectNumber, setProjectNumber] = useState('');
@@ -124,12 +110,9 @@ export const ProjectHome: React.FC = () => {
   }, [projects, searchText]);
 
   const openProject = (project: ProjectRecord) => {
-    // Shared (team) projects are read-only for non-owners — don't write back.
-    if (!project._shared) {
-      const updated = { ...project, updatedAt: new Date().toISOString() };
-      saveProject(updated);
-    }
-    window.localStorage.setItem(ACTIVE_PROJECT_KEY, project.id);
+    const updated = { ...project, updatedAt: new Date().toISOString() };
+    saveProject(updated);
+    window.localStorage.setItem(ACTIVE_PROJECT_KEY, updated.id);
     window.localStorage.setItem(SESSION_MODE_KEY, 'project');
     navigate('/dashboard');
   };
@@ -292,17 +275,7 @@ export const ProjectHome: React.FC = () => {
                           <div className="flex items-center gap-2.5">
                             <div className="w-[3px] self-stretch min-h-[28px] rounded-full shrink-0" style={{ background: chipColor }} />
                             <div>
-                              <div className="flex items-center gap-2">
-                                <span className="font-medium text-slate-200">{project.name}</span>
-                                {project._shared && (
-                                  <span className="inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider text-blue-400 bg-blue-600/10 border border-blue-500/30 px-1.5 py-0.5 rounded">
-                                    <Users size={9} /> Shared
-                                  </span>
-                                )}
-                              </div>
-                              {project._shared && project.ownerEmail && (
-                                <div className="mt-0.5 text-[10px] text-slate-500">by {project.ownerEmail}</div>
-                              )}
+                              <div className="font-medium text-slate-200">{project.name}</div>
                               {project.description && <div className="mt-0.5 max-w-xs truncate text-slate-500">{project.description}</div>}
                             </div>
                           </div>
@@ -366,18 +339,14 @@ export const ProjectHome: React.FC = () => {
                                   className="px-3 py-1 rounded bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-medium transition-colors">
                                   Open
                                 </button>
-                                {!project._shared && (
-                                  <>
-                                    <button onClick={() => startEditProject(project)} title="Edit"
-                                      className="p-1 rounded bg-slate-700 hover:bg-slate-600 text-slate-400 hover:text-white transition-colors">
-                                      <Pencil size={12} />
-                                    </button>
-                                    <button onClick={() => deleteProject(project.id)} title="Delete"
-                                      className="p-1 rounded bg-slate-700 hover:bg-red-900/40 text-slate-500 hover:text-red-400 transition-colors">
-                                      <Trash2 size={12} />
-                                    </button>
-                                  </>
-                                )}
+                                <button onClick={() => startEditProject(project)} title="Edit"
+                                  className="p-1 rounded bg-slate-700 hover:bg-slate-600 text-slate-400 hover:text-white transition-colors">
+                                  <Pencil size={12} />
+                                </button>
+                                <button onClick={() => deleteProject(project.id)} title="Delete"
+                                  className="p-1 rounded bg-slate-700 hover:bg-red-900/40 text-slate-500 hover:text-red-400 transition-colors">
+                                  <Trash2 size={12} />
+                                </button>
                               </>
                             )}
                           </div>

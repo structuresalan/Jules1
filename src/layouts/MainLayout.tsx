@@ -4,7 +4,7 @@ import {
   Home, Frame, Layers, Wind, Database, Settings, LogOut, Menu,
   Network, FileText, ChevronRight, ChevronDown, ChevronUp, Camera,
   ClipboardList, MapPin, FolderOpen, Inbox, BookOpen, SlidersHorizontal,
-  Search, Plus,
+  Search, Plus, Building2,
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { DisclaimerModal } from '../components/DisclaimerModal';
@@ -12,6 +12,7 @@ import { BrandMark } from '../components/BrandMark';
 import { colorForProject, initialFor, projectColorVars, stableIndexForId } from '../lib/projectColors';
 import { useCollection } from '../lib/useCollection';
 import { COLLECTIONS } from '../lib/db';
+import { subscribeProfile, type UserProfile } from '../lib/userProfile';
 
 interface StoredProject {
   id: string;
@@ -83,6 +84,9 @@ export const MainLayout: React.FC = () => {
   const [toolsExpanded, setToolsExpanded] = React.useState(false);
   const [switcherOpen, setSwitcherOpen] = React.useState(false);
   const [switcherSearch, setSwitcherSearch] = React.useState('');
+  const [profile, setProfile] = React.useState<UserProfile | null>(null);
+  React.useEffect(() => subscribeProfile(setProfile), []);
+  const showCompanyNav = profile?.companyId && (profile?.tier === 'pro' || profile?.tier === 'business');
   const { items: allProjects } = useCollection<StoredProject>(
     COLLECTIONS.projects.col,
     COLLECTIONS.projects.ls,
@@ -212,6 +216,12 @@ export const MainLayout: React.FC = () => {
             <BookOpen size={16} />
             Library
           </NavLink>
+          {showCompanyNav && (
+            <NavLink to="/company" className={navLinkCls}>
+              <Building2 size={16} />
+              Company
+            </NavLink>
+          )}
 
           {/* Color chip — project switcher */}
           {projectSummary.mode === 'project' && (

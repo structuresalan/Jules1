@@ -39,6 +39,7 @@ interface ProjectRecord {
   ownerUid?: string;
   ownerEmail?: string;
   companyId?: string;
+  visibility?: 'private' | 'team';
 }
 
 const STORAGE_KEY = 'struccalc.projects.v3';
@@ -257,6 +258,7 @@ export const ProjectSettings: React.FC = () => {
   const [projectType, setProjectType] = useState<ProjectType>(project?.projectType || 'New Construction');
   const [status, setStatus] = useState<ProjectStatus>(project?.status || 'Active');
   const [predictedEndDate, setPredictedEndDate] = useState(project?.predictedEndDate || '');
+  const [visibility, setVisibility] = useState<'private' | 'team'>(project?.visibility ?? 'team');
 
   // Share form state
   const [showShareForm, setShowShareForm] = useState(false);
@@ -278,6 +280,7 @@ export const ProjectSettings: React.FC = () => {
       setLocation(p.location); setDescription(p.description);
       setProjectType(p.projectType); setStatus(p.status);
       setPredictedEndDate(p.predictedEndDate || '');
+      setVisibility(p.visibility ?? 'team');
     }
   }, []);
 
@@ -315,6 +318,7 @@ export const ProjectSettings: React.FC = () => {
       ownerUid: project.ownerUid || user?.uid || undefined,
       ownerEmail: project.ownerEmail || user?.email || undefined,
       companyId: isTeamUser ? profile!.companyId : project.companyId,
+      visibility: isTeamUser ? visibility : 'private',
     };
     saveProject(updated);
     setProject(updated);
@@ -424,6 +428,49 @@ export const ProjectSettings: React.FC = () => {
             </div>
           )}
         </div>
+
+        {/* Visibility (Pro/Business + owner/manager only) */}
+        {profile?.companyId && (profile.tier === 'pro' || profile.tier === 'business') &&
+          (profile.companyRole === 'owner' || profile.companyRole === 'manager') && (
+          <div className="bg-slate-800 border border-slate-700 rounded-xl p-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 font-mono">Visibility</div>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-blue-400 bg-blue-600/10 border border-blue-500/30 px-1.5 py-0.5 rounded capitalize">
+                {profile.companyRole}
+              </span>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => setVisibility('team')}
+                className={`text-left rounded-lg border p-4 transition-colors ${
+                  visibility === 'team'
+                    ? 'border-blue-500 bg-blue-600/10'
+                    : 'border-slate-700 bg-slate-900 hover:border-slate-500'
+                }`}
+              >
+                <div className="text-sm font-semibold text-slate-100 mb-1">Team</div>
+                <div className="text-[11px] text-slate-400 leading-relaxed">
+                  All members of your company can view this project on the Company page.
+                </div>
+              </button>
+              <button
+                type="button"
+                onClick={() => setVisibility('private')}
+                className={`text-left rounded-lg border p-4 transition-colors ${
+                  visibility === 'private'
+                    ? 'border-blue-500 bg-blue-600/10'
+                    : 'border-slate-700 bg-slate-900 hover:border-slate-500'
+                }`}
+              >
+                <div className="text-sm font-semibold text-slate-100 mb-1">Private</div>
+                <div className="text-[11px] text-slate-400 leading-relaxed">
+                  Only you can see this project. It will not appear on the Company page.
+                </div>
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Meta — read-only */}
         <div className="bg-slate-800 border border-slate-700 rounded-xl p-5 space-y-3">
