@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Monitor, Palette, Sparkles, SlidersHorizontal, User, Users, CreditCard, Save, UserPlus, Trash2, Shield, HardDrive, Image, Zap, Building2, ChevronRight, Check, X } from 'lucide-react';
+import { Monitor, Palette, Sparkles, SlidersHorizontal, User, Users, CreditCard, Save, UserPlus, Trash2, Shield, HardDrive, Image, Zap, Building2, Check, X } from 'lucide-react';
 import { type WebsiteAccent, type WebsiteDensity, type WebsiteStyle, useWebsiteStyleSettings } from '../utils/websiteStyle';
 import { updateAccountInfo, updateCompanyInfo, subscribeProfile, formatBytes, getEffectiveLimits, redeemPromoCode, TIER_LIMITS } from '../lib/userProfile';
 import type { UserProfile, Tier } from '../lib/userProfile';
@@ -81,6 +81,59 @@ export const SettingsPage: React.FC = () => {
   const [inviting, setInviting] = useState(false);
   const [inviteError, setInviteError] = useState('');
   const [acceptingInvite, setAcceptingInvite] = useState(false);
+
+  // Payment/upgrade state
+  const [paymentStatus, setPaymentStatus] = useState<'' | 'verifying' | 'success' | 'failed' | 'cancelled'>('');
+  const [upgrading, setUpgrading] = useState<string>('');
+
+  // Read ?tab= from URL on mount and set activeTab accordingly
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const tab = params.get('tab');
+    if (tab === 'team' || tab === 'billing' || tab === 'account' || tab === 'appearance') {
+      setActiveTab(tab as typeof activeTab);
+    }
+  }, []);
+
+  // Handle Stripe return — verify session and update tier
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const sessionId = params.get('session_id');
+    const cancelled = params.get('cancelled');
+
+    if (cancelled) {
+      setPaymentStatus('cancelled');
+      window.history.replaceState({}, '', '/settings?tab=billing');
+      return;
+    }
+    if (!sessionId) return;
+
+    setPaymentStatus('verifying');
+    fetch(`/api/verify-subscription?session_id=${sessionId}`)
+      .then(r => r.json())
+      .then(async (data) => {
+        if (data.paid && data.tier) {
+          const { auth: a, db: d } = await import('../firebase');
+          const { doc, setDoc } = await import('firebase/firestore');
+          if (a?.currentUser && d) {
+            await setDoc(
+              doc(d, 'users', a.currentUser.uid, 'profile', 'main'),
+              { tier: data.tier },
+              { merge: true }
+            );
+          }
+          setPaymentStatus('success');
+        } else {
+          setPaymentStatus('failed');
+        }
+        window.history.replaceState({}, '', '/settings?tab=billing');
+        setTimeout(() => setPaymentStatus(''), 5000);
+      })
+      .catch(() => {
+        setPaymentStatus('failed');
+        setTimeout(() => setPaymentStatus(''), 5000);
+      });
+  }, []);
 
   // Sync discipline from profile
   useEffect(() => {
@@ -185,6 +238,31 @@ export const SettingsPage: React.FC = () => {
     if (!pendingInvite) return;
     await declineInvite(pendingInvite.id);
     setPendingInvite(null);
+  };
+
+  const handleUpgrade = async (tier: 'pro' | 'business') => {
+    if (!auth?.currentUser?.email) return;
+    setUpgrading(tier);
+    try {
+      const response = await fetch('/api/create-checkout-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tier,
+          uid: auth.currentUser.uid,
+          email: auth.currentUser.email,
+          origin: window.location.origin,
+        }),
+      });
+      const data = await response.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        setUpgrading('');
+      }
+    } catch {
+      setUpgrading('');
+    }
   };
 
   const tabs: Array<{ id: SettingsTab; label: string; icon: React.ReactNode }> = [
@@ -531,6 +609,26 @@ export const SettingsPage: React.FC = () => {
       {/* Billing tab */}
       {activeTab === 'billing' && (
         <div className="space-y-4">
+          {paymentStatus === 'verifying' && (
+            <div className="bg-blue-500/10 border border-blue-500/30 rounded p-4 text-sm text-blue-300">
+              Verifying your payment…
+            </div>
+          )}
+          {paymentStatus === 'success' && (
+            <div className="bg-green-500/10 border border-green-500/30 rounded p-4 text-sm text-green-300">
+              ✓ Subscription activated! Your new plan is now in effect.
+            </div>
+          )}
+          {paymentStatus === 'cancelled' && (
+            <div className="bg-amber-500/10 border border-amber-500/30 rounded p-4 text-sm text-amber-300">
+              Payment cancelled. You haven't been charged.
+            </div>
+          )}
+          {paymentStatus === 'failed' && (
+            <div className="bg-red-500/10 border border-red-500/30 rounded p-4 text-sm text-red-300">
+              Could not verify payment. If you were charged, please contact support.
+            </div>
+          )}
           <div className="bg-slate-800 border border-slate-700 rounded p-5">
             <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-4">Current Plan</div>
             {profile && (
@@ -602,8 +700,12 @@ export const SettingsPage: React.FC = () => {
                     <div>{TIER_LIMITS[tier].uploadsPerDay}/day uploads</div>
                   </div>
                   {profile?.tier !== tier && (
-                    <button className="mt-3 flex items-center gap-1.5 px-3 py-1 bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium rounded transition-colors">
-                      <ChevronRight size={11} /> Upgrade
+                    <button
+                      onClick={() => tier !== 'starter' && handleUpgrade(tier as 'pro' | 'business')}
+                      disabled={upgrading === tier || tier === 'starter'}
+                      className="w-full mt-3 text-[10px] font-bold uppercase tracking-wider border border-slate-600 text-slate-400 hover:text-white hover:border-slate-400 disabled:opacity-40 disabled:cursor-not-allowed rounded px-2 py-1.5 transition-colors"
+                    >
+                      {upgrading === tier ? 'Redirecting…' : 'Upgrade'}
                     </button>
                   )}
                 </div>

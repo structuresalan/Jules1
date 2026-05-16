@@ -10,16 +10,20 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@stripe/stripe-js": "^5.4.0",
     "firebase": "^12.12.1",
     "lucide-react": "^1.14.0",
     "pdfjs-dist": "^5.7.284",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
     "react-router-dom": "^7.14.2",
-    "react-to-pdf": "^3.2.2"
+    "react-to-pdf": "^3.2.2",
+    "resend": "^4.0.1",
+    "stripe": "^17.4.0"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@vercel/node": "^3.2.27",
     "@types/node": "^24.12.2",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",

@@ -94,6 +94,20 @@ export const inviteMember = async (companyId: string, companyName: string, email
   const inviteId = `inv_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 5)}`;
   const invite: CompanyInvite = { id: inviteId, companyId, companyName, email: normalEmail, role, invitedByUid: userId, createdAt: new Date().toISOString(), status: 'pending' };
   await setDoc(doc(db, 'invites', inviteId), invite);
+  // After creating Firestore invite, send email (best-effort)
+  try {
+    await fetch('/api/send-invite-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        to: normalEmail,
+        companyName,
+        role,
+        inviterEmail: auth?.currentUser?.email,
+        appUrl: typeof window !== 'undefined' ? `${window.location.origin}/settings?tab=team` : '',
+      }),
+    });
+  } catch { /* email is best-effort */ }
 };
 
 export const removeMember = async (companyId: string, memberId: string): Promise<void> => {
