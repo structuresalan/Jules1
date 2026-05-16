@@ -1,7 +1,11 @@
-import React, { useEffect, useState } from 'react';
-import { Monitor, Palette, Sparkles, SlidersHorizontal, User, Users, CreditCard, HardDrive, Image, Zap } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Monitor, Palette, Sparkles, SlidersHorizontal, User, Users, CreditCard, Save, UserPlus, Trash2, Shield } from 'lucide-react';
 import { type WebsiteAccent, type WebsiteDensity, type WebsiteStyle, useWebsiteStyleSettings } from '../utils/websiteStyle';
-import { subscribeProfile, formatBytes, getEffectiveLimits, redeemPromoCode, TIER_LIMITS, type UserProfile, type Tier } from '../lib/userProfile';
+import { updateAccountInfo, subscribeProfile } from '../lib/userProfile';
+import type { UserProfile } from '../lib/userProfile';
+import { subscribeTeam, inviteMember, removeMember, updateMemberRole } from '../lib/teamService';
+import type { TeamMember, TeamRole } from '../lib/teamService';
+import { auth, updatePassword, reauthenticateWithCredential, EmailAuthProvider } from '../firebase';
 
 const styleOptions: Array<{
   value: WebsiteStyle;
@@ -40,22 +44,75 @@ type SettingsTab = 'appearance' | 'account' | 'team' | 'billing';
 
 export const SettingsPage: React.FC = () => {
   const { settings, updateSettings } = useWebsiteStyleSettings();
-  const [activeTab, setActiveTab] = React.useState<SettingsTab>('appearance');
+  const [activeTab, setActiveTab] = useState<SettingsTab>('appearance');
   const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [promoInput, setPromoInput] = useState('');
-  const [promoStatus, setPromoStatus] = useState<{ ok: boolean; msg: string } | null>(null);
-  const [promoLoading, setPromoLoading] = useState(false);
+
+  // Account tab state
+  const [acctName, setAcctName] = useState('');
+  const [acctCompany, setAcctCompany] = useState('');
+  const [acctDiscipline, setAcctDiscipline] = useState('Structural');
+  const [acctSaving, setAcctSaving] = useState(false);
+  const [acctSaved, setAcctSaved] = useState(false);
+  const [pwCurrent, setPwCurrent] = useState('');
+  const [pwNew, setPwNew] = useState('');
+  const [pwConfirm, setPwConfirm] = useState('');
+  const [pwError, setPwError] = useState('');
+  const [pwSaving, setPwSaving] = useState(false);
+  const [pwSaved, setPwSaved] = useState(false);
+
+  // Teams tab state
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteRole, setInviteRole] = useState<TeamRole>('member');
+  const [inviting, setInviting] = useState(false);
+  const [inviteError, setInviteError] = useState('');
 
   useEffect(() => subscribeProfile(setProfile), []);
+  useEffect(() => subscribeTeam(setTeamMembers), []);
 
-  const handleRedeem = async () => {
-    if (!promoInput.trim()) return;
-    setPromoLoading(true);
-    setPromoStatus(null);
-    const result = await redeemPromoCode(promoInput.trim());
-    setPromoStatus({ ok: result.success, msg: result.message });
-    if (result.success) setPromoInput('');
-    setPromoLoading(false);
+  useEffect(() => {
+    if (profile?.displayName) setAcctName(profile.displayName);
+    if (profile?.company) setAcctCompany(profile.company);
+    if (profile?.discipline) setAcctDiscipline(profile.discipline);
+  }, [profile]);
+
+  const handleSaveAccount = async () => {
+    setAcctSaving(true);
+    await updateAccountInfo({ displayName: acctName, company: acctCompany, discipline: acctDiscipline });
+    setAcctSaving(false);
+    setAcctSaved(true);
+    setTimeout(() => setAcctSaved(false), 2000);
+  };
+
+  const handleChangePassword = async () => {
+    setPwError('');
+    if (pwNew !== pwConfirm) { setPwError('Passwords do not match.'); return; }
+    if (pwNew.length < 6) { setPwError('Password must be at least 6 characters.'); return; }
+    const user = auth?.currentUser;
+    if (!user || !user.email) { setPwError('Not signed in.'); return; }
+    setPwSaving(true);
+    try {
+      const credential = EmailAuthProvider.credential(user.email, pwCurrent);
+      await reauthenticateWithCredential(user, credential);
+      await updatePassword(user, pwNew);
+      setPwSaved(true);
+      setPwCurrent(''); setPwNew(''); setPwConfirm('');
+      setTimeout(() => setPwSaved(false), 2000);
+    } catch {
+      setPwError('Current password is incorrect.');
+    } finally {
+      setPwSaving(false);
+    }
+  };
+
+  const handleInvite = async () => {
+    if (!inviteEmail.trim()) return;
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(inviteEmail)) { setInviteError('Invalid email.'); return; }
+    setInviting(true);
+    setInviteError('');
+    await inviteMember(inviteEmail, inviteRole);
+    setInviteEmail('');
+    setInviting(false);
   };
 
   const tabs: Array<{ id: SettingsTab; label: string; icon: React.ReactNode }> = [
@@ -102,147 +159,220 @@ export const SettingsPage: React.FC = () => {
       </div>
 
       {activeTab === 'account' && (
-        <div className="bg-slate-800 border border-slate-700 rounded-xl p-8 flex flex-col items-center justify-center gap-3 min-h-48 text-center">
-          <User size={28} className="text-slate-600" />
-          <div className="text-slate-400 font-medium">Account settings coming soon</div>
-          <div className="text-sm text-slate-600 max-w-xs">Manage your profile, email, and password here in an upcoming release.</div>
+        <div className="space-y-4">
+          {/* Profile info */}
+          <div className="bg-slate-800 border border-slate-700 rounded p-5">
+            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-4">Profile</div>
+            <div className="space-y-3">
+              {/* Avatar */}
+              <div className="flex items-center gap-4 mb-5">
+                <div className="w-12 h-12 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold text-lg select-none">
+                  {acctName ? acctName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() : (auth?.currentUser?.email?.[0] ?? '?').toUpperCase()}
+                </div>
+                <div>
+                  <div className="text-sm font-medium text-slate-200">{acctName || 'No name set'}</div>
+                  <div className="text-xs text-slate-500">{auth?.currentUser?.email}</div>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1.5">Full Name</label>
+                <input
+                  value={acctName}
+                  onChange={e => setAcctName(e.target.value)}
+                  placeholder="Avery Morgan"
+                  className="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-blue-500"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1.5">Company</label>
+                <input
+                  value={acctCompany}
+                  onChange={e => setAcctCompany(e.target.value)}
+                  placeholder="Riverside Engineering, PC"
+                  className="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-blue-500"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1.5">Discipline</label>
+                <select
+                  value={acctDiscipline}
+                  onChange={e => setAcctDiscipline(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm text-slate-200 outline-none focus:border-blue-500"
+                >
+                  <option>Structural</option>
+                  <option>Architectural</option>
+                  <option>MEP</option>
+                  <option>Civil / Site</option>
+                  <option>General Contractor</option>
+                  <option>Inspector</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1.5">Email</label>
+                <input
+                  value={auth?.currentUser?.email ?? ''}
+                  disabled
+                  className="w-full bg-slate-900/50 border border-slate-700 rounded px-3 py-2 text-sm text-slate-500 outline-none cursor-not-allowed"
+                />
+              </div>
+              <button
+                onClick={handleSaveAccount}
+                disabled={acctSaving}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm font-medium rounded transition-colors"
+              >
+                <Save size={13} />
+                {acctSaved ? 'Saved!' : acctSaving ? 'Saving…' : 'Save Changes'}
+              </button>
+            </div>
+          </div>
+
+          {/* Change password */}
+          <div className="bg-slate-800 border border-slate-700 rounded p-5">
+            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-4">Change Password</div>
+            <div className="space-y-3">
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1.5">Current Password</label>
+                <input
+                  type="password"
+                  value={pwCurrent}
+                  onChange={e => setPwCurrent(e.target.value)}
+                  placeholder="••••••••"
+                  className="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-blue-500"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1.5">New Password</label>
+                <input
+                  type="password"
+                  value={pwNew}
+                  onChange={e => setPwNew(e.target.value)}
+                  placeholder="••••••••"
+                  className="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-blue-500"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1.5">Confirm New Password</label>
+                <input
+                  type="password"
+                  value={pwConfirm}
+                  onChange={e => setPwConfirm(e.target.value)}
+                  placeholder="••••••••"
+                  className="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-blue-500"
+                />
+              </div>
+              {pwError && <div className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded px-3 py-2">{pwError}</div>}
+              <button
+                onClick={handleChangePassword}
+                disabled={pwSaving || !pwCurrent || !pwNew || !pwConfirm}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm font-medium rounded transition-colors"
+              >
+                <Shield size={13} />
+                {pwSaved ? 'Password Updated!' : pwSaving ? 'Updating…' : 'Update Password'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
       {activeTab === 'team' && (
-        <div className="bg-slate-800 border border-slate-700 rounded-xl p-8 flex flex-col items-center justify-center gap-3 min-h-48 text-center">
-          <Users size={28} className="text-slate-600" />
-          <div className="text-slate-400 font-medium">Team management coming soon</div>
-          <div className="text-sm text-slate-600 max-w-xs">Invite collaborators, manage roles, and share projects with your team.</div>
+        <div className="space-y-4">
+          {/* Invite */}
+          <div className="bg-slate-800 border border-slate-700 rounded p-5">
+            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-4">Invite Member</div>
+            <div className="flex gap-2">
+              <input
+                type="email"
+                value={inviteEmail}
+                onChange={e => setInviteEmail(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleInvite()}
+                placeholder="colleague@firm.com"
+                className="flex-1 bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-blue-500"
+              />
+              <select
+                value={inviteRole}
+                onChange={e => setInviteRole(e.target.value as TeamRole)}
+                className="bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm text-slate-200 outline-none focus:border-blue-500"
+              >
+                <option value="member">Member</option>
+                <option value="admin">Admin</option>
+              </select>
+              <button
+                onClick={handleInvite}
+                disabled={inviting || !inviteEmail.trim()}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm font-medium rounded transition-colors"
+              >
+                <UserPlus size={13} />
+                {inviting ? '…' : 'Invite'}
+              </button>
+            </div>
+            {inviteError && <div className="mt-2 text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded px-3 py-2">{inviteError}</div>}
+          </div>
+
+          {/* Member list */}
+          <div className="bg-slate-800 border border-slate-700 rounded p-5">
+            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-4">Members</div>
+            <div className="space-y-2">
+              {/* Owner row (current user) */}
+              <div className="flex items-center justify-between py-2.5 px-3 bg-slate-900 rounded border border-slate-700">
+                <div className="flex items-center gap-3">
+                  <div className="w-7 h-7 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-bold">
+                    {(auth?.currentUser?.email?.[0] ?? '?').toUpperCase()}
+                  </div>
+                  <div>
+                    <div className="text-sm text-slate-200">{auth?.currentUser?.email}</div>
+                    <div className="text-[10px] text-slate-500">You</div>
+                  </div>
+                </div>
+                <span className="text-[10px] font-bold uppercase tracking-wider bg-blue-600/20 text-blue-400 border border-blue-500/30 px-2 py-0.5 rounded">Owner</span>
+              </div>
+
+              {teamMembers.length === 0 && (
+                <div className="text-center py-8 text-slate-600 text-sm">No team members yet. Invite someone above.</div>
+              )}
+
+              {teamMembers.map(m => (
+                <div key={m.id} className="flex items-center justify-between py-2.5 px-3 bg-slate-900 rounded border border-slate-700">
+                  <div className="flex items-center gap-3">
+                    <div className="w-7 h-7 rounded-full bg-slate-700 flex items-center justify-center text-slate-400 text-xs font-bold">
+                      {m.email[0].toUpperCase()}
+                    </div>
+                    <div>
+                      <div className="text-sm text-slate-200">{m.email}</div>
+                      <div className="text-[10px] text-slate-500 flex items-center gap-1.5">
+                        <span className={`inline-block w-1.5 h-1.5 rounded-full ${m.status === 'active' ? 'bg-green-500' : 'bg-amber-500'}`}/>
+                        {m.status === 'pending' ? 'Invite pending' : 'Active'}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={m.role}
+                      onChange={e => updateMemberRole(m.id, e.target.value as TeamRole)}
+                      className="bg-slate-800 border border-slate-600 rounded px-2 py-1 text-xs text-slate-300 outline-none focus:border-blue-500"
+                    >
+                      <option value="member">Member</option>
+                      <option value="admin">Admin</option>
+                    </select>
+                    <button
+                      onClick={() => removeMember(m.id)}
+                      className="p-1.5 text-slate-600 hover:text-red-400 transition-colors rounded hover:bg-red-500/10"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       )}
 
       {activeTab === 'billing' && (
-        <div className="space-y-4">
-          {/* Current plan */}
-          <div className="bg-slate-800 border border-slate-700 rounded p-5">
-            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-3">Current Plan</div>
-            {profile ? (
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-slate-100 font-semibold capitalize text-sm">{profile.tier}</span>
-                    {profile.promoActive && (
-                      <span className="bg-green-500/20 text-green-400 border border-green-500/30 text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider">Promo Active</span>
-                    )}
-                  </div>
-                  <div className="text-xs text-slate-400 mt-0.5">
-                    {profile.promoActive ? 'All limits removed' : `${formatBytes(TIER_LIMITS[profile.tier as Tier].bytes)} storage · ${TIER_LIMITS[profile.tier as Tier].photoCount.toLocaleString()} photos`}
-                  </div>
-                </div>
-                <div className="flex gap-2">
-                  {(['starter', 'pro', 'business'] as Tier[]).map(t => (
-                    <div key={t} className={`text-[10px] px-2 py-1 rounded border font-medium capitalize ${profile.tier === t ? 'bg-blue-600 border-blue-500 text-white' : 'bg-slate-700 border-slate-600 text-slate-400'}`}>{t}</div>
-                  ))}
-                </div>
-              </div>
-            ) : (
-              <div className="text-slate-500 text-sm">Loading…</div>
-            )}
-          </div>
-
-          {/* Storage usage */}
-          {profile && (() => {
-            const limits = getEffectiveLimits(profile);
-            const storagePct = Math.min(100, (profile.storageUsedBytes / limits.bytes) * 100);
-            const photoPct = Math.min(100, (profile.photoCount / limits.photoCount) * 100);
-            return (
-              <div className="bg-slate-800 border border-slate-700 rounded p-5 space-y-4">
-                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Usage</div>
-                {/* Storage bar */}
-                <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <div className="flex items-center gap-1.5 text-xs text-slate-300"><HardDrive size={12} className="text-blue-400"/>Storage</div>
-                    <span className="text-[10px] text-slate-400">{formatBytes(profile.storageUsedBytes)} / {profile.promoActive ? '∞' : formatBytes(limits.bytes)}</span>
-                  </div>
-                  <div className="h-1.5 rounded-full bg-slate-700 overflow-hidden">
-                    <div className={`h-full rounded-full transition-all ${storagePct > 90 ? 'bg-red-500' : storagePct > 70 ? 'bg-amber-500' : 'bg-blue-500'}`} style={{ width: `${profile.promoActive ? 0 : storagePct}%` }}/>
-                  </div>
-                </div>
-                {/* Photos bar */}
-                <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <div className="flex items-center gap-1.5 text-xs text-slate-300"><Image size={12} className="text-blue-400"/>Photos</div>
-                    <span className="text-[10px] text-slate-400">{profile.photoCount.toLocaleString()} / {profile.promoActive ? '∞' : limits.photoCount.toLocaleString()}</span>
-                  </div>
-                  <div className="h-1.5 rounded-full bg-slate-700 overflow-hidden">
-                    <div className={`h-full rounded-full transition-all ${photoPct > 90 ? 'bg-red-500' : photoPct > 70 ? 'bg-amber-500' : 'bg-blue-500'}`} style={{ width: `${profile.promoActive ? 0 : photoPct}%` }}/>
-                  </div>
-                </div>
-                {/* Uploads today */}
-                <div className="flex items-center justify-between text-xs">
-                  <div className="flex items-center gap-1.5 text-slate-300"><Zap size={12} className="text-blue-400"/>Uploads today</div>
-                  <span className="text-slate-400">{profile.uploadsToday} / {profile.promoActive ? '∞' : limits.uploadsPerDay}</span>
-                </div>
-              </div>
-            );
-          })()}
-
-          {/* Promo code */}
-          <div className="bg-slate-800 border border-slate-700 rounded p-5">
-            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-3">Promo Code</div>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={promoInput}
-                onChange={e => setPromoInput(e.target.value)}
-                placeholder="Enter 10-digit code"
-                maxLength={10}
-                className="flex-1 bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-blue-500"
-              />
-              <button
-                onClick={handleRedeem}
-                disabled={promoLoading || !promoInput.trim()}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded transition-colors"
-              >
-                {promoLoading ? '…' : 'Redeem'}
-              </button>
-            </div>
-            {promoStatus && (
-              <div className={`mt-2 text-xs px-3 py-2 rounded border ${promoStatus.ok ? 'bg-green-500/10 border-green-500/30 text-green-400' : 'bg-red-500/10 border-red-500/30 text-red-400'}`}>
-                {promoStatus.msg}
-              </div>
-            )}
-          </div>
-
-          {/* Tier cards */}
-          <div className="bg-slate-800 border border-slate-700 rounded p-5">
-            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-3">Plans</div>
-            <div className="grid grid-cols-3 gap-3">
-              {([
-                { id: 'starter' as Tier, name: 'Starter', price: 'Free', storage: '1 GB', photos: '500', uploads: '50/day' },
-                { id: 'pro' as Tier, name: 'Pro', price: '$29/mo', storage: '5 GB', photos: '2,500', uploads: '200/day' },
-                { id: 'business' as Tier, name: 'Business', price: '$79/mo', storage: '20 GB', photos: '10,000', uploads: '1,000/day' },
-              ] as const).map(t => {
-                const active = profile?.tier === t.id;
-                return (
-                  <div key={t.id} className={`rounded border p-4 ${active ? 'border-blue-500 bg-blue-500/10' : 'border-slate-700 bg-slate-900'}`}>
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-sm font-semibold text-slate-100">{t.name}</span>
-                      {active && <span className="text-[10px] bg-blue-600 text-white px-1.5 py-0.5 rounded font-bold uppercase">Current</span>}
-                    </div>
-                    <div className="text-blue-400 font-bold text-sm mb-3">{t.price}</div>
-                    <div className="space-y-1 text-[10px] text-slate-400 mb-4">
-                      <div>{t.storage} storage</div>
-                      <div>{t.photos} photos</div>
-                      <div>{t.uploads}</div>
-                    </div>
-                    {!active && (
-                      <button className="w-full text-[10px] font-bold uppercase tracking-wider border border-slate-600 text-slate-400 hover:text-white hover:border-slate-400 rounded px-2 py-1.5 transition-colors">
-                        Upgrade
-                      </button>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-            <div className="mt-3 text-[10px] text-slate-600 text-center">Payment integration coming soon. Use a promo code to unlock all limits during testing.</div>
-          </div>
+        <div className="bg-slate-800 border border-slate-700 rounded-xl p-8 flex flex-col items-center justify-center gap-3 min-h-48 text-center">
+          <CreditCard size={28} className="text-slate-600" />
+          <div className="text-slate-400 font-medium">Billing coming soon</div>
+          <div className="text-sm text-slate-600 max-w-xs">Subscription plans, invoices, and payment methods will appear here.</div>
         </div>
       )}
 

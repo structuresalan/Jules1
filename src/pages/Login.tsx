@@ -51,7 +51,7 @@ export const Login: React.FC = () => {
     setIsSubmitting(true);
     try {
       if (authMode === 'create') {
-        await createAccount(email, password, inviteCode, selectedTier);
+        await createAccount(email, password, inviteCode, selectedTier, `${firstName} ${lastName}`.trim(), company, discipline);
       } else {
         await login(email, password);
       }

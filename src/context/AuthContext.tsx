@@ -29,7 +29,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const ignoreNullAuthStateUntilRef = useRef(0);
   const authConfigured = Boolean(auth);
 
-  const createAccount = async (email: string, password: string, inviteCode = '', tier = 'starter') => {
+  const createAccount = async (email: string, password: string, inviteCode = '', tier = 'starter', displayName = '', company = '', discipline = '') => {
     const activeAuth = auth;
     const normalizedEmail = email.trim();
 
@@ -45,7 +45,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await setPersistence(activeAuth, browserLocalPersistence);
     const credential = await createUserWithEmailAndPassword(activeAuth, normalizedEmail, password);
 
-    initUserProfile(tier as Tier).catch(() => {}); // fire and forget
+    initUserProfile(tier as Tier, { displayName, company, discipline }).catch(() => {});
 
     ignoreNullAuthStateUntilRef.current = Date.now() + 6000;
     setUser(credential.user);

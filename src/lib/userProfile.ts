@@ -17,6 +17,9 @@ export interface UserProfile {
   uploadsToday: number;
   uploadsResetAt: string;
   promoActive?: boolean;
+  displayName?: string;
+  company?: string;
+  discipline?: string;
 }
 
 export interface TierLimits {
@@ -172,17 +175,22 @@ export const formatBytes = (bytes: number): string => {
   return `${(bytes / 1024 ** 3).toFixed(2)} GB`;
 };
 
-export const initUserProfile = async (tier: Tier): Promise<void> => {
+export const initUserProfile = async (tier: Tier, extra?: { displayName?: string; company?: string; discipline?: string }): Promise<void> => {
   // Wait for auth.currentUser to be set (up to 3 seconds)
   for (let i = 0; i < 30; i++) {
     if (auth?.currentUser) break;
     await new Promise(r => setTimeout(r, 100));
   }
-  const p: UserProfile = { ...defaultProfile(), tier };
+  const p: UserProfile = { ...defaultProfile(), tier, ...extra };
   lsWrite(p);
   const ref = profileRef();
   if (!ref) return;
   try { await setDoc(ref, p); } catch { /* offline ok */ }
+};
+
+export const updateAccountInfo = async (fields: { displayName?: string; company?: string; discipline?: string }): Promise<void> => {
+  const p = await getProfile();
+  await writeProfile({ ...p, ...fields });
 };
 
 export const redeemPromoCode = async (code: string): Promise<{ success: boolean; message: string }> => {
