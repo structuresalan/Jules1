@@ -2571,7 +2571,7 @@ export function VisualWorkspace({
             </div>
           )}
 
-        </div>
+        </div>}
 
         {/* ── Canvas + schedule ───────────────────────────────────────────── */}
         <div className="flex-1 flex flex-col overflow-hidden">
@@ -2947,7 +2947,7 @@ export function VisualWorkspace({
             />
           </div>
           </div>{/* end bottom strip flex */}
-        </div>}
+        </div>
 
         {/* ── Right panel ─────────────────────────────────────────────────── */}
         {!compact && showInspector && (
