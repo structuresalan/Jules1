@@ -23,6 +23,7 @@ import { Reports } from './pages/Reports';
 import { ReportEditor } from './pages/ReportEditor';
 import { Library } from './pages/Library';
 import { ClientReviewPage } from './pages/ClientReviewPage';
+import { WorkspaceReportSplit } from './pages/WorkspaceReportSplit';
 import { applyWebsiteStyleSettings, getWebsiteStyleSettings } from './utils/websiteStyle';
 import './styles/websiteTheme.css';
 
@@ -53,6 +54,7 @@ const AppContent = () => {
         <Route path="documents" element={<Reports />} />
         <Route path="reports/:reportId" element={<ReportEditor />} />
         <Route path="visual-workspace" element={<VisualWorkspace />} />
+        <Route path="workspace-report" element={<WorkspaceReportSplit />} />
         <Route path="variables" element={<Variables />} />
         <Route path="settings" element={<SettingsPage />} />
         <Route path="observations" element={<Observations />} />
