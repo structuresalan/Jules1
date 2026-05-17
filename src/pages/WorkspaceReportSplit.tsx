@@ -44,7 +44,6 @@ const genId = () => Math.random().toString(36).slice(2, 10);
 // ─── ReportPanel ─────────────────────────────────────────────────────────────
 
 interface ReportPanelProps {
-  projectId: string | null;
   projectName: string;
   reports: ReportRecord[];
   activeReportId: string | null;
@@ -54,7 +53,6 @@ interface ReportPanelProps {
 }
 
 const ReportPanel: React.FC<ReportPanelProps> = ({
-  projectId,
   projectName,
   reports,
   activeReportId,
@@ -357,7 +355,6 @@ export const WorkspaceReportSplit: React.FC = () => {
       {/* Right: Report panel 45% */}
       <div className="flex-[45] min-w-0 flex flex-col bg-slate-900 overflow-hidden">
         <ReportPanel
-          projectId={projectId}
           projectName={projectName}
           reports={projectReports}
           activeReportId={activeReportId}

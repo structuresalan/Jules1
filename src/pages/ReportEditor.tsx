@@ -159,13 +159,12 @@ const EditableBlock: React.FC<{ label: string; active?: boolean; children: React
 interface ExhibitBlockProps {
   exhibit: ExhibitBlock;
   markup: Markup | undefined;
-  projectId: string;
   onCaptionChange: (caption: string) => void;
   onDelete: () => void;
 }
 
 const MarkupExhibitBlock: React.FC<ExhibitBlockProps> = ({
-  exhibit, markup, projectId, onCaptionChange, onDelete,
+  exhibit, markup, onCaptionChange, onDelete,
 }) => {
   const [editingCaption, setEditingCaption] = useState(false);
   const [caption, setCaption] = useState(exhibit.caption);
@@ -652,7 +651,6 @@ export const ReportEditor: React.FC = () => {
             key={exhibit.id}
             exhibit={exhibit}
             markup={markupById.get(exhibit.markupId)}
-            projectId={project.id}
             onCaptionChange={caption => updateExhibitCaption(exhibit.id, caption)}
             onDelete={() => deleteExhibit(exhibit.id)}
           />

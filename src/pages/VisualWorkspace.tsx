@@ -503,7 +503,7 @@ interface VisualWorkspaceProps {
 
 export function VisualWorkspace({
   compact = false,
-  reportExhibitIds = new Set(),
+  reportExhibitIds: _reportExhibitIds = new Set(),
   onAddToReport,
 }: VisualWorkspaceProps = {}) {
   const navigate = useNavigate();
