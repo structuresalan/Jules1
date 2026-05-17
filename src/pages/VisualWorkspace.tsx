@@ -495,7 +495,17 @@ const SEED_GRAPH: RelationshipGraph = {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export function VisualWorkspace() {
+interface VisualWorkspaceProps {
+  compact?: boolean;
+  reportExhibitIds?: Set<string>;
+  onAddToReport?: (markupIds: string[], boardId: string) => void;
+}
+
+export function VisualWorkspace({
+  compact = false,
+  reportExhibitIds = new Set(),
+  onAddToReport,
+}: VisualWorkspaceProps = {}) {
   const navigate = useNavigate();
   const containerRef  = useRef<HTMLDivElement>(null);
   const fileInputRef  = useRef<HTMLInputElement>(null);
@@ -2175,6 +2185,11 @@ export function VisualWorkspace() {
             <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block"/>
             Saved
           </span>
+          {/* Split view */}
+          <button onClick={() => navigate('/workspace-report')}
+            className="text-[10px] px-2 py-0.5 rounded border border-slate-700 text-slate-400 hover:text-white hover:border-slate-500 transition-colors">
+            Split view
+          </button>
           {/* Compare */}
           <button onClick={() => setActivePanel(prev => prev === 'compare' ? null : 'compare')}
             title="Compare overlay"
@@ -2396,7 +2411,7 @@ export function VisualWorkspace() {
           <>
             <span className="text-slate-600 shrink-0">|</span>
             <button
-              onClick={() => setShowCreateReportModal(true)}
+              onClick={() => onAddToReport ? onAddToReport(selectedIds, activeBoardId) : setShowCreateReportModal(true)}
               className="flex items-center gap-1 h-5 px-2 rounded border border-blue-700 bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 text-[10px] font-medium shrink-0 transition-colors"
             >
               <FilePlus size={11} />
@@ -2415,7 +2430,7 @@ export function VisualWorkspace() {
       <div className="flex flex-1 overflow-hidden">
 
         {/* ── Module rail ── app-level navigation ───────────────────────── */}
-        <div className="w-10 shrink-0 flex flex-col bg-slate-950 border-r border-slate-800">
+        {!compact && <div className="w-10 shrink-0 flex flex-col bg-slate-950 border-r border-slate-800">
           <div className="flex-1 flex flex-col items-center py-2 gap-1">
             {[
               { to: '/dashboard', icon: <Home size={15}/>,    label: 'Dashboard',       shortcut: 'D' },
@@ -2443,10 +2458,10 @@ export function VisualWorkspace() {
               <Settings size={15}/>
             </NavLink>
           </div>
-        </div>
+        </div>}
 
         {/* ── Left panel ─────────────────────────────────────────────────── */}
-        <div className="w-52 shrink-0 flex flex-col bg-slate-800 border-r border-slate-700 overflow-hidden">
+        {!compact && <div className="w-52 shrink-0 flex flex-col bg-slate-800 border-r border-slate-700 overflow-hidden">
           <div className="flex-1 overflow-y-auto">
             <div className="flex items-center justify-between px-3 py-2 border-b border-slate-700">
               <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Boards</span>
@@ -2932,10 +2947,10 @@ export function VisualWorkspace() {
             />
           </div>
           </div>{/* end bottom strip flex */}
-        </div>
+        </div>}
 
         {/* ── Right panel ─────────────────────────────────────────────────── */}
-        {showInspector && (
+        {!compact && showInspector && (
           <div className="w-60 shrink-0 flex flex-col bg-slate-800 border-l border-slate-700 overflow-hidden">
             <div className="border-b border-slate-700 shrink-0">
               <div className="flex items-center justify-between px-3 py-1.5">
@@ -3281,7 +3296,7 @@ export function VisualWorkspace() {
           </div>
         )}
 
-        {!showInspector && (
+        {!compact && !showInspector && (
           <button onClick={() => setShowInspector(true)}
             className="w-7 shrink-0 bg-slate-800 border-l border-slate-700 flex items-center justify-center text-slate-400 hover:text-white" title="Show Inspector">
             <ChevronLeft size={14} style={{ transform: 'rotate(180deg)' }}/>
