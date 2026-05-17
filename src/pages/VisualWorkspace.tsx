@@ -3746,20 +3746,20 @@ export function VisualWorkspace({
             </div>
           </div>
         </div>
-    </div>
 
-    {/* ── Create report from selection modal ───────────────────────── */}
-    {showCreateReportModal && (
-      <CreateReportModal
-        selectedIds={selectedIds}
-        activeBoardId={activeBoardId}
-        boardMarkups={boardMarkups}
-        projectId={projectId || 'default'}
-        projectReports={projectReports}
-        saveReport={saveReport}
-        navigate={navigate}
-        onClose={() => setShowCreateReportModal(false)}
-      />
-    )}
+      {/* ── Create report from selection modal ───────────────────────── */}
+      {showCreateReportModal && (
+        <CreateReportModal
+          selectedIds={selectedIds}
+          activeBoardId={activeBoardId}
+          boardMarkups={boardMarkups}
+          projectId={projectId || 'default'}
+          projectReports={projectReports}
+          saveReport={saveReport}
+          navigate={navigate}
+          onClose={() => setShowCreateReportModal(false)}
+        />
+      )}
+    </div>
   );
 }
