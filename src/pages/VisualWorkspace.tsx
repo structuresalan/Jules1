@@ -10,7 +10,7 @@ import {
   Eye, EyeOff, Trash2, Upload,
   Filter, RefreshCw, ChevronLeft,
   Tag, Stamp, Hash, Minimize2, Search, Download,
-  Home, Frame, Wind, Database, Settings, ArrowLeft,
+  Home, Frame, Wind, Database, Settings, ArrowLeft, FilePlus,
 } from 'lucide-react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { getActiveProjectId } from '../utils/projectDocuments';
@@ -75,10 +75,32 @@ type ActivePanel =
   | 'color' | 'photo' | 'file' | 'note' | 'scale'
   | 'report' | 'export' | 'photo-library' | 'link' | 'stamps' | 'compare' | 'review' | null;
 
+// ─── Report types (mirrored from ReportEditor) ───────────────────────────────
+
+interface ExhibitBlock {
+  id: string;
+  markupId: string;
+  boardId: string;
+  caption: string;
+  figureNumber: number;
+}
+
+interface ReportRecord {
+  id: string;
+  projectId: string;
+  title: string;
+  executiveSummary: string;
+  recommendations: string;
+  exhibits?: ExhibitBlock[];
+  createdAt: string;
+  updatedAt: string;
+}
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 let _ctr = 100;
 const genId = () => `m_${++_ctr}`;
+const genReportId = () => Math.random().toString(36).slice(2, 10);
 
 // Ensure any markup loaded from localStorage (possibly from an older schema) has all fields
 function normalizeMarkup(raw: Record<string, unknown>): Markup {
@@ -292,6 +314,160 @@ function exportMarkupsCsv(markups: Markup[]): void {
   a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
   a.download = `markups-${Date.now()}.csv`;
   a.click();
+}
+
+// ─── Create-report-from-selection modal ──────────────────────────────────────
+
+interface CreateReportModalProps {
+  selectedIds: string[];
+  activeBoardId: string;
+  boardMarkups: Record<string, Markup[]>;
+  projectId: string;
+  projectReports: ReportRecord[];
+  saveReport: (r: ReportRecord) => void;
+  navigate: (to: string) => void;
+  onClose: () => void;
+}
+
+function CreateReportModal({
+  selectedIds, activeBoardId, boardMarkups, projectId,
+  projectReports, saveReport, navigate, onClose,
+}: CreateReportModalProps) {
+  const [mode, setMode] = useState<'pick' | 'new'>('pick');
+  const [targetReportId, setTargetReportId] = useState<string>(projectReports[0]?.id ?? '');
+  const [newTitle, setNewTitle] = useState('Inspection Report');
+
+  const selectedMarkups = (boardMarkups[activeBoardId] ?? []).filter(m => selectedIds.includes(m.id));
+
+  const buildExhibits = (existingExhibits: ExhibitBlock[]): ExhibitBlock[] => {
+    const startNum = existingExhibits.length + 1;
+    return [
+      ...existingExhibits,
+      ...selectedMarkups.map((m, i) => ({
+        id: genReportId(),
+        markupId: m.id,
+        boardId: activeBoardId,
+        caption: '',
+        figureNumber: startNum + i,
+      })),
+    ];
+  };
+
+  const handleConfirm = () => {
+    const now = new Date().toISOString();
+    if (mode === 'new' || projectReports.length === 0) {
+      const newReport: ReportRecord = {
+        id: genReportId(),
+        projectId,
+        title: newTitle || 'Inspection Report',
+        executiveSummary: '',
+        recommendations: '',
+        exhibits: buildExhibits([]),
+        createdAt: now,
+        updatedAt: now,
+      };
+      saveReport(newReport);
+      navigate(`/reports/${newReport.id}`);
+    } else {
+      const target = projectReports.find(r => r.id === targetReportId) ?? projectReports[0];
+      const updated: ReportRecord = {
+        ...target,
+        exhibits: buildExhibits(target.exhibits ?? []),
+        updatedAt: now,
+      };
+      saveReport(updated);
+      navigate(`/reports/${target.id}`);
+    }
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+      <div className="bg-slate-900 border border-slate-700 rounded-xl shadow-2xl w-full max-w-md">
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-800">
+          <div>
+            <div className="text-sm font-medium text-slate-100">Add to report</div>
+            <div className="text-[11px] text-slate-500 mt-0.5">
+              {selectedMarkups.length} markup{selectedMarkups.length !== 1 ? 's' : ''} will become figure{selectedMarkups.length !== 1 ? 's' : ''}
+            </div>
+          </div>
+          <button onClick={onClose} className="text-slate-500 hover:text-slate-200 transition-colors">
+            <X size={16} />
+          </button>
+        </div>
+
+        {/* Selected markup preview */}
+        <div className="px-5 py-3 border-b border-slate-800 max-h-36 overflow-y-auto space-y-1.5">
+          {selectedMarkups.map((m, i) => (
+            <div key={m.id} className="flex items-center gap-2.5 text-[12px]">
+              <div className="w-1 h-4 rounded-full shrink-0" style={{ background: m.color }} />
+              <span className="text-slate-500 font-mono text-[10px]">→ Fig. {(projectReports.find(r => r.id === targetReportId)?.exhibits?.length ?? 0) + i + 1}</span>
+              <span className="text-slate-300 truncate">{m.text || `Markup #${m.number}`}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* Target picker */}
+        <div className="px-5 py-4 space-y-3">
+          {projectReports.length > 0 && (
+            <div className="flex gap-2">
+              <button
+                onClick={() => setMode('pick')}
+                className={`flex-1 py-1.5 rounded border text-[11px] font-medium transition-colors ${mode === 'pick' ? 'border-blue-500 bg-blue-600/20 text-blue-300' : 'border-slate-700 text-slate-400 hover:border-slate-600'}`}
+              >
+                Add to existing report
+              </button>
+              <button
+                onClick={() => setMode('new')}
+                className={`flex-1 py-1.5 rounded border text-[11px] font-medium transition-colors ${mode === 'new' ? 'border-blue-500 bg-blue-600/20 text-blue-300' : 'border-slate-700 text-slate-400 hover:border-slate-600'}`}
+              >
+                Create new report
+              </button>
+            </div>
+          )}
+
+          {(mode === 'pick' && projectReports.length > 0) ? (
+            <select
+              value={targetReportId}
+              onChange={e => setTargetReportId(e.target.value)}
+              className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-blue-500"
+            >
+              {projectReports.map(r => (
+                <option key={r.id} value={r.id}>
+                  {r.title} · {r.exhibits?.length ?? 0} existing figures
+                </option>
+              ))}
+            </select>
+          ) : (
+            <input
+              type="text"
+              value={newTitle}
+              onChange={e => setNewTitle(e.target.value)}
+              placeholder="Report title…"
+              autoFocus={mode === 'new' || projectReports.length === 0}
+              className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500"
+            />
+          )}
+        </div>
+
+        {/* Actions */}
+        <div className="flex gap-2 px-5 pb-5">
+          <button onClick={onClose} className="flex-1 py-2 rounded-lg border border-slate-700 text-[12px] text-slate-400 hover:bg-slate-800 transition-colors">
+            Cancel
+          </button>
+          <button
+            onClick={handleConfirm}
+            disabled={selectedMarkups.length === 0}
+            className="flex-1 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-[12px] font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
+          >
+            <FilePlus size={13} />
+            {mode === 'pick' && projectReports.length > 0 ? 'Add to report →' : 'Create report →'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 // ─── Relationship graph seed data ────────────────────────────────────────────
@@ -629,6 +805,14 @@ export function VisualWorkspace() {
     // Removes
     sitePhotos.forEach(p => { if (!nextIds.has(p.id)) removePhotoRow(p.id); });
   }, [sitePhotos, savePhotoRow, removePhotoRow, projectId]);
+
+  // Reports — used by "Create report from selection"
+  const { items: allReports, save: saveReport } = useCollection<ReportRecord>(COLLECTIONS.reports.col, COLLECTIONS.reports.ls);
+  const projectReports = React.useMemo(
+    () => allReports.filter(r => r.projectId === (projectId || 'default')),
+    [allReports, projectId],
+  );
+  const [showCreateReportModal, setShowCreateReportModal] = useState(false);
 
   // ── Resize observer ───────────────────────────────────────────────────────
   useEffect(() => {
@@ -2207,8 +2391,22 @@ export function VisualWorkspace() {
           <span className="text-slate-600 shrink-0">|</span>
         </>)}
 
+        {/* Create report from selected markups */}
+        {selectedIds.length > 0 && tool === 'select' && (
+          <>
+            <span className="text-slate-600 shrink-0">|</span>
+            <button
+              onClick={() => setShowCreateReportModal(true)}
+              className="flex items-center gap-1 h-5 px-2 rounded border border-blue-700 bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 text-[10px] font-medium shrink-0 transition-colors"
+            >
+              <FilePlus size={11} />
+              Add {selectedIds.length} to report
+            </button>
+          </>
+        )}
+
         {/* Empty fallback */}
-        {!['text','callout','arrow','cloud','box','pen','highlighter','dimension','distance'].includes(tool) && !selectedMarkup && pdfTotalPages <= 1 && (
+        {!['text','callout','arrow','cloud','box','pen','highlighter','dimension','distance'].includes(tool) && !selectedMarkup && pdfTotalPages <= 1 && selectedIds.length === 0 && (
           <span className="text-slate-700 italic">Select a tool or markup to see properties</span>
         )}
       </div>
@@ -3534,5 +3732,19 @@ export function VisualWorkspace() {
           </div>
         </div>
     </div>
+
+    {/* ── Create report from selection modal ───────────────────────── */}
+    {showCreateReportModal && (
+      <CreateReportModal
+        selectedIds={selectedIds}
+        activeBoardId={activeBoardId}
+        boardMarkups={boardMarkups}
+        projectId={projectId || 'default'}
+        projectReports={projectReports}
+        saveReport={saveReport}
+        navigate={navigate}
+        onClose={() => setShowCreateReportModal(false)}
+      />
+    )}
   );
 }
