@@ -44,7 +44,6 @@ const AppContent = () => {
       <Route path="/login" element={<Login />} />
       <Route path="/review/:reviewId" element={<ClientReviewPage />} />
       <Route path="/qa/visual-workspace" element={<VisualWorkspace />} />
-      <Route path="/workspace-report" element={<WorkspaceReportSplit />} />
 
       <Route path="/" element={<ProtectedRoute><MainLayout /></ProtectedRoute>}>
         <Route index element={<ProjectHome />} />
@@ -55,6 +54,7 @@ const AppContent = () => {
         <Route path="documents" element={<Reports />} />
         <Route path="reports/:reportId" element={<ReportEditor />} />
         <Route path="visual-workspace" element={<VisualWorkspace />} />
+        <Route path="workspace-report" element={<WorkspaceReportSplit />} />
         <Route path="variables" element={<Variables />} />
         <Route path="settings" element={<SettingsPage />} />
         <Route path="observations" element={<Observations />} />
